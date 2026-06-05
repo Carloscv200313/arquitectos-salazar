@@ -12,34 +12,27 @@ export function DashboardCashflowCard({
   const totalExpense = points.reduce((sum, point) => sum + point.expense, 0);
 
   return (
-    <Card className="gap-0 px-5 py-5">
-      <div className="flex items-start justify-between gap-4">
+    <Card className="flex h-full flex-col gap-0 px-5 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">Cashflow</p>
-          <p className="mt-1 text-sm text-muted-foreground">Ingresos y egresos internos de los últimos 6 meses.</p>
+          <p className="text-sm font-semibold">Flujo de caja</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Últimos 6 meses</p>
         </div>
-        <div className="flex gap-4 text-xs">
+        <div className="flex gap-5 text-xs">
           <Legend label="Ingresos" dotClassName="bg-brand" value={formatCurrency(totalIncome)} />
-          <Legend label="Egresos" dotClassName="bg-foreground/75" value={formatCurrency(totalExpense)} />
+          <Legend label="Egresos" dotClassName="bg-chart-4" value={formatCurrency(totalExpense)} />
         </div>
       </div>
 
-      <div className="mt-6">
-        <div className="grid h-72 grid-cols-6 gap-4">
+      <div className="mt-6 flex-1">
+        <div className="grid h-64 grid-cols-6 gap-3 sm:gap-5">
           {points.map((point) => (
             <div key={point.key} className="flex min-h-0 flex-col items-center gap-3">
-              <div className="flex min-h-0 flex-1 items-end gap-1.5">
+              <div className="flex min-h-0 flex-1 items-end justify-center gap-1.5">
                 <Bar value={point.income} maxValue={maxValue} className="bg-brand" />
-                <Bar value={point.expense} maxValue={maxValue} className="bg-foreground/75" />
+                <Bar value={point.expense} maxValue={maxValue} className="bg-chart-4" />
               </div>
-              <div className="text-center">
-                <p className="text-xs font-medium text-foreground">{point.label}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {point.income > 0 || point.expense > 0
-                    ? `${Math.round(point.income + point.expense).toLocaleString()}`
-                    : "—"}
-                </p>
-              </div>
+              <p className="text-xs font-medium capitalize text-muted-foreground">{point.label}</p>
             </div>
           ))}
         </div>
@@ -59,7 +52,7 @@ function Legend({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className={`size-2 rounded-full ${dotClassName}`} />
+      <span className={`size-2.5 rounded-full ${dotClassName}`} />
       <div>
         <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
         <p className="font-semibold tabular-nums text-foreground">{value}</p>
@@ -77,12 +70,13 @@ function Bar({
   maxValue: number;
   className: string;
 }) {
-  const height = value > 0 ? Math.max((value / maxValue) * 100, 10) : 0;
+  const height = value > 0 ? Math.max((value / maxValue) * 100, 4) : 0;
   return (
-    <div className="flex h-full w-7 items-end rounded-full bg-muted/60">
+    <div className="flex h-full w-5 items-end sm:w-6">
       <div
-        className={`w-full rounded-full transition-all ${className}`}
+        className={`w-full rounded-md transition-all ${className}`}
         style={{ height: `${height}%` }}
+        title={formatCurrency(value)}
       />
     </div>
   );

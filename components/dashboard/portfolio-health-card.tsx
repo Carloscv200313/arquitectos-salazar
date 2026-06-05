@@ -22,9 +22,9 @@ export function DashboardPortfolioHealthCard({
     status.reduce((sum, item) => sum + item.count, 0),
   );
   const segments = [
-    { value: status.find((item) => item.status === "paid")?.count ?? 0, color: "#57b87a" },
-    { value: status.find((item) => item.status === "partial")?.count ?? 0, color: "#f4b740" },
-    { value: status.find((item) => item.status === "pending")?.count ?? 0, color: "#d6dae2" },
+    { value: status.find((item) => item.status === "paid")?.count ?? 0, color: "var(--brand)" },
+    { value: status.find((item) => item.status === "partial")?.count ?? 0, color: "var(--warning)" },
+    { value: status.find((item) => item.status === "pending")?.count ?? 0, color: "var(--chart-3)" },
   ];
   const gradient = segments.reduce((parts, segment, index) => {
     const previous = parts.offset;

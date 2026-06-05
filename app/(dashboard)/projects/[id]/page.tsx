@@ -65,10 +65,8 @@ export default async function ProjectDetailPage({
 
       <FinanceOverview finance={project.finance} />
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        <ProjectDistributionCard project={project} />
-        <PaymentHistory payments={payments} />
-      </div>
+      <ProjectDistributionCard project={project} />
+      <PaymentHistory payments={payments} />
     </div>
   );
 }

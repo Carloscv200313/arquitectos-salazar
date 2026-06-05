@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 export function AppBrand({ className }: { className?: string }) {
   return (
     <div className={cn("flex items-center gap-2.5", className)}>
-      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand shadow-sm ring-8 ring-brand-foreground/10">
+      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand shadow-sm ring-2 ring-brand-foreground/10">
         <Image
           src="/logo-arquitectos-salazar-transparent.png"
           alt="Logo Arquitectos Salazar"

@@ -34,7 +34,7 @@ function Line({
         {pct !== undefined && (
           <span className="text-xs text-muted-foreground">{formatPercent(pct * 100)}</span>
         )}
-        <span className={cn("w-28 text-right", strong && "font-semibold")}>
+        <span className={cn("whitespace-nowrap text-right", strong && "font-semibold")}>
           {formatCurrency(amount)}
         </span>
       </div>
@@ -98,15 +98,6 @@ export function ProjectDistributionCard({ project }: { project: ProjectWithFinan
               <Line label={PROJECT_SLICE_LABELS.plans} pct={PROJECT_DISTRIBUTION.plans} amount={project.plans_amount} muted />
               <Line label={PROJECT_SLICE_LABELS.render} pct={PROJECT_DISTRIBUTION.render} amount={project.render_amount} muted />
             </div>
-          </div>
-
-          <div className="rounded-xl bg-muted/35 px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Lectura operativa
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Usa ingresos para cobros del cliente y egresos para pagos internos de propuesta, modelado 3D, planos y render.
-            </p>
           </div>
         </section>
       </div>

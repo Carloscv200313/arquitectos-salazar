@@ -49,18 +49,17 @@ export default async function DashboardPage() {
         </FadeIn>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <FadeIn delay={0.14}>
-          <DashboardRecentMovementsCard movements={snapshot.recentMovements} />
-        </FadeIn>
-        <FadeIn delay={0.18}>
-          <DashboardPortfolioHealthCard
-            status={snapshot.status}
-            pendingProjects={snapshot.pendingProjects}
-            expenseAreas={snapshot.expenseAreas}
-          />
-        </FadeIn>
-      </div>
+      <FadeIn delay={0.14}>
+        <DashboardPortfolioHealthCard
+          status={snapshot.status}
+          pendingProjects={snapshot.pendingProjects}
+          expenseAreas={snapshot.expenseAreas}
+        />
+      </FadeIn>
+
+      <FadeIn delay={0.18}>
+        <DashboardRecentMovementsCard movements={snapshot.recentMovements} />
+      </FadeIn>
     </div>
   );
 }

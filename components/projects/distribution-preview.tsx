@@ -30,7 +30,7 @@ function Row({
   muted?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 text-sm">
+    <div className="flex items-center justify-between gap-3 py-2 text-sm">
       <span className="flex min-w-0 items-center gap-2">
         {dot && <span className={cn("size-2 shrink-0 rounded-full", dot)} />}
         <span className={cn("truncate", strong ? "font-medium" : muted ? "text-muted-foreground" : "")}>
@@ -46,6 +46,14 @@ function Row({
         {formatCurrency(amount)}
       </span>
     </div>
+  );
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {children}
+    </p>
   );
 }
 
@@ -67,33 +75,34 @@ export function DistributionPreview({
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm text-muted-foreground">Total a cobrar</span>
-        <span className="text-2xl font-semibold tracking-tight tabular-nums text-brand-foreground">
-          {formatCurrency(b.total)}
-        </span>
+    <div className="space-y-5">
+      {/* Hero: total a cobrar */}
+      <div className="rounded-xl bg-brand-muted/40 p-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="text-sm font-medium text-muted-foreground">Total a cobrar</span>
+          <span className="text-2xl font-semibold tracking-tight tabular-nums text-brand-foreground">
+            {formatCurrency(b.total)}
+          </span>
+        </div>
+        <div className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-background/60">
+          {segments.map((s, i) =>
+            b.total > 0 && s.v > 0 ? (
+              <div key={i} className={s.c} style={{ width: `${(s.v / b.total) * 100}%` }} />
+            ) : null,
+          )}
+        </div>
       </div>
 
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
-        {segments.map((s, i) =>
-          b.total > 0 && s.v > 0 ? (
-            <div key={i} className={s.c} style={{ width: `${(s.v / b.total) * 100}%` }} />
-          ) : null,
-        )}
-      </div>
-
+      {/* Cálculo del total (primary) */}
       <div>
-        <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Cálculo del total
-        </p>
-        <div className="divide-y">
+        <SectionTitle>Cálculo del total</SectionTitle>
+        <div className="divide-y divide-border/60">
           <Row label={PROJECT_BASE_LABEL} amount={b.base} dot="bg-brand" strong />
           {validAddons.map((a, i) => (
             <Row key={i} label={a.concept || "Adicional"} amount={a.amount} dot="bg-chart-2" muted />
           ))}
         </div>
-        <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
+        <div className="mt-2 flex items-center justify-between border-t pt-2.5 text-sm">
           <span className="font-semibold">Total a cobrar</span>
           <span className="font-semibold tabular-nums text-brand-foreground">
             {formatCurrency(b.total)}
@@ -101,26 +110,23 @@ export function DistributionPreview({
         </div>
       </div>
 
-      <div>
-        <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Distribución referencial
-        </p>
-        <div className="divide-y">
+      {/* Referencial (secondary, boxed) */}
+      <div className="rounded-xl border bg-muted/25 p-4">
+        <SectionTitle>Distribución referencial</SectionTitle>
+        <div className="divide-y divide-border/60">
           <Row label={PROJECT_MARKUP_LABEL} pct={MARKUP_TOTAL_RATE} amount={b.markupTotal} muted />
           <Row label={MARKUP_LABELS.office} pct={MARKUP.office} amount={b.markup.office} muted />
           <Row label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={b.markup.utility} muted />
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Oficina y utilidad se muestran como referencia interna. No se suman al total
-          a cobrar.
+        <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+          Referencia interna. No se suma al total a cobrar.
         </p>
       </div>
 
-      <div>
-        <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Distribución operativa interna
-        </p>
-        <div className="divide-y">
+      {/* Operativa interna (secondary, boxed) */}
+      <div className="rounded-xl border bg-muted/25 p-4">
+        <SectionTitle>Distribución operativa interna</SectionTitle>
+        <div className="divide-y divide-border/60">
           {projectKeys.map((k) => (
             <Row
               key={k}
