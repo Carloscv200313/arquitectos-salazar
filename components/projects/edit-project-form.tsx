@@ -1,0 +1,293 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Loader2, UserPlus, Users, Plus, Trash2 } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
+import type { Client, ProjectWithFinance } from "@/lib/types";
+import { DistributionPreview } from "./distribution-preview";
+import { updateProjectAction } from "@/app/(dashboard)/projects/actions";
+
+type ClientMode = "existing" | "new";
+interface AddonRow {
+  id: string;
+  concept: string;
+  amount: string;
+}
+
+function FieldError({ children }: { children?: string }) {
+  if (!children) return null;
+  return <p className="text-xs text-destructive">{children}</p>;
+}
+
+export function EditProjectForm({
+  project,
+  clients,
+}: {
+  project: ProjectWithFinance;
+  clients: Client[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [name, setName] = useState(project.name);
+  const [clientMode, setClientMode] = useState<ClientMode>("existing");
+  const [clientId, setClientId] = useState(project.client_id);
+  const [clientName, setClientName] = useState("");
+  const [projectAmount, setProjectAmount] = useState(String(project.project_amount));
+  const [addons, setAddons] = useState<AddonRow[]>(
+    project.addons.map((a) => ({
+      id: a.id,
+      concept: a.concept,
+      amount: String(a.amount),
+    })),
+  );
+
+  const base = Number(projectAmount);
+  const parsedAddons = addons.map((a) => ({
+    concept: a.concept,
+    amount: Number(a.amount) || 0,
+  }));
+
+  function updateAddon(id: string, patch: Partial<AddonRow>) {
+    setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }
+  function removeAddon(id: string) {
+    setAddons((prev) => prev.filter((a) => a.id !== id));
+  }
+  function addRow() {
+    setAddons((prev) => [...prev, { id: crypto.randomUUID(), concept: "", amount: "" }]);
+  }
+
+  function submit() {
+    setErrors({});
+    startTransition(async () => {
+      const res = await updateProjectAction({
+        id: project.id,
+        name: name.trim(),
+        clientId: clientMode === "existing" ? clientId : "",
+        clientName: clientMode === "new" ? clientName.trim() : "",
+        projectAmount: Number(projectAmount),
+        addons: parsedAddons
+          .filter((a) => a.amount > 0)
+          .map((a) => ({ concept: a.concept.trim(), amount: a.amount })),
+      });
+      if (res.ok) {
+        toast.success("Proyecto actualizado", { description: name.trim() });
+        router.push(`/projects/${project.id}`);
+      } else {
+        if (res.fieldErrors) setErrors(res.fieldErrors);
+        toast.error(res.error);
+      }
+    });
+  }
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr] lg:items-start">
+      <div className="flex flex-col gap-5">
+        <Card className="gap-0 py-0">
+          <div className="border-b px-5 py-4">
+            <h2 className="text-sm font-semibold">Editar proyecto</h2>
+            <p className="text-xs text-muted-foreground">
+              Ya cobrado: {formatCurrency(project.finance.income)}. El total resultante no
+              puede ser menor.
+            </p>
+          </div>
+
+          <div className="grid gap-4 p-5">
+            <div className="grid gap-1.5">
+              <Label htmlFor="name">Nombre del proyecto</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-invalid={!!errors.name}
+              />
+              <FieldError>{errors.name}</FieldError>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label>Cliente</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setClientMode("existing")}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    clientMode === "existing"
+                      ? "border-brand bg-brand-muted text-brand-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <Users className="size-4" /> Existente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClientMode("new")}
+                  className={cn(
+                    "flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    clientMode === "new"
+                      ? "border-brand bg-brand-muted text-brand-foreground"
+                      : "hover:bg-accent",
+                  )}
+                >
+                  <UserPlus className="size-4" /> Nuevo
+                </button>
+              </div>
+              {clientMode === "existing" ? (
+                <Select
+                  value={clientId}
+                  onValueChange={(v) => setClientId(v ?? "")}
+                  items={clients.map((c) => ({ label: c.name, value: c.id }))}
+                >
+                  <SelectTrigger className="w-full" aria-invalid={!!errors.clientId}>
+                    <SelectValue placeholder="Selecciona un cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Nombre del nuevo cliente"
+                  aria-invalid={!!errors.clientName || !!errors.clientId}
+                />
+              )}
+              <FieldError>{errors.clientId || errors.clientName}</FieldError>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="base">Monto del proyecto</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="base"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={projectAmount}
+                  onChange={(e) => setProjectAmount(e.target.value)}
+                  className="pl-7 text-base font-medium"
+                  aria-invalid={!!errors.projectAmount}
+                />
+              </div>
+              <FieldError>{errors.projectAmount}</FieldError>
+              <p className="text-xs text-muted-foreground">
+                Este es el monto base que se le cobra al cliente antes de sumar adicionales.
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="gap-0 py-0">
+          <div className="flex items-center justify-between gap-4 border-b px-5 py-4">
+            <div>
+              <h2 className="text-sm font-semibold">Adicionales</h2>
+              <p className="text-xs text-muted-foreground">
+                Montos extra. Se suman al total sin porcentajes.
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addRow}>
+              <Plus className="size-4" /> Agregar
+            </Button>
+          </div>
+          <div className="p-5">
+            {addons.length === 0 ? (
+              <p className="rounded-lg bg-muted/50 px-3 py-3 text-center text-xs text-muted-foreground">
+                Sin adicionales.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {addons.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2">
+                    <Input
+                      value={a.concept}
+                      onChange={(e) => updateAddon(a.id, { concept: e.target.value })}
+                      placeholder="Concepto (ej. Levantamiento)"
+                      className="flex-1"
+                    />
+                    <div className="relative w-32 shrink-0">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={a.amount}
+                        onChange={(e) => updateAddon(a.id, { amount: e.target.value })}
+                        placeholder="0.00"
+                        className="pl-6"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeAddon(a.id)}
+                    >
+                      <Trash2 className="size-4" />
+                      <span className="sr-only">Quitar adicional</span>
+                    </Button>
+                  </div>
+                ))}
+                <FieldError>{errors.addons}</FieldError>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <div className="lg:sticky lg:top-24">
+        <Card className="gap-0 py-0">
+          <div className="border-b px-5 py-4">
+            <h2 className="text-sm font-semibold">Resumen</h2>
+            <p className="text-xs text-muted-foreground">Cálculo automático del total.</p>
+          </div>
+          <div className="p-5">
+            <DistributionPreview base={base} addons={parsedAddons} />
+          </div>
+          <div className="flex flex-col gap-2 border-t p-5">
+            <Button onClick={submit} disabled={isPending} className="w-full">
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              Guardar cambios
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => router.push(`/projects/${project.id}`)}
+              disabled={isPending}
+              className="w-full"
+            >
+              Cancelar
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
