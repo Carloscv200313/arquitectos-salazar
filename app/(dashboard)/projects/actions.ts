@@ -52,6 +52,8 @@ export async function createProjectAction(
       name: d.name,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
+      template: d.template,
+      weights: d.weights,
       projectAmount: d.projectAmount,
       addons: d.addons,
       anticipo: d.registerAnticipo

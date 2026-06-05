@@ -7,7 +7,7 @@
 //
 // State lives on globalThis so it survives Next.js HMR in development.
 
-import { SEED_PAYMENT_METHODS } from "@/lib/constants";
+import { SEED_PAYMENT_METHODS, resolveTemplateWeights } from "@/lib/constants";
 import { computeBreakdown, type Addon } from "@/lib/calculations";
 import type {
   Client,
@@ -15,6 +15,7 @@ import type {
   Project,
   ProjectAddon,
   ProjectPayment,
+  ProjectTemplate,
 } from "@/lib/types";
 
 interface DB {
@@ -56,6 +57,7 @@ function buildProject(
   base: number,
   createdDaysAgo: number,
   addonLines: Addon[] = [],
+  template: ProjectTemplate = "diamante",
 ): SeedProject {
   const ts = daysAgoISO(createdDaysAgo);
   const id = uuid();
@@ -66,11 +68,12 @@ function buildProject(
     amount: a.amount,
     created_at: ts,
   }));
-  const b = computeBreakdown(base, addons);
+  const b = computeBreakdown(base, addons, resolveTemplateWeights(template));
   const project: Project = {
     id,
     client_id: clientId,
     name,
+    template,
     project_amount: b.base,
     office_amount: b.markup.office,
     utility_amount: b.markup.utility,
@@ -116,10 +119,10 @@ function seed(): DB {
     ]),
     // base 4500 -> total 6750. Paid in full.
     buildProject("Remodelación Oficina Centro", clients[1].id, 4500, 25),
-    // base 38000 -> total 57000 + 2500 = 59500. Partial.
+    // base 38000 + 2500 levantamiento. Partial. Plantilla Oro.
     buildProject("Edificio Multifamiliar Surco", clients[2].id, 38000, 12, [
       { concept: "Levantamiento arquitectónico", amount: 2500 },
-    ]),
+    ], "oro"),
     // base 8000 -> total 12000. Pending (no payments).
     buildProject("Vivienda Unifamiliar La Molina", clients[3].id, 8000, 5),
   ];

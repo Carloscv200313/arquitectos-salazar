@@ -6,7 +6,13 @@
 
 import "server-only";
 
-import { computeBreakdown, computeFinance, type Addon } from "@/lib/calculations";
+import {
+  computeBreakdown,
+  computeFinance,
+  weightsFromAmounts,
+  type Addon,
+} from "@/lib/calculations";
+import { resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
 import type {
   Client,
   InternalArea,
@@ -14,6 +20,7 @@ import type {
   PaymentWithMethod,
   ProjectAddon,
   ProjectPayment,
+  ProjectTemplate,
   ProjectWithFinance,
   PaymentStatus,
 } from "@/lib/types";
@@ -131,6 +138,8 @@ export interface CreateProjectData {
   name: string;
   clientId?: string;
   clientName?: string;
+  template: ProjectTemplate;
+  weights?: SliceWeights;
   projectAmount: number;
   addons: Addon[];
   anticipo?: {
@@ -144,13 +153,15 @@ export interface CreateProjectData {
 
 export async function createProject(data: CreateProjectData): Promise<string> {
   const client = await findOrCreateClient(data.clientId, data.clientName, data.userId);
-  const b = computeBreakdown(data.projectAmount, data.addons);
+  const weights = resolveTemplateWeights(data.template, data.weights);
+  const b = computeBreakdown(data.projectAmount, data.addons, weights);
   const ts = nowISO();
   const id = uuid();
   db.projects.push({
     id,
     client_id: client.id,
     name: data.name.trim(),
+    template: data.template,
     project_amount: b.base,
     office_amount: b.markup.office,
     utility_amount: b.markup.utility,
@@ -207,7 +218,14 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
   const project = db.projects.find((p) => p.id === data.id);
   if (!project) throw new Error("Proyecto no encontrado");
   const client = await findOrCreateClient(data.clientId, data.clientName, data.userId);
-  const b = computeBreakdown(data.projectAmount, data.addons);
+  // Preserve the project's distribution: recover weights from current amounts.
+  const weights = weightsFromAmounts({
+    proposal: project.proposal_amount,
+    modeling_3d: project.modeling_3d_amount,
+    plans: project.plans_amount,
+    render: project.render_amount,
+  });
+  const b = computeBreakdown(data.projectAmount, data.addons, weights);
   project.name = data.name.trim();
   project.client_id = client.id;
   project.project_amount = b.base;

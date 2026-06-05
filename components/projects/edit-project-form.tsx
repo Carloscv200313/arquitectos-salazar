@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { Client, ProjectWithFinance } from "@/lib/types";
+import { weightsFromAmounts } from "@/lib/calculations";
 import { DistributionPreview } from "./distribution-preview";
 import { updateProjectAction } from "@/app/(dashboard)/projects/actions";
 
@@ -58,6 +59,12 @@ export function EditProjectForm({
   );
 
   const base = Number(projectAmount);
+  const weights = weightsFromAmounts({
+    proposal: project.proposal_amount,
+    modeling_3d: project.modeling_3d_amount,
+    plans: project.plans_amount,
+    render: project.render_amount,
+  });
   const parsedAddons = addons.map((a) => ({
     concept: a.concept,
     amount: Number(a.amount) || 0,
@@ -270,7 +277,7 @@ export function EditProjectForm({
             <p className="text-xs text-muted-foreground">Cálculo automático del total.</p>
           </div>
           <div className="p-5">
-            <DistributionPreview base={base} addons={parsedAddons} />
+            <DistributionPreview base={base} addons={parsedAddons} weights={weights} />
           </div>
           <div className="flex flex-col gap-2 border-t p-5">
             <Button onClick={submit} disabled={isPending} className="w-full">

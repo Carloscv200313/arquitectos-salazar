@@ -28,10 +28,14 @@ export interface ProjectAddon {
   created_at: string;
 }
 
+export type ProjectTemplate = "diamante" | "oro" | "especial";
+
 export interface Project {
   id: string;
   client_id: string;
   name: string;
+  // Distribution template that defines the internal area weights
+  template: ProjectTemplate;
   // Base amount of the project (the input). Markup is computed on top of this.
   project_amount: number;
   // Markup amounts, computed as % of project_amount

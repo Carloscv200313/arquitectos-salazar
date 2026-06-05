@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { listClients, listPaymentMethods } from "@/lib/data/projects";
-import { CreateProjectForm } from "@/components/projects/create-project-form";
+import { CreateProjectWizard } from "@/components/projects/create-project-wizard";
 
 export const metadata = { title: "Nuevo proyecto" };
 
@@ -22,11 +22,11 @@ export default async function NewProjectPage() {
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Nuevo proyecto</h1>
         <p className="text-sm text-muted-foreground">
-          Registra el proyecto, su cliente y la distribución automática del monto.
+          Elige una plantilla, completa los datos y confirma.
         </p>
       </div>
 
-      <CreateProjectForm clients={clients} methods={methods} />
+      <CreateProjectWizard clients={clients} methods={methods} />
     </div>
   );
 }

@@ -3,8 +3,10 @@
 import {
   MARKUP,
   PROJECT_DISTRIBUTION,
+  PROYECTO_RATE,
   type MarkupKey,
   type ProjectSliceKey,
+  type SliceWeights,
 } from "./constants";
 import type {
   MovementType,
@@ -58,9 +60,30 @@ export function computeMarkup(base: number): MarkupAmounts {
   return result;
 }
 
-/** Internal split of the project base: proposal / modeling / plans / render. */
-export function distributeProject(base: number): ProjectDistribution {
-  return splitAmount(base, PROJECT_DISTRIBUTION);
+/** Amount of the "Proyecto" portion (50% of the base) that the 4 areas split. */
+export function projectPortion(base: number): number {
+  return round2((Number.isFinite(base) && base > 0 ? base : 0) * PROYECTO_RATE);
+}
+
+/**
+ * Internal split of the "Proyecto" portion (50% of base) across the 4 areas,
+ * using the given template weights (which must sum to 1).
+ */
+export function distributeProject(
+  base: number,
+  weights: SliceWeights = PROJECT_DISTRIBUTION,
+): ProjectDistribution {
+  return splitAmount(projectPortion(base), weights);
+}
+
+/** Recover normalized weights (sum 1) from stored area amounts. */
+export function weightsFromAmounts(amounts: ProjectDistribution): SliceWeights {
+  const total = (Object.values(amounts) as number[]).reduce((a, b) => a + b, 0);
+  if (total <= 0) return { ...PROJECT_DISTRIBUTION };
+  const keys = Object.keys(amounts) as ProjectSliceKey[];
+  const out = {} as SliceWeights;
+  keys.forEach((k) => (out[k] = amounts[k] / total));
+  return out;
 }
 
 export function sumAddons(addons: Pick<Addon, "amount">[]): number {
@@ -69,18 +92,20 @@ export function sumAddons(addons: Pick<Addon, "amount">[]): number {
 
 export interface ProjectBreakdown {
   base: number; // project base amount (input)
-  markup: MarkupAmounts; // deprecated in UI, kept for storage compatibility
-  markupTotal: number; // deprecated in UI, kept for storage compatibility
+  markup: MarkupAmounts; // office / utility — referencial (% of base)
+  markupTotal: number; // office + utility — referencial
+  projectPortion: number; // "Proyecto" = 50% of base, split among the 4 areas
   subtotal: number; // base amount before addons
   addonsTotal: number; // sum of additional line items
   total: number; // subtotal + addonsTotal  (amount the client pays)
-  project: ProjectDistribution; // internal split of the base
+  project: ProjectDistribution; // 4 areas, sum = projectPortion
 }
 
-/** Full breakdown from a project base amount + additional line items. */
+/** Full breakdown from a project base amount + addons + template weights. */
 export function computeBreakdown(
   base: number,
   addons: Pick<Addon, "amount">[] = [],
+  weights: SliceWeights = PROJECT_DISTRIBUTION,
 ): ProjectBreakdown {
   const safeBase = Number.isFinite(base) && base > 0 ? round2(base) : 0;
   const markup = computeMarkup(safeBase);
@@ -94,10 +119,11 @@ export function computeBreakdown(
     base: safeBase,
     markup,
     markupTotal,
+    projectPortion: projectPortion(safeBase),
     subtotal,
     addonsTotal,
     total,
-    project: distributeProject(safeBase),
+    project: distributeProject(safeBase, weights),
   };
 }
 

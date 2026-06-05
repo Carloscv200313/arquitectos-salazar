@@ -49,6 +49,8 @@ create table if not exists public.projects (
   id                 uuid primary key default gen_random_uuid(),
   client_id          uuid not null references public.clients (id) on delete restrict,
   name               text not null check (char_length(trim(name)) between 2 and 120),
+  -- distribution template for the internal areas
+  template           text not null default 'diamante' check (template in ('diamante', 'oro', 'especial')),
   -- base amount charged to the client
   project_amount     numeric(14,2) not null check (project_amount > 0),
   -- retained for backward compatibility with legacy data; no longer used in UI totals

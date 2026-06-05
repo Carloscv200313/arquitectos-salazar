@@ -1,13 +1,14 @@
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   MARKUP,
   MARKUP_LABELS,
-  MARKUP_TOTAL_RATE,
-  PROJECT_DISTRIBUTION,
-  PROJECT_BASE_LABEL,
+  PROYECTO_RATE,
   PROJECT_MARKUP_LABEL,
   PROJECT_SLICE_LABELS,
+  TEMPLATE_LABELS,
 } from "@/lib/constants";
+import { round2 } from "@/lib/calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProjectWithFinance } from "@/lib/types";
@@ -43,23 +44,36 @@ function Line({
 }
 
 export function ProjectDistributionCard({ project }: { project: ProjectWithFinance }) {
+  const portion = round2(
+    project.proposal_amount +
+      project.modeling_3d_amount +
+      project.plans_amount +
+      project.render_amount,
+  );
+  const pctOf = (amount: number) => (portion > 0 ? amount / portion : 0);
+
   return (
     <Card className="gap-0 py-0">
-      <div className="border-b px-5 py-4">
-        <h2 className="text-sm font-semibold">Resumen del proyecto</h2>
-        <p className="text-xs text-muted-foreground">
-          Total a cobrar {formatCurrency(project.total_amount)}
-        </p>
+      <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold">Resumen del proyecto</h2>
+          <p className="text-xs text-muted-foreground">
+            Total a cobrar {formatCurrency(project.total_amount)}
+          </p>
+        </div>
+        <Badge variant="secondary" className="shrink-0">
+          Plantilla {TEMPLATE_LABELS[project.template]}
+        </Badge>
       </div>
 
-      <div className="grid gap-6 p-5 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-5 p-5 xl:grid-cols-[1.05fr_0.95fr]">
         <section className="space-y-5">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Composición del total
             </p>
             <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line label={PROJECT_BASE_LABEL} amount={project.project_amount} strong />
+              <Line label="Monto del proyecto" amount={project.project_amount} strong />
               {project.addons.map((a) => (
                 <Line key={a.id} label={a.concept} amount={a.amount} muted />
               ))}
@@ -74,30 +88,33 @@ export function ProjectDistributionCard({ project }: { project: ProjectWithFinan
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Distribución referencial
+              Referencia interna
             </p>
             <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line label={PROJECT_MARKUP_LABEL} pct={MARKUP_TOTAL_RATE} amount={project.office_amount + project.utility_amount} muted />
               <Line label={MARKUP_LABELS.office} pct={MARKUP.office} amount={project.office_amount} muted />
               <Line label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={project.utility_amount} muted />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Proyecto 50%, oficina y utilidad son referencias internas. No se suman al total a cobrar.
+              {PROJECT_MARKUP_LABEL} 50%, oficina y utilidad son referencias internas. No se
+              suman al total a cobrar.
             </p>
           </div>
         </section>
 
-        <section className="space-y-5">
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Distribución operativa interna
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Distribución del proyecto
             </p>
-            <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line label={PROJECT_SLICE_LABELS.proposal} pct={PROJECT_DISTRIBUTION.proposal} amount={project.proposal_amount} muted />
-              <Line label={PROJECT_SLICE_LABELS.modeling_3d} pct={PROJECT_DISTRIBUTION.modeling_3d} amount={project.modeling_3d_amount} muted />
-              <Line label={PROJECT_SLICE_LABELS.plans} pct={PROJECT_DISTRIBUTION.plans} amount={project.plans_amount} muted />
-              <Line label={PROJECT_SLICE_LABELS.render} pct={PROJECT_DISTRIBUTION.render} amount={project.render_amount} muted />
-            </div>
+            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+              {Math.round(PROYECTO_RATE * 100)}% · {formatCurrency(portion)}
+            </span>
+          </div>
+          <div className="rounded-xl border bg-muted/20 px-4 py-3">
+            <Line label={PROJECT_SLICE_LABELS.proposal} pct={pctOf(project.proposal_amount)} amount={project.proposal_amount} muted />
+            <Line label={PROJECT_SLICE_LABELS.modeling_3d} pct={pctOf(project.modeling_3d_amount)} amount={project.modeling_3d_amount} muted />
+            <Line label={PROJECT_SLICE_LABELS.plans} pct={pctOf(project.plans_amount)} amount={project.plans_amount} muted />
+            <Line label={PROJECT_SLICE_LABELS.render} pct={pctOf(project.render_amount)} amount={project.render_amount} muted />
           </div>
         </section>
       </div>

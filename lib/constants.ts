@@ -22,6 +22,63 @@ export type ProjectSliceKey = keyof typeof PROJECT_DISTRIBUTION;
 
 export const MARKUP_TOTAL_RATE = Object.values(MARKUP).reduce((a, b) => a + b, 0);
 
+// ── Plantillas (templates) ───────────────────────────────────────────────────
+// Las 4 áreas internas reparten la porción "Proyecto" = 50% del monto base.
+// Los pesos de cada plantilla suman 1 (100% de esa porción).
+export const PROYECTO_RATE = 0.5;
+
+export type ProjectTemplate = "diamante" | "oro" | "especial";
+
+export type SliceWeights = Record<ProjectSliceKey, number>;
+
+export const TEMPLATE_WEIGHTS: Record<"diamante" | "oro", SliceWeights> = {
+  diamante: { proposal: 0.2, modeling_3d: 0.33, plans: 0.33, render: 0.14 },
+  oro: { proposal: 0.2, modeling_3d: 0.3, plans: 0.35, render: 0.15 },
+};
+
+export const TEMPLATE_LABELS: Record<ProjectTemplate, string> = {
+  diamante: "Diamante",
+  oro: "Oro",
+  especial: "Especial",
+};
+
+export const PROJECT_TEMPLATES: {
+  id: ProjectTemplate;
+  label: string;
+  description: string;
+  weights: SliceWeights | null; // null = el usuario define (especial)
+}[] = [
+  {
+    id: "diamante",
+    label: "Diamante",
+    description: "Distribución estándar de la empresa.",
+    weights: TEMPLATE_WEIGHTS.diamante,
+  },
+  {
+    id: "oro",
+    label: "Oro",
+    description: "Mayor peso en planos y render.",
+    weights: TEMPLATE_WEIGHTS.oro,
+  },
+  {
+    id: "especial",
+    label: "Especial",
+    description: "Define tú mismo el peso de cada área (debe sumar 100%).",
+    weights: null,
+  },
+];
+
+/** Devuelve los pesos de una plantilla. Para especial usa los provistos. */
+export function resolveTemplateWeights(
+  template: ProjectTemplate,
+  custom?: SliceWeights,
+): SliceWeights {
+  if (template === "especial") {
+    return custom ?? TEMPLATE_WEIGHTS.diamante;
+  }
+  return TEMPLATE_WEIGHTS[template];
+}
+
 export const PROJECT_BASE_LABEL = "Monto del proyecto";
 export const PROJECT_MARKUP_LABEL = "Proyecto";
 
@@ -58,5 +115,5 @@ export const MOVEMENT_TYPE_LABELS = {
   expense: "Egreso",
 } as const;
 
-export const CURRENCY = "USD";
-export const LOCALE = "es-PE";
+export const CURRENCY = "MXN";
+export const LOCALE = "es-MX";

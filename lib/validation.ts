@@ -35,12 +35,27 @@ export const addonSchema = z.object({
 
 const addons = z.array(addonSchema).max(20, "Demasiados adicionales").default([]);
 
+// Template weights for the 4 internal areas (fractions summing to 1).
+export const sliceWeightsSchema = z.object({
+  proposal: z.number().min(0).max(1),
+  modeling_3d: z.number().min(0).max(1),
+  plans: z.number().min(0).max(1),
+  render: z.number().min(0).max(1),
+});
+
+function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number; render: number }) {
+  const sum = w.proposal + w.modeling_3d + w.plans + w.render;
+  return Math.abs(sum - 1) < 0.005;
+}
+
 // ── Create project ────────────────────────────────────────────────
 export const createProjectSchema = z
   .object({
     name,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
+    template: z.enum(["diamante", "oro", "especial"]).default("diamante"),
+    weights: sliceWeightsSchema.optional(),
     projectAmount: money,
     addons,
     registerAnticipo: z.boolean().default(false),
@@ -58,6 +73,15 @@ export const createProjectSchema = z
         path: ["clientId"],
         message: "Selecciona o crea un cliente",
       });
+    }
+    if (data.template === "especial") {
+      if (!data.weights || !weightsSumOk(data.weights)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["weights"],
+          message: "Los porcentajes deben sumar 100%",
+        });
+      }
     }
     if (data.registerAnticipo) {
       const total = computeBreakdown(data.projectAmount, data.addons ?? []).total;

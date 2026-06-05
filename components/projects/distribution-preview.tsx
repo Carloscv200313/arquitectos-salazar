@@ -4,12 +4,12 @@ import { computeBreakdown, type Addon } from "@/lib/calculations";
 import {
   MARKUP,
   MARKUP_LABELS,
-  MARKUP_TOTAL_RATE,
+  PROYECTO_RATE,
   PROJECT_DISTRIBUTION,
-  PROJECT_BASE_LABEL,
   PROJECT_MARKUP_LABEL,
   PROJECT_SLICE_LABELS,
   type ProjectSliceKey,
+  type SliceWeights,
 } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -60,12 +60,14 @@ function SectionTitle({ children }: { children: string }) {
 export function DistributionPreview({
   base,
   addons,
+  weights = PROJECT_DISTRIBUTION,
 }: {
   base: number;
   addons: Addon[];
+  weights?: SliceWeights;
 }) {
   const valid = Number.isFinite(base) && base > 0;
-  const b = computeBreakdown(valid ? base : 0, addons);
+  const b = computeBreakdown(valid ? base : 0, addons, weights);
   const projectKeys = Object.keys(PROJECT_DISTRIBUTION) as ProjectSliceKey[];
   const validAddons = addons.filter((a) => a.amount > 0);
 
@@ -93,11 +95,11 @@ export function DistributionPreview({
         </div>
       </div>
 
-      {/* Cálculo del total (primary) */}
+      {/* Cálculo del total */}
       <div>
         <SectionTitle>Cálculo del total</SectionTitle>
         <div className="divide-y divide-border/60">
-          <Row label={PROJECT_BASE_LABEL} amount={b.base} dot="bg-brand" strong />
+          <Row label="Monto del proyecto" amount={b.base} dot="bg-brand" strong />
           {validAddons.map((a, i) => (
             <Row key={i} label={a.concept || "Adicional"} amount={a.amount} dot="bg-chart-2" muted />
           ))}
@@ -110,33 +112,38 @@ export function DistributionPreview({
         </div>
       </div>
 
-      {/* Referencial (secondary, boxed) */}
+      {/* Distribución del Proyecto (50% del monto) según plantilla */}
       <div className="rounded-xl border bg-muted/25 p-4">
-        <SectionTitle>Distribución referencial</SectionTitle>
-        <div className="divide-y divide-border/60">
-          <Row label={PROJECT_MARKUP_LABEL} pct={MARKUP_TOTAL_RATE} amount={b.markupTotal} muted />
-          <Row label={MARKUP_LABELS.office} pct={MARKUP.office} amount={b.markup.office} muted />
-          <Row label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={b.markup.utility} muted />
+        <div className="mb-1 flex items-center justify-between">
+          <SectionTitle>Distribución del proyecto</SectionTitle>
+          <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+            {Math.round(PROYECTO_RATE * 100)}% · {formatCurrency(b.projectPortion)}
+          </span>
         </div>
-        <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-          Referencia interna. No se suma al total a cobrar.
-        </p>
-      </div>
-
-      {/* Operativa interna (secondary, boxed) */}
-      <div className="rounded-xl border bg-muted/25 p-4">
-        <SectionTitle>Distribución operativa interna</SectionTitle>
         <div className="divide-y divide-border/60">
           {projectKeys.map((k) => (
             <Row
               key={k}
               label={PROJECT_SLICE_LABELS[k]}
-              pct={PROJECT_DISTRIBUTION[k]}
+              pct={weights[k]}
               amount={b.project[k]}
               muted
             />
           ))}
         </div>
+      </div>
+
+      {/* Referencial: oficina / utilidad (el otro 50%) */}
+      <div className="rounded-xl border bg-muted/25 p-4">
+        <SectionTitle>Referencia interna</SectionTitle>
+        <div className="divide-y divide-border/60">
+          <Row label={MARKUP_LABELS.office} pct={MARKUP.office} amount={b.markup.office} muted />
+          <Row label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={b.markup.utility} muted />
+        </div>
+        <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
+          {PROJECT_MARKUP_LABEL} 50%, oficina y utilidad son referencias internas. No se
+          suman al total a cobrar.
+        </p>
       </div>
     </div>
   );
