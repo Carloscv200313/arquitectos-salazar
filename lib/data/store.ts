@@ -11,11 +11,14 @@ import { SEED_PAYMENT_METHODS, resolveTemplateWeights } from "@/lib/constants";
 import { computeBreakdown, type Addon } from "@/lib/calculations";
 import type {
   Client,
+  InternalTransfer,
   PaymentMethod,
   Project,
   ProjectAddon,
   ProjectPayment,
   ProjectTemplate,
+  Work,
+  WorkMovement,
 } from "@/lib/types";
 
 interface DB {
@@ -24,6 +27,9 @@ interface DB {
   projects: Project[];
   addons: ProjectAddon[];
   payments: ProjectPayment[];
+  internalTransfers: InternalTransfer[];
+  works: Work[];
+  workMovements: WorkMovement[];
 }
 
 const SYSTEM_USER = "seed";
@@ -144,7 +150,52 @@ function seed(): DB {
     payment(projects[2].id, "expense", "Pago de render", 5320, dateOnly(2), methods[1].id, "render"),
   ];
 
-  return { clients, methods, projects, addons, payments };
+  const internalTransfers: InternalTransfer[] = [
+    transfer(
+      "Cierre de proyectos varios",
+      34520,
+      "2026-03-20",
+      methods[2].id,
+      methods[0].id,
+    ),
+    transfer(
+      "Reserva operativa",
+      74060.22,
+      "2026-03-20",
+      methods[2].id,
+      methods[3].id,
+    ),
+  ];
+
+  const works: Work[] = [
+    work("Casa de Alejandro López Atilano", clients[1].id, "active", 35, "Control de obra residencial."),
+    work("Remodelación Local Miraflores", clients[0].id, "active", 18, "Adecuación interior y acabados."),
+    work("Ampliación Terraza Surco", clients[2].id, "finished", 55, null),
+  ];
+
+  const workMovements: WorkMovement[] = [
+    workMovement(works[0].id, "939", dateOnly(35), "Abono de obra", "Alejandro López Atilano", "Abono de obra", "income", 300000, methods[3].id),
+    workMovement(works[0].id, "629018", dateOnly(34), "Abono de obra, BBVA", "Alejandro López Atilano", "Abono de obra", "income", 188871.75, methods[5].id),
+    workMovement(works[0].id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Aceros Ayotlán", "Material de construcción", "expense", 234358.04, methods[0].id),
+    workMovement(works[0].id, "0072", dateOnly(28), "700 blocks", "Master Block", "Material de construcción", "expense", 11900, methods[2].id),
+    workMovement(works[0].id, "6043", dateOnly(27), "Mano de obra", "Luis Flores", "Honorarios", "expense", 16000, methods[2].id),
+    workMovement(works[1].id, "A-001", dateOnly(18), "Anticipo inicial", "Inmobiliaria Andina S.A.C.", "Abono de obra", "income", 12000, methods[3].id),
+    workMovement(works[1].id, "M-118", dateOnly(16), "Pintura interior", "Pinturas Andina", "Pintura", "expense", 2400, methods[2].id),
+    workMovement(works[1].id, "S-021", dateOnly(15), "Servicio eléctrico", "Técnicos del Sur", "Servicio", "expense", 900, methods[1].id),
+    workMovement(works[2].id, "T-001", dateOnly(55), "Abono inicial", "Constructora del Sur", "Abono de obra", "income", 15000, methods[3].id),
+    workMovement(works[2].id, "G-040", dateOnly(50), "Granito de barra", "Granitos Lima", "Granito", "expense", 6200, methods[2].id),
+  ];
+
+  return {
+    clients,
+    methods,
+    projects,
+    addons,
+    payments,
+    internalTransfers,
+    works,
+    workMovements,
+  };
 }
 
 function payment(
@@ -170,8 +221,122 @@ function payment(
   };
 }
 
+function transfer(
+  description: string,
+  amount: number,
+  date: string,
+  fromMethodId: string,
+  toMethodId: string,
+): InternalTransfer {
+  return {
+    id: uuid(),
+    description,
+    amount,
+    transfer_date: date,
+    from_payment_method_id: fromMethodId,
+    to_payment_method_id: toMethodId,
+    created_at: nowISO(),
+    created_by: SYSTEM_USER,
+  };
+}
+
+function work(
+  name: string,
+  clientId: string,
+  status: Work["status"],
+  createdDaysAgo: number,
+  description: string | null,
+): Work {
+  const ts = daysAgoISO(createdDaysAgo);
+  return {
+    id: uuid(),
+    client_id: clientId,
+    name,
+    status,
+    description,
+    created_at: ts,
+    updated_at: ts,
+    created_by: SYSTEM_USER,
+  };
+}
+
+function workMovement(
+  workId: string,
+  receipt: string,
+  date: string,
+  concept: string,
+  supplier: string,
+  category: string,
+  movementType: WorkMovement["movement_type"],
+  amount: number,
+  paymentMethodId: string,
+  observations: string | null = null,
+): WorkMovement {
+  return {
+    id: uuid(),
+    work_id: workId,
+    receipt,
+    movement_date: date,
+    concept,
+    supplier,
+    category,
+    movement_type: movementType,
+    amount,
+    payment_method_id: paymentMethodId,
+    observations,
+    created_at: nowISO(),
+    created_by: SYSTEM_USER,
+  };
+}
+
 const globalForDb = globalThis as unknown as { __as_db?: DB };
 
 export const db: DB = globalForDb.__as_db ?? (globalForDb.__as_db = seed());
+
+// HMR keeps the old global store alive in development. When the schema evolves,
+// make sure newly added collections exist without requiring a server restart.
+if (!db.internalTransfers) db.internalTransfers = [];
+if (!db.works) {
+  const client = (index: number) => db.clients[index % Math.max(db.clients.length, 1)]?.id;
+  db.works = db.clients.length
+    ? [
+        work("Casa de Alejandro López Atilano", client(1), "active", 35, "Control de obra residencial."),
+        work("Remodelación Local Miraflores", client(0), "active", 18, "Adecuación interior y acabados."),
+        work("Ampliación Terraza Surco", client(2), "finished", 55, null),
+      ]
+    : [];
+}
+if (!db.workMovements) {
+  const [first, second, third] = db.works;
+  db.workMovements = [
+    ...(first
+      ? [
+          workMovement(first.id, "939", dateOnly(35), "Abono de obra", "Alejandro López Atilano", "Abono de obra", "income", 300000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "629018", dateOnly(34), "Abono de obra, BBVA", "Alejandro López Atilano", "Abono de obra", "income", 188871.75, db.methods[5]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Aceros Ayotlán", "Material de construcción", "expense", 234358.04, db.methods[0]?.id),
+          workMovement(first.id, "0072", dateOnly(28), "700 blocks", "Master Block", "Material de construcción", "expense", 11900, db.methods[2]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "6043", dateOnly(27), "Mano de obra", "Luis Flores", "Honorarios", "expense", 16000, db.methods[2]?.id ?? db.methods[0]?.id),
+        ]
+      : []),
+    ...(second
+      ? [
+          workMovement(second.id, "A-001", dateOnly(18), "Anticipo inicial", "Inmobiliaria Andina S.A.C.", "Abono de obra", "income", 12000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(second.id, "M-118", dateOnly(16), "Pintura interior", "Pinturas Andina", "Pintura", "expense", 2400, db.methods[2]?.id ?? db.methods[0]?.id),
+          workMovement(second.id, "S-021", dateOnly(15), "Servicio eléctrico", "Técnicos del Sur", "Servicio", "expense", 900, db.methods[1]?.id ?? db.methods[0]?.id),
+        ]
+      : []),
+    ...(third
+      ? [
+          workMovement(third.id, "T-001", dateOnly(55), "Abono inicial", "Constructora del Sur", "Abono de obra", "income", 15000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(third.id, "G-040", dateOnly(50), "Granito de barra", "Granitos Lima", "Granito", "expense", 6200, db.methods[2]?.id ?? db.methods[0]?.id),
+        ]
+      : []),
+  ];
+}
+for (const movement of db.workMovements) {
+  if (!movement.payment_method_id) {
+    movement.payment_method_id = db.methods[0]?.id ?? "";
+  }
+}
 
 export { uuid, nowISO };

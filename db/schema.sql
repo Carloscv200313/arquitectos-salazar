@@ -94,6 +94,27 @@ create table if not exists public.project_payments (
 create index if not exists idx_payments_project on public.project_payments (project_id);
 create index if not exists idx_payments_date on public.project_payments (payment_date desc);
 
+-- ── internal_transfers (traspasos entre formas de pago) ─────────────────────
+create table if not exists public.internal_transfers (
+  id                      uuid primary key default gen_random_uuid(),
+  description             text not null check (char_length(trim(description)) between 2 and 160),
+  amount                  numeric(14,2) not null check (amount > 0),
+  transfer_date           date not null,
+  from_payment_method_id  uuid not null references public.payment_methods (id) on delete restrict,
+  to_payment_method_id    uuid not null references public.payment_methods (id) on delete restrict,
+  created_at              timestamptz not null default now(),
+  created_by              uuid references auth.users (id) on delete set null,
+  constraint chk_internal_transfers_different_methods
+    check (from_payment_method_id <> to_payment_method_id)
+);
+
+create index if not exists idx_internal_transfers_date
+  on public.internal_transfers (transfer_date desc);
+create index if not exists idx_internal_transfers_from_method
+  on public.internal_transfers (from_payment_method_id);
+create index if not exists idx_internal_transfers_to_method
+  on public.internal_transfers (to_payment_method_id);
+
 -- ── project_addons (adicionales: levantamiento, etc.) ────────────────────────
 create table if not exists public.project_addons (
   id          uuid primary key default gen_random_uuid(),
@@ -104,6 +125,45 @@ create table if not exists public.project_addons (
 );
 
 create index if not exists idx_addons_project on public.project_addons (project_id);
+
+-- ── works (obras) ───────────────────────────────────────────────────────────
+create table if not exists public.works (
+  id           uuid primary key default gen_random_uuid(),
+  client_id    uuid not null references public.clients (id) on delete restrict,
+  name         text not null check (char_length(trim(name)) between 2 and 120),
+  status       text not null default 'active' check (status in ('active', 'paused', 'finished')),
+  description  text,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  created_by   uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_works_client on public.works (client_id);
+create index if not exists idx_works_created on public.works (created_at desc);
+
+create trigger trg_works_updated_at
+  before update on public.works
+  for each row execute function public.set_updated_at();
+
+-- ── work_movements (entradas / salidas de obra) ─────────────────────────────
+create table if not exists public.work_movements (
+  id             uuid primary key default gen_random_uuid(),
+  work_id        uuid not null references public.works (id) on delete cascade,
+  receipt        text not null check (char_length(trim(receipt)) between 1 and 80),
+  movement_date  date not null,
+  concept        text not null check (char_length(trim(concept)) between 2 and 160),
+  supplier       text not null check (char_length(trim(supplier)) between 2 and 160),
+  category       text not null,
+  movement_type  text not null check (movement_type in ('income', 'expense')),
+  amount         numeric(14,2) not null check (amount > 0),
+  payment_method_id uuid not null references public.payment_methods (id) on delete restrict,
+  observations   text,
+  created_at     timestamptz not null default now(),
+  created_by     uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_work_movements_work on public.work_movements (work_id);
+create index if not exists idx_work_movements_date on public.work_movements (movement_date desc);
 
 -- ── seed payment methods ─────────────────────────────────────────────────────
 insert into public.payment_methods (name)
@@ -126,6 +186,9 @@ alter table public.payment_methods  enable row level security;
 alter table public.projects         enable row level security;
 alter table public.project_payments enable row level security;
 alter table public.project_addons   enable row level security;
+alter table public.internal_transfers enable row level security;
+alter table public.works            enable row level security;
+alter table public.work_movements   enable row level security;
 
 -- clients
 create policy "clients_select" on public.clients
@@ -157,10 +220,36 @@ create policy "payments_insert" on public.project_payments
 create policy "payments_delete" on public.project_payments
   for delete to authenticated using (true);
 
+-- internal_transfers
+create policy "internal_transfers_select" on public.internal_transfers
+  for select to authenticated using (true);
+create policy "internal_transfers_insert" on public.internal_transfers
+  for insert to authenticated with check (true);
+create policy "internal_transfers_delete" on public.internal_transfers
+  for delete to authenticated using (true);
+
 -- project_addons
 create policy "addons_select" on public.project_addons
   for select to authenticated using (true);
 create policy "addons_insert" on public.project_addons
   for insert to authenticated with check (true);
 create policy "addons_delete" on public.project_addons
+  for delete to authenticated using (true);
+
+-- works
+create policy "works_select" on public.works
+  for select to authenticated using (true);
+create policy "works_insert" on public.works
+  for insert to authenticated with check (true);
+create policy "works_update" on public.works
+  for update to authenticated using (true) with check (true);
+create policy "works_delete" on public.works
+  for delete to authenticated using (true);
+
+-- work_movements
+create policy "work_movements_select" on public.work_movements
+  for select to authenticated using (true);
+create policy "work_movements_insert" on public.work_movements
+  for insert to authenticated with check (true);
+create policy "work_movements_delete" on public.work_movements
   for delete to authenticated using (true);

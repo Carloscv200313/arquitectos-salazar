@@ -1,9 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { listProjects, listPaymentMethods, type ProjectFilters } from "@/lib/data/projects";
+import {
+  listProjects,
+  listPaymentMethods,
+  type ProjectFilters,
+} from "@/lib/data/projects";
 import { SummaryCards } from "@/components/projects/summary-cards";
 import { ProjectsFilters } from "@/components/projects/projects-filters";
 import { ProjectsTable } from "@/components/projects/projects-table";
@@ -67,9 +71,18 @@ export default async function ProjectsPage({
             Gestiona montos, movimientos e hitos internos de cada proyecto.
           </p>
         </div>
-        <Button nativeButton={false} render={<Link href="/projects/new" />}>
-          <Plus className="size-4" /> Nuevo proyecto
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/projects/reports" />}
+          >
+            <FileText className="size-4" /> Reportes
+          </Button>
+          <Button nativeButton={false} render={<Link href="/projects/new" />}>
+            <Plus className="size-4" /> Nuevo proyecto
+          </Button>
+        </div>
       </div>
 
       <SummaryCards projects={projects} />

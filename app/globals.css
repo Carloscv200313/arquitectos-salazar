@@ -83,6 +83,8 @@
   --success-foreground: oklch(0.27 0.06 150);
   --warning: oklch(0.83 0.16 80);
   --warning-foreground: oklch(0.35 0.08 70);
+  --project-table-income: oklch(0.52 0.16 150);
+  --project-table-pending: oklch(0.56 0.18 24);
   --chart-1: oklch(0.84 0.2 128);
   --chart-2: oklch(0.7 0.13 145);
   --chart-3: oklch(0.55 0.09 155);
@@ -124,6 +126,8 @@
   --success-foreground: oklch(0.92 0.05 150);
   --warning: oklch(0.83 0.16 80);
   --warning-foreground: oklch(0.95 0.05 90);
+  --project-table-income: oklch(0.76 0.16 150);
+  --project-table-pending: oklch(0.72 0.17 24);
   --chart-1: oklch(0.84 0.2 128);
   --chart-2: oklch(0.7 0.13 145);
   --chart-3: oklch(0.6 0.1 155);
@@ -148,5 +152,16 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@layer components {
+  .project-table-income {
+    color: var(--project-table-income);
+    font-weight: 500;
+  }
+
+  .project-table-pending {
+    color: var(--project-table-pending);
   }
 }

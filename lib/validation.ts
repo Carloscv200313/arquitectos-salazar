@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { computeBreakdown } from "./calculations";
-import { PROJECT_DISTRIBUTION } from "./constants";
+import { PROJECT_DISTRIBUTION, WORK_CATEGORIES, WORK_STATUSES } from "./constants";
 
 // Reusable money field: positive, finite, max 2 decimals.
 const money = z
@@ -157,3 +157,71 @@ export const registerMovementSchema = z
   });
 
 export type RegisterMovementInput = z.infer<typeof registerMovementSchema>;
+
+// ── Register internal transfer between payment methods ───────────
+export const registerInternalTransferSchema = z
+  .object({
+    description: concept,
+    amount: money,
+    transferDate: isoDate,
+    fromPaymentMethodId: z.string().uuid("Selecciona la cuenta de origen"),
+    toPaymentMethodId: z.string().uuid("Selecciona la cuenta de destino"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fromPaymentMethodId === data.toPaymentMethodId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["toPaymentMethodId"],
+        message: "El destino debe ser diferente al origen",
+      });
+    }
+  });
+
+export type RegisterInternalTransferInput = z.infer<
+  typeof registerInternalTransferSchema
+>;
+
+const workStatus = z.enum(WORK_STATUSES);
+const workCategory = z.enum(WORK_CATEGORIES);
+
+// ── Works ────────────────────────────────────────────────────────
+export const createWorkSchema = z
+  .object({
+    name,
+    clientId: z.string().uuid().optional().or(z.literal("")),
+    clientName: name.optional().or(z.literal("")),
+    status: workStatus.default("active"),
+    description: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    const hasId = !!data.clientId && data.clientId !== "";
+    const hasName = !!data.clientName && data.clientName !== "";
+    if (!hasId && !hasName) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["clientId"],
+        message: "Selecciona o crea un cliente",
+      });
+    }
+  });
+
+export const updateWorkSchema = createWorkSchema.extend({
+  id: z.string().uuid("Obra inválida"),
+});
+
+export const registerWorkMovementSchema = z.object({
+  workId: z.string().uuid("Obra inválida"),
+  receipt: z.string().trim().min(1, "Ingresa el recibo").max(80, "Máximo 80 caracteres"),
+  movementDate: isoDate,
+  concept,
+  supplier: z.string().trim().min(2, "Ingresa proveedor").max(160, "Máximo 160 caracteres"),
+  category: workCategory,
+  movementType: z.enum(["income", "expense"]),
+  amount: money,
+  paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+  observations: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+});
+
+export type CreateWorkInput = z.infer<typeof createWorkSchema>;
+export type UpdateWorkInput = z.infer<typeof updateWorkSchema>;
+export type RegisterWorkMovementInput = z.infer<typeof registerWorkMovementSchema>;

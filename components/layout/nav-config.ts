@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   FolderKanban,
+  Hammer,
   Users,
   Wallet,
   BarChart3,
@@ -28,6 +29,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Proyectos", href: "/projects", icon: FolderKanban },
+      { label: "Obras", href: "/obras", icon: Hammer },
       { label: "Clientes", href: "/clients", icon: Users, disabled: true },
       { label: "Finanzas", href: "/finance", icon: Wallet, disabled: true },
       { label: "Reportes", href: "/reports", icon: BarChart3, disabled: true },

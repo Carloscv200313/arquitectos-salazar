@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   createProjectSchema,
+  registerInternalTransferSchema,
   registerMovementSchema,
   updateProjectSchema,
 } from "@/lib/validation";
@@ -11,6 +12,7 @@ import {
   createProject,
   updateProject,
   registerMovement,
+  registerInternalTransfer,
   deleteProject,
   getProject,
   listMovements,
@@ -151,6 +153,35 @@ export async function registerMovementAction(
     return { ok: true, data: undefined };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
+  }
+}
+
+export async function registerInternalTransferAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = registerInternalTransferSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del traspaso.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  const d = parsed.data;
+  try {
+    await registerInternalTransfer({
+      description: d.description,
+      amount: d.amount,
+      transferDate: d.transferDate,
+      fromPaymentMethodId: d.fromPaymentMethodId,
+      toPaymentMethodId: d.toPaymentMethodId,
+      userId: currentUserId(),
+    });
+    revalidatePath("/projects");
+    revalidatePath("/dashboard");
+    return { ok: true, data: undefined };
+  } catch {
+    return { ok: false, error: "No se pudo registrar el traspaso interno." };
   }
 }
 

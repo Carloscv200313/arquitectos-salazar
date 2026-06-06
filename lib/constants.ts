@@ -115,5 +115,32 @@ export const MOVEMENT_TYPE_LABELS = {
   expense: "Egreso",
 } as const;
 
+export const WORK_STATUSES = ["active", "paused", "finished"] as const;
+
+export const WORK_STATUS_LABELS = {
+  active: "Activa",
+  paused: "Pausada",
+  finished: "Finalizada",
+} as const;
+
+export const WORK_CATEGORIES = [
+  "Carpintería",
+  "Material de construcción",
+  "Material de obras",
+  "Instalaciones",
+  "Maquinaria",
+  "Equipo y herramientas",
+  "Herrería",
+  "Aluminio",
+  "Tabla roca",
+  "Abono de obra",
+  "Honorarios",
+  "Servicio",
+  "Pintura",
+  "Cantera",
+  "Granito",
+  "Yeso",
+] as const;
+
 export const CURRENCY = "MXN";
 export const LOCALE = "es-MX";

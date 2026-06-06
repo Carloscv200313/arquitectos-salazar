@@ -9,20 +9,24 @@ import "server-only";
 import {
   computeBreakdown,
   computeFinance,
+  round2,
   weightsFromAmounts,
   type Addon,
 } from "@/lib/calculations";
-import { resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
+import { MARKUP, resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
 import type {
   Client,
   InternalArea,
+  InternalTransferWithMethods,
   PaymentMethod,
+  PaymentMethodReportRow,
   PaymentWithMethod,
   ProjectAddon,
   ProjectPayment,
   ProjectTemplate,
   ProjectWithFinance,
   PaymentStatus,
+  UtilityReportRow,
 } from "@/lib/types";
 import { db, nowISO, uuid } from "./store";
 
@@ -106,6 +110,64 @@ export async function listMovements(projectId: string): Promise<PaymentWithMetho
       (a, b) =>
         new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime(),
     );
+}
+
+export async function listInternalTransfers(): Promise<InternalTransferWithMethods[]> {
+  return db.internalTransfers
+    .map((t) => ({
+      ...t,
+      fromMethod: db.methods.find((m) => m.id === t.from_payment_method_id) ?? null,
+      toMethod: db.methods.find((m) => m.id === t.to_payment_method_id) ?? null,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.transfer_date).getTime() - new Date(a.transfer_date).getTime(),
+    );
+}
+
+export async function getPaymentMethodReport(): Promise<PaymentMethodReportRow[]> {
+  const rows = new Map<string, PaymentMethodReportRow>();
+  for (const method of db.methods.filter((m) => m.is_active)) {
+    rows.set(method.id, {
+      methodId: method.id,
+      methodName: method.name,
+      clientMovements: 0,
+      internalMovements: 0,
+      finalBalance: 0,
+    });
+  }
+
+  for (const movement of db.payments) {
+    const row = rows.get(movement.payment_method_id);
+    if (!row) continue;
+    const sign = movement.movement_type === "income" ? 1 : -1;
+    row.clientMovements = round2(row.clientMovements + movement.amount * sign);
+  }
+
+  for (const transfer of db.internalTransfers) {
+    const from = rows.get(transfer.from_payment_method_id);
+    const to = rows.get(transfer.to_payment_method_id);
+    if (from) from.internalMovements = round2(from.internalMovements - transfer.amount);
+    if (to) to.internalMovements = round2(to.internalMovements + transfer.amount);
+  }
+
+  return [...rows.values()].map((row) => ({
+    ...row,
+    finalBalance: round2(row.clientMovements + row.internalMovements),
+  }));
+}
+
+export async function getUtilityReport(): Promise<UtilityReportRow[]> {
+  const byMonth = new Map<string, number>();
+  for (const movement of db.payments) {
+    if (movement.movement_type !== "income") continue;
+    const month = movement.payment_date.slice(0, 7);
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + movement.amount * MARKUP.utility));
+  }
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, utilityAmount]) => ({ month, utilityAmount: round2(utilityAmount) }));
 }
 
 async function findOrCreateClient(
@@ -278,6 +340,35 @@ export async function registerMovement(data: RegisterPaymentData): Promise<void>
     payment_date: data.paymentDate,
     payment_method_id: data.paymentMethodId,
     internal_area: data.internalArea ?? null,
+    created_at: nowISO(),
+    created_by: data.userId,
+  });
+}
+
+export interface RegisterInternalTransferData {
+  description: string;
+  amount: number;
+  transferDate: string;
+  fromPaymentMethodId: string;
+  toPaymentMethodId: string;
+  userId: string | null;
+}
+
+export async function registerInternalTransfer(
+  data: RegisterInternalTransferData,
+): Promise<void> {
+  const from = db.methods.find((m) => m.id === data.fromPaymentMethodId && m.is_active);
+  const to = db.methods.find((m) => m.id === data.toPaymentMethodId && m.is_active);
+  if (!from || !to) throw new Error("Forma de pago inválida");
+  if (from.id === to.id) throw new Error("Las cuentas deben ser diferentes");
+
+  db.internalTransfers.push({
+    id: uuid(),
+    description: data.description.trim(),
+    amount: data.amount,
+    transfer_date: data.transferDate,
+    from_payment_method_id: data.fromPaymentMethodId,
+    to_payment_method_id: data.toPaymentMethodId,
     created_at: nowISO(),
     created_by: data.userId,
   });

@@ -33,6 +33,12 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod, ProjectWithFinance } from "@/lib/types";
 
+function moneyTone(value: number, intent: "positive" | "pending" = "positive") {
+  if (Math.abs(value) < 0.001) return "text-muted-foreground";
+  if (intent === "pending") return "text-destructive";
+  return "text-brand-foreground";
+}
+
 export function ProjectsTable({
   projects,
   methods,
@@ -79,16 +85,21 @@ export function ProjectsTable({
                 <TableCell className="text-muted-foreground">
                   {p.client.name}
                 </TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
+                <TableCell className="text-right font-semibold tabular-nums">
                   {formatCurrency(p.total_amount)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums text-success-foreground">
+                <TableCell
+                  className={cn(
+                    "text-right font-medium tabular-nums",
+                    moneyTone(p.finance.income),
+                  )}
+                >
                   {formatCurrency(p.finance.income)}
                 </TableCell>
                 <TableCell
                   className={cn(
                     "text-right tabular-nums font-medium",
-                    p.finance.pending > 0 ? "text-foreground" : "text-muted-foreground",
+                    moneyTone(p.finance.pending, "pending"),
                   )}
                 >
                   {formatCurrency(p.finance.pending)}

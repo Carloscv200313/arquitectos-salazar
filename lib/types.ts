@@ -68,6 +68,17 @@ export interface ProjectPayment {
   created_by: string | null;
 }
 
+export interface InternalTransfer {
+  id: string;
+  description: string;
+  amount: number;
+  transfer_date: string;
+  from_payment_method_id: string;
+  to_payment_method_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
 // Derived financial snapshot of a project (computed, never stored).
 export interface ProjectFinance {
   total: number;
@@ -91,4 +102,82 @@ export interface ProjectWithFinance extends Project {
 
 export interface PaymentWithMethod extends ProjectPayment {
   method: PaymentMethod | null;
+}
+
+export interface InternalTransferWithMethods extends InternalTransfer {
+  fromMethod: PaymentMethod | null;
+  toMethod: PaymentMethod | null;
+}
+
+export interface PaymentMethodReportRow {
+  methodId: string;
+  methodName: string;
+  clientMovements: number;
+  internalMovements: number;
+  finalBalance: number;
+}
+
+export interface UtilityReportRow {
+  month: string;
+  utilityAmount: number;
+}
+
+export type WorkStatus = "active" | "paused" | "finished";
+export type WorkMovementType = "income" | "expense";
+
+export interface Work {
+  id: string;
+  client_id: string;
+  name: string;
+  status: WorkStatus;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface WorkMovement {
+  id: string;
+  work_id: string;
+  receipt: string;
+  movement_date: string;
+  concept: string;
+  supplier: string;
+  category: string;
+  movement_type: WorkMovementType;
+  amount: number;
+  payment_method_id: string;
+  observations: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface WorkFinance {
+  income: number;
+  expense: number;
+  balance: number;
+  movementsCount: number;
+  lastMovementDate: string | null;
+}
+
+export interface WorkWithFinance extends Work {
+  client: Client;
+  finance: WorkFinance;
+}
+
+export interface WorkMovementWithBalance extends WorkMovement {
+  balance: number;
+  method: PaymentMethod | null;
+}
+
+export interface WorkCategorySummary {
+  category: string;
+  income: number;
+  expense: number;
+  balance: number;
+}
+
+export interface WorkAdministrationUtilityRow {
+  month: string;
+  amount: number;
 }
