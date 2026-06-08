@@ -115,11 +115,13 @@ export const MOVEMENT_TYPE_LABELS = {
   expense: "Egreso",
 } as const;
 
-export const WORK_STATUSES = ["active", "paused", "finished"] as const;
+export const WORK_STATUSES = ["active", "finished"] as const;
+
+export const WORK_FILTER_STATUSES = ["active", "debtor", "finished"] as const;
 
 export const WORK_STATUS_LABELS = {
   active: "Activa",
-  paused: "Pausada",
+  debtor: "Por cobrar",
   finished: "Finalizada",
 } as const;
 
@@ -140,6 +142,26 @@ export const WORK_CATEGORIES = [
   "Cantera",
   "Granito",
   "Yeso",
+] as const;
+
+export const WORK_INCOME_CATEGORY = "Abono de obra" as const;
+
+export const WORK_EXPENSE_CATEGORIES = WORK_CATEGORIES.filter(
+  (category) => category !== WORK_INCOME_CATEGORY,
+);
+
+export const WORK_PROVIDERS = [
+  "Estribadora",
+  "Concretos LOPAR",
+  "Materiales Aguilar",
+  "Mat. Gonzalez",
+  "Mat. Quezada",
+  "Caracol Betania",
+  "Caracol Ayotlán",
+  "Alfarería León",
+  "Logonza",
+  "Maderería Paisa",
+  "Master Block",
 ] as const;
 
 export const CURRENCY = "MXN";

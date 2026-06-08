@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { computeBreakdown } from "./calculations";
-import { PROJECT_DISTRIBUTION, WORK_CATEGORIES, WORK_STATUSES } from "./constants";
+import {
+  PROJECT_DISTRIBUTION,
+  WORK_CATEGORIES,
+  WORK_INCOME_CATEGORY,
+  WORK_PROVIDERS,
+  WORK_STATUSES,
+} from "./constants";
 
 // Reusable money field: positive, finite, max 2 decimals.
 const money = z
@@ -209,19 +215,90 @@ export const updateWorkSchema = createWorkSchema.extend({
   id: z.string().uuid("Obra inválida"),
 });
 
-export const registerWorkMovementSchema = z.object({
-  workId: z.string().uuid("Obra inválida"),
-  receipt: z.string().trim().min(1, "Ingresa el recibo").max(80, "Máximo 80 caracteres"),
-  movementDate: isoDate,
-  concept,
-  supplier: z.string().trim().min(2, "Ingresa proveedor").max(160, "Máximo 160 caracteres"),
-  category: workCategory,
-  movementType: z.enum(["income", "expense"]),
-  amount: money,
-  paymentMethodId: z.string().uuid("Selecciona forma de pago"),
-  observations: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
-});
+export const registerWorkMovementSchema = z
+  .object({
+    workId: z.string().uuid("Obra inválida"),
+    receipt: z.string().trim().min(1, "Ingresa el recibo").max(80, "Máximo 80 caracteres"),
+    movementDate: isoDate,
+    concept,
+    supplier: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
+    category: workCategory,
+    movementType: z.enum(["income", "expense"]),
+    amount: money,
+    paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+    observations: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (data.movementType === "income" && data.category !== WORK_INCOME_CATEGORY) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["category"],
+        message: "Las entradas solo pueden usar Abono de obra",
+      });
+    }
+    if (data.movementType === "expense" && (!data.supplier || data.supplier.trim().length < 2)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supplier"],
+        message: "Selecciona proveedor",
+      });
+    } else if (
+      data.movementType === "expense" &&
+      !WORK_PROVIDERS.includes(data.supplier as (typeof WORK_PROVIDERS)[number])
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["supplier"],
+        message: "Selecciona un proveedor autorizado",
+      });
+    }
+  });
 
 export type CreateWorkInput = z.infer<typeof createWorkSchema>;
 export type UpdateWorkInput = z.infer<typeof updateWorkSchema>;
 export type RegisterWorkMovementInput = z.infer<typeof registerWorkMovementSchema>;
+
+export const manualDebtorSchema = z.object({
+  id: z.string().uuid("Deudor inválido").optional().or(z.literal("")),
+  name,
+  amount: z
+    .number({ error: "Ingresa un monto válido" })
+    .finite("Monto inválido")
+    .min(0, "El monto no puede ser negativo")
+    .max(1_000_000_000, "Monto demasiado alto")
+    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+});
+
+export type ManualDebtorInput = z.infer<typeof manualDebtorSchema>;
+
+export const generalBalanceEntrySchema = z
+  .object({
+    description: concept,
+    amount: money,
+    entryDate: isoDate,
+    fromAccountId: z.string().min(1, "Selecciona la cuenta de egreso"),
+    toAccountId: z.string().min(1, "Selecciona la cuenta de ingreso"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fromAccountId === data.toAccountId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["toAccountId"],
+        message: "El ingreso debe ser diferente al egreso",
+      });
+    }
+  });
+
+export type GeneralBalanceEntryInput = z.infer<typeof generalBalanceEntrySchema>;
+
+export const generalBalanceAccountMovementSchema = z.object({
+  accountId: z.string().min(1, "Cuenta inválida"),
+  movementType: z.enum(["income", "expense"]),
+  description: concept,
+  amount: money,
+  movementDate: isoDate,
+});
+
+export type GeneralBalanceAccountMovementInput = z.infer<
+  typeof generalBalanceAccountMovementSchema
+>;

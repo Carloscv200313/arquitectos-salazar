@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   createWorkSchema,
+  registerInternalTransferSchema,
   registerWorkMovementSchema,
   updateWorkSchema,
 } from "@/lib/validation";
 import {
   createWork,
   deleteWork,
+  registerWorkInternalTransfer,
   registerWorkMovement,
   updateWork,
 } from "@/lib/data/works";
@@ -110,7 +112,7 @@ export async function registerWorkMovementAction(
       receipt: d.receipt,
       movementDate: d.movementDate,
       concept: d.concept,
-      supplier: d.supplier,
+      supplier: d.movementType === "income" ? "Cliente" : d.supplier,
       category: d.category,
       movementType: d.movementType,
       amount: d.amount,
@@ -123,6 +125,37 @@ export async function registerWorkMovementAction(
     return { ok: true, data: undefined };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
+  }
+}
+
+export async function registerWorkInternalTransferAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = registerInternalTransferSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del traspaso.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    await registerWorkInternalTransfer({
+      description: d.description,
+      amount: d.amount,
+      transferDate: d.transferDate,
+      fromPaymentMethodId: d.fromPaymentMethodId,
+      toPaymentMethodId: d.toPaymentMethodId,
+      userId: currentUserId(),
+    });
+    revalidatePath("/obras");
+    revalidatePath("/obras/reports");
+    revalidatePath("/finance/balance-general");
+    return { ok: true, data: undefined };
+  } catch {
+    return { ok: false, error: "No se pudo registrar el traspaso interno." };
   }
 }
 

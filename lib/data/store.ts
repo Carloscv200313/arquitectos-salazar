@@ -7,11 +7,19 @@
 //
 // State lives on globalThis so it survives Next.js HMR in development.
 
-import { SEED_PAYMENT_METHODS, resolveTemplateWeights } from "@/lib/constants";
+import {
+  SEED_PAYMENT_METHODS,
+  WORK_INCOME_CATEGORY,
+  WORK_PROVIDERS,
+  resolveTemplateWeights,
+} from "@/lib/constants";
 import { computeBreakdown, type Addon } from "@/lib/calculations";
 import type {
   Client,
+  GeneralBalanceAccountMovement,
+  GeneralBalanceEntry,
   InternalTransfer,
+  ManualDebtor,
   PaymentMethod,
   Project,
   ProjectAddon,
@@ -28,8 +36,12 @@ interface DB {
   addons: ProjectAddon[];
   payments: ProjectPayment[];
   internalTransfers: InternalTransfer[];
+  workInternalTransfers: InternalTransfer[];
   works: Work[];
   workMovements: WorkMovement[];
+  manualDebtors: ManualDebtor[];
+  generalBalanceEntries: GeneralBalanceEntry[];
+  generalBalanceAccountMovements: GeneralBalanceAccountMovement[];
 }
 
 const SYSTEM_USER = "seed";
@@ -174,16 +186,35 @@ function seed(): DB {
   ];
 
   const workMovements: WorkMovement[] = [
-    workMovement(works[0].id, "939", dateOnly(35), "Abono de obra", "Alejandro López Atilano", "Abono de obra", "income", 300000, methods[3].id),
-    workMovement(works[0].id, "629018", dateOnly(34), "Abono de obra, BBVA", "Alejandro López Atilano", "Abono de obra", "income", 188871.75, methods[5].id),
-    workMovement(works[0].id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Aceros Ayotlán", "Material de construcción", "expense", 234358.04, methods[0].id),
+    workMovement(works[0].id, "939", dateOnly(35), "Abono de obra", "Cliente", WORK_INCOME_CATEGORY, "income", 300000, methods[3].id),
+    workMovement(works[0].id, "629018", dateOnly(34), "Abono de obra, BBVA", "Cliente", WORK_INCOME_CATEGORY, "income", 188871.75, methods[5].id),
+    workMovement(works[0].id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Mat. Gonzalez", "Material de construcción", "expense", 234358.04, methods[0].id),
     workMovement(works[0].id, "0072", dateOnly(28), "700 blocks", "Master Block", "Material de construcción", "expense", 11900, methods[2].id),
-    workMovement(works[0].id, "6043", dateOnly(27), "Mano de obra", "Luis Flores", "Honorarios", "expense", 16000, methods[2].id),
-    workMovement(works[1].id, "A-001", dateOnly(18), "Anticipo inicial", "Inmobiliaria Andina S.A.C.", "Abono de obra", "income", 12000, methods[3].id),
-    workMovement(works[1].id, "M-118", dateOnly(16), "Pintura interior", "Pinturas Andina", "Pintura", "expense", 2400, methods[2].id),
-    workMovement(works[1].id, "S-021", dateOnly(15), "Servicio eléctrico", "Técnicos del Sur", "Servicio", "expense", 900, methods[1].id),
-    workMovement(works[2].id, "T-001", dateOnly(55), "Abono inicial", "Constructora del Sur", "Abono de obra", "income", 15000, methods[3].id),
-    workMovement(works[2].id, "G-040", dateOnly(50), "Granito de barra", "Granitos Lima", "Granito", "expense", 6200, methods[2].id),
+    workMovement(works[0].id, "6043", dateOnly(27), "Mano de obra", "Maderería Paisa", "Honorarios", "expense", 16000, methods[2].id),
+    workMovement(works[1].id, "A-001", dateOnly(18), "Anticipo inicial", "Cliente", WORK_INCOME_CATEGORY, "income", 12000, methods[3].id),
+    workMovement(works[1].id, "M-118", dateOnly(16), "Pintura interior", "Alfarería León", "Pintura", "expense", 2400, methods[2].id),
+    workMovement(works[1].id, "S-021", dateOnly(15), "Servicio eléctrico", "Concretos LOPAR", "Servicio", "expense", 900, methods[1].id),
+    workMovement(works[2].id, "T-001", dateOnly(55), "Abono inicial", "Cliente", WORK_INCOME_CATEGORY, "income", 15000, methods[3].id),
+    workMovement(works[2].id, "G-040", dateOnly(50), "Granito de barra", "Mat. Quezada", "Granito", "expense", 6200, methods[2].id),
+  ];
+
+  const manualDebtors: ManualDebtor[] = [
+    manualDebtor("Juan Humberto", 6000),
+    manualDebtor("Donato", 2690),
+    manualDebtor("Diana", 750),
+    manualDebtor("Antonio Ayala", 0),
+    manualDebtor("Alejandro, pintor", 0),
+    manualDebtor("Beto Flores (Mont)", 5410.04),
+    manualDebtor("Juan José", 3200),
+    manualDebtor("Vicente", 3000),
+    manualDebtor("Jorge Herrera", 0),
+    manualDebtor("Enrique", 9155),
+    manualDebtor("Luis Flores", 2660),
+    manualDebtor("Don Jaime", 0),
+    manualDebtor("César Iván", 610),
+    manualDebtor("Uriel", 5578),
+    manualDebtor("Daniel Herrera Rodríguez", 3000),
+    manualDebtor("Osvaldo", 1500),
   ];
 
   return {
@@ -193,8 +224,12 @@ function seed(): DB {
     addons,
     payments,
     internalTransfers,
+    workInternalTransfers: [],
     works,
     workMovements,
+    manualDebtors,
+    generalBalanceEntries: [],
+    generalBalanceAccountMovements: [],
   };
 }
 
@@ -289,6 +324,18 @@ function workMovement(
   };
 }
 
+function manualDebtor(name: string, amount: number): ManualDebtor {
+  const ts = nowISO();
+  return {
+    id: uuid(),
+    name,
+    amount,
+    created_at: ts,
+    updated_at: ts,
+    created_by: SYSTEM_USER,
+  };
+}
+
 const globalForDb = globalThis as unknown as { __as_db?: DB };
 
 export const db: DB = globalForDb.__as_db ?? (globalForDb.__as_db = seed());
@@ -296,6 +343,29 @@ export const db: DB = globalForDb.__as_db ?? (globalForDb.__as_db = seed());
 // HMR keeps the old global store alive in development. When the schema evolves,
 // make sure newly added collections exist without requiring a server restart.
 if (!db.internalTransfers) db.internalTransfers = [];
+if (!db.workInternalTransfers) db.workInternalTransfers = [];
+if (!db.generalBalanceEntries) db.generalBalanceEntries = [];
+if (!db.generalBalanceAccountMovements) db.generalBalanceAccountMovements = [];
+if (!db.manualDebtors) {
+  db.manualDebtors = [
+    manualDebtor("Juan Humberto", 6000),
+    manualDebtor("Donato", 2690),
+    manualDebtor("Diana", 750),
+    manualDebtor("Antonio Ayala", 0),
+    manualDebtor("Alejandro, pintor", 0),
+    manualDebtor("Beto Flores (Mont)", 5410.04),
+    manualDebtor("Juan José", 3200),
+    manualDebtor("Vicente", 3000),
+    manualDebtor("Jorge Herrera", 0),
+    manualDebtor("Enrique", 9155),
+    manualDebtor("Luis Flores", 2660),
+    manualDebtor("Don Jaime", 0),
+    manualDebtor("César Iván", 610),
+    manualDebtor("Uriel", 5578),
+    manualDebtor("Daniel Herrera Rodríguez", 3000),
+    manualDebtor("Osvaldo", 1500),
+  ];
+}
 if (!db.works) {
   const client = (index: number) => db.clients[index % Math.max(db.clients.length, 1)]?.id;
   db.works = db.clients.length
@@ -311,31 +381,47 @@ if (!db.workMovements) {
   db.workMovements = [
     ...(first
       ? [
-          workMovement(first.id, "939", dateOnly(35), "Abono de obra", "Alejandro López Atilano", "Abono de obra", "income", 300000, db.methods[3]?.id ?? db.methods[0]?.id),
-          workMovement(first.id, "629018", dateOnly(34), "Abono de obra, BBVA", "Alejandro López Atilano", "Abono de obra", "income", 188871.75, db.methods[5]?.id ?? db.methods[0]?.id),
-          workMovement(first.id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Aceros Ayotlán", "Material de construcción", "expense", 234358.04, db.methods[0]?.id),
+          workMovement(first.id, "939", dateOnly(35), "Abono de obra", "Cliente", WORK_INCOME_CATEGORY, "income", 300000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "629018", dateOnly(34), "Abono de obra, BBVA", "Cliente", WORK_INCOME_CATEGORY, "income", 188871.75, db.methods[5]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "0006614", dateOnly(30), "Aceros, varillas y anillos", "Mat. Gonzalez", "Material de construcción", "expense", 234358.04, db.methods[0]?.id),
           workMovement(first.id, "0072", dateOnly(28), "700 blocks", "Master Block", "Material de construcción", "expense", 11900, db.methods[2]?.id ?? db.methods[0]?.id),
-          workMovement(first.id, "6043", dateOnly(27), "Mano de obra", "Luis Flores", "Honorarios", "expense", 16000, db.methods[2]?.id ?? db.methods[0]?.id),
+          workMovement(first.id, "6043", dateOnly(27), "Mano de obra", "Maderería Paisa", "Honorarios", "expense", 16000, db.methods[2]?.id ?? db.methods[0]?.id),
         ]
       : []),
     ...(second
       ? [
-          workMovement(second.id, "A-001", dateOnly(18), "Anticipo inicial", "Inmobiliaria Andina S.A.C.", "Abono de obra", "income", 12000, db.methods[3]?.id ?? db.methods[0]?.id),
-          workMovement(second.id, "M-118", dateOnly(16), "Pintura interior", "Pinturas Andina", "Pintura", "expense", 2400, db.methods[2]?.id ?? db.methods[0]?.id),
-          workMovement(second.id, "S-021", dateOnly(15), "Servicio eléctrico", "Técnicos del Sur", "Servicio", "expense", 900, db.methods[1]?.id ?? db.methods[0]?.id),
+          workMovement(second.id, "A-001", dateOnly(18), "Anticipo inicial", "Cliente", WORK_INCOME_CATEGORY, "income", 12000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(second.id, "M-118", dateOnly(16), "Pintura interior", "Alfarería León", "Pintura", "expense", 2400, db.methods[2]?.id ?? db.methods[0]?.id),
+          workMovement(second.id, "S-021", dateOnly(15), "Servicio eléctrico", "Concretos LOPAR", "Servicio", "expense", 900, db.methods[1]?.id ?? db.methods[0]?.id),
         ]
       : []),
     ...(third
       ? [
-          workMovement(third.id, "T-001", dateOnly(55), "Abono inicial", "Constructora del Sur", "Abono de obra", "income", 15000, db.methods[3]?.id ?? db.methods[0]?.id),
-          workMovement(third.id, "G-040", dateOnly(50), "Granito de barra", "Granitos Lima", "Granito", "expense", 6200, db.methods[2]?.id ?? db.methods[0]?.id),
+          workMovement(third.id, "T-001", dateOnly(55), "Abono inicial", "Cliente", WORK_INCOME_CATEGORY, "income", 15000, db.methods[3]?.id ?? db.methods[0]?.id),
+          workMovement(third.id, "G-040", dateOnly(50), "Granito de barra", "Mat. Quezada", "Granito", "expense", 6200, db.methods[2]?.id ?? db.methods[0]?.id),
         ]
       : []),
   ];
 }
+const providerCorrections: Record<string, string> = {
+  "Alejandro López Atilano": "Cliente",
+  "Inmobiliaria Andina S.A.C.": "Cliente",
+  "Constructora del Sur": "Cliente",
+  "Aceros Ayotlán": "Mat. Gonzalez",
+  "Luis Flores": "Maderería Paisa",
+  "Pinturas Andina": "Alfarería León",
+  "Técnicos del Sur": "Concretos LOPAR",
+  "Granitos Lima": "Mat. Quezada",
+};
 for (const movement of db.workMovements) {
   if (!movement.payment_method_id) {
     movement.payment_method_id = db.methods[0]?.id ?? "";
+  }
+  if (movement.movement_type === "income") {
+    movement.supplier = "Cliente";
+    movement.category = WORK_INCOME_CATEGORY;
+  } else if (!WORK_PROVIDERS.includes(movement.supplier as (typeof WORK_PROVIDERS)[number])) {
+    movement.supplier = providerCorrections[movement.supplier] ?? WORK_PROVIDERS[0];
   }
 }
 

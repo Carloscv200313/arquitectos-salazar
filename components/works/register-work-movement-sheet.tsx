@@ -21,7 +21,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { WORK_CATEGORIES } from "@/lib/constants";
+import {
+  WORK_EXPENSE_CATEGORIES,
+  WORK_INCOME_CATEGORY,
+  WORK_PROVIDERS,
+} from "@/lib/constants";
 import { formatCurrency, todayISODate } from "@/lib/format";
 import { registerWorkMovementAction } from "@/app/(dashboard)/obras/actions";
 import type { PaymentMethod } from "@/lib/types";
@@ -51,7 +55,8 @@ export function RegisterWorkMovementSheet({
   const [observations, setObservations] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const categoryItems = WORK_CATEGORIES.map((item) => ({ label: item, value: item }));
+  const categoryItems = WORK_EXPENSE_CATEGORIES.map((item) => ({ label: item, value: item }));
+  const providerItems = WORK_PROVIDERS.map((item) => ({ label: item, value: item }));
   const methodItems = methods.map((method) => ({ label: method.name, value: method.id }));
 
   function reset() {
@@ -75,8 +80,8 @@ export function RegisterWorkMovementSheet({
         receipt,
         movementDate,
         concept,
-        supplier,
-        category,
+        supplier: movementType === "expense" ? supplier : "",
+        category: movementType === "income" ? WORK_INCOME_CATEGORY : category,
         movementType,
         amount: Number(amount),
         paymentMethodId,
@@ -114,7 +119,12 @@ export function RegisterWorkMovementSheet({
             <Label htmlFor="work-movement-type">Tipo de movimiento</Label>
             <Select
               value={movementType}
-              onValueChange={(value) => setMovementType((value ?? "expense") as "income" | "expense")}
+              onValueChange={(value) => {
+                const next = (value ?? "expense") as "income" | "expense";
+                setMovementType(next);
+                setCategory(next === "income" ? WORK_INCOME_CATEGORY : "");
+                setSupplier("");
+              }}
               items={[
                 { label: "Entrada", value: "income" },
                 { label: "Salida", value: "expense" },
@@ -149,31 +159,63 @@ export function RegisterWorkMovementSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="concept">Concepto</Label>
-            <Input id="concept" value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Ej. Compra de material" aria-invalid={!!errors.concept} />
+            <Input
+              id="concept"
+              value={concept}
+              onChange={(e) => setConcept(e.target.value)}
+              placeholder={movementType === "income" ? "Ej. Abono inicial" : "Ej. Compra de material"}
+              aria-invalid={!!errors.concept}
+            />
             {errors.concept && <p className="text-xs text-destructive">{errors.concept}</p>}
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="supplier">Proveedor</Label>
-            <Input id="supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Proveedor o persona relacionada" aria-invalid={!!errors.supplier} />
-            {errors.supplier && <p className="text-xs text-destructive">{errors.supplier}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {movementType === "expense" && (
             <div className="grid gap-2">
-              <Label htmlFor="category">Categoría</Label>
-              <Select value={category} onValueChange={(value) => setCategory(value ?? "")} items={categoryItems}>
-                <SelectTrigger id="category" className="w-full" aria-invalid={!!errors.category}>
-                  <SelectValue placeholder="Selecciona categoría" />
+              <Label htmlFor="supplier">Proveedor</Label>
+              <Select
+                value={supplier}
+                onValueChange={(value) => setSupplier(value ?? "")}
+                items={providerItems}
+              >
+                <SelectTrigger id="supplier" className="w-full" aria-invalid={!!errors.supplier}>
+                  <SelectValue placeholder="Selecciona proveedor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {WORK_CATEGORIES.map((item) => (
+                  {WORK_PROVIDERS.map((item) => (
                     <SelectItem key={item} value={item}>
                       {item}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {errors.supplier && <p className="text-xs text-destructive">{errors.supplier}</p>}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="category">Categoría</Label>
+              {movementType === "income" ? (
+                <Input
+                  id="category"
+                  value={WORK_INCOME_CATEGORY}
+                  readOnly
+                  className="bg-muted/50 text-muted-foreground"
+                />
+              ) : (
+                <Select value={category} onValueChange={(value) => setCategory(value ?? "")} items={categoryItems}>
+                  <SelectTrigger id="category" className="w-full" aria-invalid={!!errors.category}>
+                    <SelectValue placeholder="Selecciona categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WORK_EXPENSE_CATEGORIES.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
             </div>
             <div className="grid gap-2">

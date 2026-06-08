@@ -131,7 +131,7 @@ create table if not exists public.works (
   id           uuid primary key default gen_random_uuid(),
   client_id    uuid not null references public.clients (id) on delete restrict,
   name         text not null check (char_length(trim(name)) between 2 and 120),
-  status       text not null default 'active' check (status in ('active', 'paused', 'finished')),
+  status       text not null default 'active' check (status in ('active', 'finished')),
   description  text,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
@@ -165,6 +165,79 @@ create table if not exists public.work_movements (
 create index if not exists idx_work_movements_work on public.work_movements (work_id);
 create index if not exists idx_work_movements_date on public.work_movements (movement_date desc);
 
+-- ── work_internal_transfers (traspasos propios de Obras) ────────────────────
+create table if not exists public.work_internal_transfers (
+  id                      uuid primary key default gen_random_uuid(),
+  description             text not null check (char_length(trim(description)) between 2 and 160),
+  amount                  numeric(14,2) not null check (amount > 0),
+  transfer_date           date not null,
+  from_payment_method_id  uuid not null references public.payment_methods (id) on delete restrict,
+  to_payment_method_id    uuid not null references public.payment_methods (id) on delete restrict,
+  created_at              timestamptz not null default now(),
+  created_by              uuid references auth.users (id) on delete set null,
+  constraint chk_work_internal_transfers_different_methods
+    check (from_payment_method_id <> to_payment_method_id)
+);
+
+create index if not exists idx_work_internal_transfers_date
+  on public.work_internal_transfers (transfer_date desc);
+create index if not exists idx_work_internal_transfers_from_method
+  on public.work_internal_transfers (from_payment_method_id);
+create index if not exists idx_work_internal_transfers_to_method
+  on public.work_internal_transfers (to_payment_method_id);
+
+-- ── finance_manual_debtors (deudores manuales de Finanzas) ──────────────────
+create table if not exists public.finance_manual_debtors (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null check (char_length(trim(name)) between 2 and 120),
+  amount      numeric(14,2) not null check (amount >= 0),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  uuid references auth.users (id) on delete set null
+);
+
+create trigger trg_finance_manual_debtors_updated_at
+  before update on public.finance_manual_debtors
+  for each row execute function public.set_updated_at();
+
+-- ── general_balance_entries (registros manuales del Balance General) ─────────
+create table if not exists public.general_balance_entries (
+  id               uuid primary key default gen_random_uuid(),
+  description      text not null check (char_length(trim(description)) between 2 and 160),
+  amount           numeric(14,2) not null check (amount > 0),
+  entry_date       date not null,
+  from_account_id  text not null check (char_length(trim(from_account_id)) between 2 and 80),
+  to_account_id    text not null check (char_length(trim(to_account_id)) between 2 and 80),
+  created_at       timestamptz not null default now(),
+  created_by       uuid references auth.users (id) on delete set null,
+  constraint chk_general_balance_entries_different_accounts
+    check (from_account_id <> to_account_id)
+);
+
+create index if not exists idx_general_balance_entries_date
+  on public.general_balance_entries (entry_date desc);
+create index if not exists idx_general_balance_entries_from_account
+  on public.general_balance_entries (from_account_id);
+create index if not exists idx_general_balance_entries_to_account
+  on public.general_balance_entries (to_account_id);
+
+-- ── general_balance_account_movements (ingresos/egresos directos por cuenta)
+create table if not exists public.general_balance_account_movements (
+  id             uuid primary key default gen_random_uuid(),
+  account_id     text not null check (char_length(trim(account_id)) between 2 and 80),
+  movement_type  text not null check (movement_type in ('income', 'expense')),
+  description    text not null check (char_length(trim(description)) between 2 and 160),
+  amount         numeric(14,2) not null check (amount > 0),
+  movement_date  date not null,
+  created_at     timestamptz not null default now(),
+  created_by     uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_general_balance_account_movements_account
+  on public.general_balance_account_movements (account_id);
+create index if not exists idx_general_balance_account_movements_date
+  on public.general_balance_account_movements (movement_date desc);
+
 -- ── seed payment methods ─────────────────────────────────────────────────────
 insert into public.payment_methods (name)
 values
@@ -189,6 +262,10 @@ alter table public.project_addons   enable row level security;
 alter table public.internal_transfers enable row level security;
 alter table public.works            enable row level security;
 alter table public.work_movements   enable row level security;
+alter table public.work_internal_transfers enable row level security;
+alter table public.finance_manual_debtors enable row level security;
+alter table public.general_balance_entries enable row level security;
+alter table public.general_balance_account_movements enable row level security;
 
 -- clients
 create policy "clients_select" on public.clients
@@ -252,4 +329,38 @@ create policy "work_movements_select" on public.work_movements
 create policy "work_movements_insert" on public.work_movements
   for insert to authenticated with check (true);
 create policy "work_movements_delete" on public.work_movements
+  for delete to authenticated using (true);
+
+-- work_internal_transfers
+create policy "work_internal_transfers_select" on public.work_internal_transfers
+  for select to authenticated using (true);
+create policy "work_internal_transfers_insert" on public.work_internal_transfers
+  for insert to authenticated with check (true);
+create policy "work_internal_transfers_delete" on public.work_internal_transfers
+  for delete to authenticated using (true);
+
+-- finance_manual_debtors
+create policy "finance_manual_debtors_select" on public.finance_manual_debtors
+  for select to authenticated using (true);
+create policy "finance_manual_debtors_insert" on public.finance_manual_debtors
+  for insert to authenticated with check (true);
+create policy "finance_manual_debtors_update" on public.finance_manual_debtors
+  for update to authenticated using (true) with check (true);
+create policy "finance_manual_debtors_delete" on public.finance_manual_debtors
+  for delete to authenticated using (true);
+
+-- general_balance_entries
+create policy "general_balance_entries_select" on public.general_balance_entries
+  for select to authenticated using (true);
+create policy "general_balance_entries_insert" on public.general_balance_entries
+  for insert to authenticated with check (true);
+create policy "general_balance_entries_delete" on public.general_balance_entries
+  for delete to authenticated using (true);
+
+-- general_balance_account_movements
+create policy "general_balance_account_movements_select" on public.general_balance_account_movements
+  for select to authenticated using (true);
+create policy "general_balance_account_movements_insert" on public.general_balance_account_movements
+  for insert to authenticated with check (true);
+create policy "general_balance_account_movements_delete" on public.general_balance_account_movements
   for delete to authenticated using (true);

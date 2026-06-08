@@ -6,6 +6,9 @@ import type {
   Client,
   WorkCategorySummary,
   WorkAdministrationUtilityRow,
+  PaymentMethodReportRow,
+  WorkFilterStatus,
+  WorkInternalTransferWithMethods,
   WorkMovement,
   WorkMovementType,
   WorkMovementWithBalance,
@@ -17,7 +20,7 @@ import { db, nowISO, uuid } from "./store";
 export interface WorkFilters {
   search?: string;
   client?: string;
-  status?: WorkStatus | "all";
+  status?: WorkFilterStatus | "all";
 }
 
 function movementsOf(workId: string): WorkMovement[] {
@@ -100,8 +103,13 @@ export async function listWorks(
     .filter((work) => {
       if (search && !work.name.toLowerCase().includes(search)) return false;
       if (client && !work.client.name.toLowerCase().includes(client)) return false;
-      if (filters.status && filters.status !== "all" && work.status !== filters.status)
-        return false;
+      if (filters.status && filters.status !== "all") {
+        if (filters.status === "debtor") return work.finance.balance < -0.001;
+        if (filters.status === "active") {
+          return work.status === "active" && work.finance.balance >= -0.001;
+        }
+        if (filters.status === "finished") return work.status === "finished";
+      }
       return true;
     })
     .sort(
@@ -181,6 +189,105 @@ export async function getWorkAdministrationUtilities(
     .map(([month, amount]) => ({ month, amount: round2(amount) }));
 }
 
+export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReportRow[]> {
+  const rows = new Map<string, PaymentMethodReportRow>();
+  for (const method of db.methods.filter((item) => item.is_active)) {
+    rows.set(method.id, {
+      methodId: method.id,
+      methodName: method.name,
+      clientMovements: 0,
+      internalMovements: 0,
+      finalBalance: 0,
+    });
+  }
+
+  for (const movement of db.workMovements) {
+    const row = rows.get(movement.payment_method_id);
+    if (!row) continue;
+    const sign = movement.movement_type === "income" ? 1 : -1;
+    row.clientMovements = round2(row.clientMovements + movement.amount * sign);
+  }
+
+  for (const transfer of db.workInternalTransfers) {
+    const from = rows.get(transfer.from_payment_method_id);
+    const to = rows.get(transfer.to_payment_method_id);
+    if (from) from.internalMovements = round2(from.internalMovements - transfer.amount);
+    if (to) to.internalMovements = round2(to.internalMovements + transfer.amount);
+  }
+
+  return [...rows.values()].map((row) => ({
+    ...row,
+    finalBalance: round2(row.clientMovements + row.internalMovements),
+  }));
+}
+
+export async function listWorkInternalTransfers(): Promise<
+  WorkInternalTransferWithMethods[]
+> {
+  return db.workInternalTransfers
+    .map((transfer) => ({
+      ...transfer,
+      fromMethod:
+        db.methods.find((method) => method.id === transfer.from_payment_method_id) ??
+        null,
+      toMethod:
+        db.methods.find((method) => method.id === transfer.to_payment_method_id) ??
+        null,
+    }))
+    .sort(
+      (a, b) =>
+        new Date(b.transfer_date).getTime() - new Date(a.transfer_date).getTime(),
+    );
+}
+
+export interface RegisterWorkInternalTransferData {
+  description: string;
+  amount: number;
+  transferDate: string;
+  fromPaymentMethodId: string;
+  toPaymentMethodId: string;
+  userId: string | null;
+}
+
+export async function registerWorkInternalTransfer(
+  data: RegisterWorkInternalTransferData,
+): Promise<void> {
+  const from = db.methods.find(
+    (method) => method.id === data.fromPaymentMethodId && method.is_active,
+  );
+  const to = db.methods.find(
+    (method) => method.id === data.toPaymentMethodId && method.is_active,
+  );
+  if (!from || !to) throw new Error("Forma de pago inválida");
+  if (from.id === to.id) throw new Error("Las cuentas deben ser diferentes");
+
+  db.workInternalTransfers.push({
+    id: uuid(),
+    description: data.description.trim(),
+    amount: data.amount,
+    transfer_date: data.transferDate,
+    from_payment_method_id: data.fromPaymentMethodId,
+    to_payment_method_id: data.toPaymentMethodId,
+    created_at: nowISO(),
+    created_by: data.userId,
+  });
+}
+
+export async function getWorksAdministrationUtilityReport(): Promise<
+  WorkAdministrationUtilityRow[]
+> {
+  const byMonth = new Map<string, number>();
+  for (const movement of db.workMovements) {
+    if (movement.category !== "Honorarios") continue;
+    const month = movement.movement_date.slice(0, 7);
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + movement.amount));
+  }
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount: round2(amount) }));
+}
+
 export interface CreateWorkData {
   name: string;
   clientId?: string;
@@ -227,7 +334,7 @@ export interface RegisterWorkMovementData {
   receipt: string;
   movementDate: string;
   concept: string;
-  supplier: string;
+  supplier?: string;
   category: string;
   movementType: WorkMovementType;
   amount: number;
@@ -251,7 +358,7 @@ export async function registerWorkMovement(
     receipt: data.receipt.trim(),
     movement_date: data.movementDate,
     concept: data.concept.trim(),
-    supplier: data.supplier.trim(),
+    supplier: data.supplier?.trim() || "Cliente",
     category: data.category,
     movement_type: data.movementType,
     amount: data.amount,

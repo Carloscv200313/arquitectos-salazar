@@ -55,7 +55,7 @@ export function WorksTable({
               <TableHead className="text-right">Saldo</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Creación</TableHead>
-              <TableHead className="w-12 text-right">
+              <TableHead className="w-24 text-right">
                 <span className="sr-only">Acciones</span>
               </TableHead>
             </TableRow>
@@ -85,36 +85,45 @@ export function WorksTable({
                   {formatCurrency(work.finance.balance)}
                 </TableCell>
                 <TableCell>
-                  <WorkStatusBadge status={work.status} />
+                  <WorkStatusBadge status={work.status} balance={work.finance.balance} />
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted-foreground">
                   {formatDate(work.created_at)}
                 </TableCell>
                 <TableCell className="text-right" onClick={(event) => event.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="size-8" />}>
-                      <Settings2 className="size-4" />
-                      <span className="sr-only">Acciones</span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}`)}>
-                        <Eye className="size-4" /> Ver detalle
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setMovementTarget(work)}>
-                        <Plus className="size-4" /> Registrar movimiento
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}/edit`)}>
-                        <Pencil className="size-4" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}#movimientos`)}>
-                        <History className="size-4" /> Historial
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(work)}>
-                        <Trash2 className="size-4" /> Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8 border-brand/30 bg-brand-muted text-brand-foreground hover:bg-brand hover:text-brand-foreground"
+                      onClick={() => setMovementTarget(work)}
+                      title="Registrar movimiento"
+                    >
+                      <Plus className="size-4" />
+                      <span className="sr-only">Registrar movimiento</span>
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button variant="outline" size="icon" className="size-8" />}>
+                        <Settings2 className="size-4" />
+                        <span className="sr-only">Acciones</span>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}`)}>
+                          <Eye className="size-4" /> Ver detalle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}/edit`)}>
+                          <Pencil className="size-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}#movimientos`)}>
+                          <History className="size-4" /> Historial
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(work)}>
+                          <Trash2 className="size-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

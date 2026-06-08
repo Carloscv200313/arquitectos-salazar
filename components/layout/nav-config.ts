@@ -5,6 +5,11 @@ import {
   Hammer,
   Users,
   Wallet,
+  Landmark,
+  ArrowLeftRight,
+  BadgeDollarSign,
+  TrendingUp,
+  Banknote,
   BarChart3,
   Settings,
   LifeBuoy,
@@ -12,10 +17,17 @@ import {
 
 export interface NavItem {
   label: string;
-  href: string;
+  href?: string;
   icon: LucideIcon;
   disabled?: boolean;
   badge?: string;
+  groupOnly?: boolean;
+  children?: Array<{
+    label: string;
+    href: string;
+    icon?: LucideIcon;
+    disabled?: boolean;
+  }>;
 }
 
 export interface NavSection {
@@ -31,7 +43,19 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Proyectos", href: "/projects", icon: FolderKanban },
       { label: "Obras", href: "/obras", icon: Hammer },
       { label: "Clientes", href: "/clients", icon: Users, disabled: true },
-      { label: "Finanzas", href: "/finance", icon: Wallet, disabled: true },
+      {
+        label: "Finanzas",
+        href: "/finance",
+        icon: Wallet,
+        groupOnly: true,
+        children: [
+          { label: "Balance general", href: "/finance/balance-general", icon: Landmark },
+          { label: "Deudas", href: "/finance/deudas", icon: BadgeDollarSign },
+          { label: "Utilidades", href: "/finance/utilidades", icon: TrendingUp },
+          { label: "Movimientos internos", href: "/finance/movimientos-internos", icon: ArrowLeftRight },
+          { label: "Salario", href: "/finance/salario", icon: Banknote },
+        ],
+      },
       { label: "Reportes", href: "/reports", icon: BarChart3, disabled: true },
     ],
   },

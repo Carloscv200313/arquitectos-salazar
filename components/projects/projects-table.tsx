@@ -63,7 +63,7 @@ export function ProjectsTable({
               <TableHead className="text-right">Por cobrar</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Creación</TableHead>
-              <TableHead className="w-12 text-right">
+              <TableHead className="w-24 text-right">
                 <span className="sr-only">Acciones</span>
               </TableHead>
             </TableRow>
@@ -111,41 +111,48 @@ export function ProjectsTable({
                   {formatDate(p.created_at)}
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={<Button variant="outline" size="icon" className="size-8" />}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8 border-brand/30 bg-brand-muted text-brand-foreground hover:bg-brand hover:text-brand-foreground"
+                      onClick={() => setPayTarget(p)}
+                      title="Registrar movimiento"
                     >
-                      <Settings2 className="size-4" />
-                      <span className="sr-only">Acciones</span>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
-                      <DropdownMenuItem onClick={() => router.push(`/projects/${p.id}`)}>
-                        <Eye className="size-4" /> Ver detalle
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => setPayTarget(p)}
+                      <Plus className="size-4" />
+                      <span className="sr-only">Registrar movimiento</span>
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={<Button variant="outline" size="icon" className="size-8" />}
                       >
-                        <Plus className="size-4" /> Registrar movimiento
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push(`/projects/${p.id}/edit`)}
-                      >
-                        <Pencil className="size-4" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push(`/projects/${p.id}#historial`)}
-                      >
-                        <History className="size-4" /> Historial de movimientos
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => setDeleteTarget(p)}
-                      >
-                        <Trash2 className="size-4" /> Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <Settings2 className="size-4" />
+                        <span className="sr-only">Acciones</span>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={() => router.push(`/projects/${p.id}`)}>
+                          <Eye className="size-4" /> Ver detalle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(`/projects/${p.id}/edit`)}
+                        >
+                          <Pencil className="size-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(`/projects/${p.id}#historial`)}
+                        >
+                          <History className="size-4" /> Historial de movimientos
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setDeleteTarget(p)}
+                        >
+                          <Trash2 className="size-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

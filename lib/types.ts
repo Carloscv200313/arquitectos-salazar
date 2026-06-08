@@ -109,6 +109,11 @@ export interface InternalTransferWithMethods extends InternalTransfer {
   toMethod: PaymentMethod | null;
 }
 
+export interface WorkInternalTransferWithMethods extends InternalTransfer {
+  fromMethod: PaymentMethod | null;
+  toMethod: PaymentMethod | null;
+}
+
 export interface PaymentMethodReportRow {
   methodId: string;
   methodName: string;
@@ -122,7 +127,8 @@ export interface UtilityReportRow {
   utilityAmount: number;
 }
 
-export type WorkStatus = "active" | "paused" | "finished";
+export type WorkStatus = "active" | "finished";
+export type WorkFilterStatus = WorkStatus | "debtor";
 export type WorkMovementType = "income" | "expense";
 
 export interface Work {
@@ -180,4 +186,94 @@ export interface WorkCategorySummary {
 export interface WorkAdministrationUtilityRow {
   month: string;
   amount: number;
+}
+
+export type DebtPartyType = "debtor" | "provider";
+
+export interface ManualDebtor {
+  id: string;
+  name: string;
+  amount: number;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface DebtReportRow {
+  id: string;
+  name: string;
+  amount: number;
+  type: DebtPartyType;
+  source: "manual" | "works";
+}
+
+export interface GeneralBalanceEntry {
+  id: string;
+  description: string;
+  amount: number;
+  entry_date: string;
+  from_account_id: string;
+  to_account_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export type GeneralBalanceMovementType = "income" | "expense";
+
+export interface GeneralBalanceAccountMovement {
+  id: string;
+  account_id: string;
+  movement_type: GeneralBalanceMovementType;
+  description: string;
+  amount: number;
+  movement_date: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface GeneralBalanceRow {
+  id: string;
+  label: string;
+  amount: number;
+  source: "works-payment-method" | "providers" | "receivable";
+  description: string;
+}
+
+export interface GeneralBalanceReport {
+  rows: GeneralBalanceRow[];
+  total: number;
+  totalWithoutDebtors: number;
+  debtorsTotal: number;
+  providersTotal: number;
+  worksReceivableTotal: number;
+}
+
+export interface GeneralBalanceHistoryRow {
+  id: string;
+  date: string;
+  description: string;
+  expenseAccount: string;
+  incomeAccount: string;
+  amount: number;
+  source: "works" | "internal-transfer" | "manual";
+}
+
+export interface GeneralBalanceAccountReport {
+  account: GeneralBalanceRow;
+  accounts: GeneralBalanceRow[];
+  history: GeneralBalanceHistoryRow[];
+}
+
+export interface FinanceUtilityRow {
+  month: string;
+  projectUtility: number;
+  workUtility: number;
+  totalUtility: number;
+}
+
+export interface FinanceUtilityReport {
+  rows: FinanceUtilityRow[];
+  projectTotal: number;
+  workTotal: number;
+  total: number;
 }

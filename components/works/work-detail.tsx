@@ -224,9 +224,10 @@ export function WorkMovementsTable({
             <TableHead className="text-xs uppercase text-muted-foreground">Concepto</TableHead>
             <TableHead className="text-xs uppercase text-muted-foreground">Proveedor</TableHead>
             <TableHead className="text-xs uppercase text-muted-foreground">Categoría</TableHead>
-            <TableHead className="text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Monto</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
+            <TableHead className="text-right text-xs uppercase text-muted-foreground">Entrada</TableHead>
+            <TableHead className="text-right text-xs uppercase text-muted-foreground">Salida</TableHead>
+            <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
+            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -239,20 +240,31 @@ export function WorkMovementsTable({
               <TableCell className="font-medium">{movement.concept}</TableCell>
               <TableCell className="text-muted-foreground">{movement.supplier}</TableCell>
               <TableCell className="text-muted-foreground">{movement.category}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {movement.method?.name ?? "Sin forma"}
+              <TableCell
+                className={cn(
+                  "text-right font-semibold tabular-nums",
+                  movement.movement_type === "income"
+                    ? "text-brand-foreground"
+                    : "text-muted-foreground",
+                )}
+              >
+                {movement.movement_type === "income" ? formatCurrency(movement.amount) : "—"}
               </TableCell>
               <TableCell
                 className={cn(
                   "text-right font-semibold tabular-nums",
-                  movement.movement_type === "income" ? "text-brand-foreground" : "text-destructive",
+                  movement.movement_type === "expense"
+                    ? "text-destructive"
+                    : "text-muted-foreground",
                 )}
               >
-                {movement.movement_type === "income" ? "" : "-"}
-                {formatCurrency(movement.amount)}
+                {movement.movement_type === "expense" ? formatCurrency(movement.amount) : "—"}
               </TableCell>
-              <TableCell className={cn("px-5 text-right font-semibold tabular-nums", signedTone(movement.balance))}>
+              <TableCell className={cn("text-right font-semibold tabular-nums", signedTone(movement.balance))}>
                 {formatCurrency(movement.balance)}
+              </TableCell>
+              <TableCell className="px-5 text-muted-foreground">
+                {movement.method?.name ?? "Sin forma"}
               </TableCell>
             </TableRow>
           ))}

@@ -55,7 +55,7 @@ export default async function WorkDetailPage({
           </Link>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight">{work.name}</h1>
-            <WorkStatusBadge status={work.status} />
+            <WorkStatusBadge status={work.status} balance={work.finance.balance} />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
