@@ -50,7 +50,22 @@ interface DB {
 }
 
 const SYSTEM_USER = "seed";
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
+
+const SEEDED_PROJECT_IDS = [
+  "11111111-1111-4111-8111-111111111111",
+  "22222222-2222-4222-8222-222222222222",
+  "33333333-3333-4333-8333-333333333333",
+  "44444444-4444-4444-8444-444444444444",
+  "55555555-5555-4555-8555-555555555555",
+];
+
+const SEEDED_WORK_IDS = [
+  "aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+  "aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+  "aaaaaaa3-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+  "aaaaaaa4-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
+];
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -82,9 +97,9 @@ function buildProject(
   createdDaysAgo: number,
   addonLines: Addon[] = [],
   template: ProjectTemplate = "diamante",
+  id: string = uuid(),
 ): SeedProject {
   const ts = daysAgoISO(createdDaysAgo);
-  const id = uuid();
   const addons: ProjectAddon[] = addonLines.map((a) => ({
     id: uuid(),
     project_id: id,
@@ -138,15 +153,47 @@ function seed(): DB {
   }));
 
   const seeds: SeedProject[] = [
-    buildProject("Edificio Multifamiliar Surco", clients[2].id, 40500, 12, [], "oro"),
+    buildProject(
+      "Edificio Multifamiliar Surco",
+      clients[2].id,
+      40500,
+      12,
+      [],
+      "oro",
+      SEEDED_PROJECT_IDS[0],
+    ),
     buildProject("Casa de Playa Asia", clients[0].id, 12800, 43, [
       { concept: "Levantamiento topográfico", amount: 800 },
-    ]),
-    buildProject("Remodelación Oficina Centro", clients[1].id, 4500, 28),
-    buildProject("Vivienda Unifamiliar La Molina", clients[3].id, 8000, 8),
-    buildProject("Proyecto Ejecutivo San Isidro", clients[4].id, 24000, 4, [
+    ], "diamante", SEEDED_PROJECT_IDS[1]),
+    buildProject(
+      "Remodelación Oficina Centro",
+      clients[1].id,
+      4500,
+      28,
+      [],
+      "diamante",
+      SEEDED_PROJECT_IDS[2],
+    ),
+    buildProject(
+      "Vivienda Unifamiliar La Molina",
+      clients[3].id,
+      8000,
+      8,
+      [],
+      "diamante",
+      SEEDED_PROJECT_IDS[3],
+    ),
+    buildProject(
+      "Proyecto Ejecutivo San Isidro",
+      clients[4].id,
+      24000,
+      4,
+      [
       { concept: "Visita técnica", amount: 1500 },
-    ]),
+      ],
+      "diamante",
+      SEEDED_PROJECT_IDS[4],
+    ),
   ];
 
   const projects = seeds.map((s) => s.project);
@@ -196,10 +243,38 @@ function seed(): DB {
   ];
 
   const works: Work[] = [
-    work("Casa de Alejandro López Atilano", clients[1].id, "active", 37, "Control integral de obra residencial."),
-    work("Remodelación Local Miraflores", clients[0].id, "active", 18, "Adecuación interior, instalaciones y acabados."),
-    work("Ampliación Terraza Surco", clients[2].id, "finished", 55, "Cierre de ampliación exterior."),
-    work("Obra General Salvador Alatorre", clients[4].id, "active", 9, "Obra con saldos por cobrar y proveedores activos."),
+    work(
+      "Casa de Alejandro López Atilano",
+      clients[1].id,
+      "active",
+      37,
+      "Control integral de obra residencial.",
+      SEEDED_WORK_IDS[0],
+    ),
+    work(
+      "Remodelación Local Miraflores",
+      clients[0].id,
+      "active",
+      18,
+      "Adecuación interior, instalaciones y acabados.",
+      SEEDED_WORK_IDS[1],
+    ),
+    work(
+      "Ampliación Terraza Surco",
+      clients[2].id,
+      "finished",
+      55,
+      "Cierre de ampliación exterior.",
+      SEEDED_WORK_IDS[2],
+    ),
+    work(
+      "Obra General Salvador Alatorre",
+      clients[4].id,
+      "active",
+      9,
+      "Obra con saldos por cobrar y proveedores activos.",
+      SEEDED_WORK_IDS[3],
+    ),
   ];
 
   const workMovements: WorkMovement[] = [
@@ -502,10 +577,11 @@ function work(
   status: Work["status"],
   createdDaysAgo: number,
   description: string | null,
+  id: string = uuid(),
 ): Work {
   const ts = daysAgoISO(createdDaysAgo);
   return {
-    id: uuid(),
+    id,
     client_id: clientId,
     name,
     status,
@@ -599,9 +675,30 @@ if (!db.works) {
   const client = (index: number) => db.clients[index % Math.max(db.clients.length, 1)]?.id;
   db.works = db.clients.length
     ? [
-        work("Casa de Alejandro López Atilano", client(1), "active", 35, "Control de obra residencial."),
-        work("Remodelación Local Miraflores", client(0), "active", 18, "Adecuación interior y acabados."),
-        work("Ampliación Terraza Surco", client(2), "finished", 55, null),
+        work(
+          "Casa de Alejandro López Atilano",
+          client(1),
+          "active",
+          35,
+          "Control de obra residencial.",
+          SEEDED_WORK_IDS[0],
+        ),
+        work(
+          "Remodelación Local Miraflores",
+          client(0),
+          "active",
+          18,
+          "Adecuación interior y acabados.",
+          SEEDED_WORK_IDS[1],
+        ),
+        work(
+          "Ampliación Terraza Surco",
+          client(2),
+          "finished",
+          55,
+          null,
+          SEEDED_WORK_IDS[2],
+        ),
       ]
     : [];
 }
