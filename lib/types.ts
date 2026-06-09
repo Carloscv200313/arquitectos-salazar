@@ -176,6 +176,49 @@ export interface WorkMovementWithBalance extends WorkMovement {
   method: PaymentMethod | null;
 }
 
+export type WorkOrderStatus = "pending_quote" | "quoted" | "partial" | "paid";
+
+export interface WorkOrder {
+  id: string;
+  work_id: string;
+  order_date: string;
+  supplier: string;
+  material: string;
+  description: string | null;
+  category: string | null;
+  amount: number | null;
+  quoted_at: string | null;
+  payable_movement_id: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface WorkOrderPayment {
+  id: string;
+  order_id: string;
+  payment_date: string;
+  description: string;
+  amount: number;
+  payment_method_id: string;
+  work_movement_id: string | null;
+  internal_transfer_id: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface WorkOrderPaymentWithMethod extends WorkOrderPayment {
+  method: PaymentMethod | null;
+}
+
+export interface WorkOrderWithRelations extends WorkOrder {
+  work: WorkWithFinance;
+  payments: WorkOrderPaymentWithMethod[];
+  paid: number;
+  pending: number;
+  status: WorkOrderStatus;
+}
+
 export interface WorkCategorySummary {
   category: string;
   income: number;
@@ -204,7 +247,7 @@ export interface DebtReportRow {
   name: string;
   amount: number;
   type: DebtPartyType;
-  source: "manual" | "works";
+  source: "manual" | "works" | "orders";
 }
 
 export interface GeneralBalanceEntry {
@@ -255,7 +298,7 @@ export interface GeneralBalanceHistoryRow {
   expenseAccount: string;
   incomeAccount: string;
   amount: number;
-  source: "works" | "internal-transfer" | "manual";
+  source: "works" | "orders" | "internal-transfer" | "manual";
 }
 
 export interface GeneralBalanceAccountReport {

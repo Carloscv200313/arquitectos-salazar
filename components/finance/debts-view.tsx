@@ -198,7 +198,7 @@ function DebtTableCard({
                       <div className="text-xs text-muted-foreground">
                         {row.source === "manual"
                           ? "Registro manual"
-                          : "Calculado desde Obras"}
+                          : "Calculado desde Pedidos"}
                       </div>
                     </div>
                   </div>
@@ -391,7 +391,7 @@ export function DebtsView({ rows }: { rows: DebtReportRow[] }) {
         <Metric
           label="Proveedores"
           value={signedCurrency(totalProviders)}
-          hint="Desde Cuentas por pagar"
+          hint="Pendiente de pedidos"
           icon={<BadgeDollarSign className="size-5" />}
           tone="danger"
         />
@@ -434,7 +434,7 @@ export function DebtsView({ rows }: { rows: DebtReportRow[] }) {
           />
           <DebtTableCard
             title="Proveedores"
-            description="Calculado desde Obras con Cuentas por pagar."
+            description="Calculado desde pedidos pendientes por proveedor."
             rows={filteredProviders}
             total={filteredProvidersTotal}
             type="provider"

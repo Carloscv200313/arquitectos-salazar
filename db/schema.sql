@@ -186,6 +186,49 @@ create index if not exists idx_work_internal_transfers_from_method
 create index if not exists idx_work_internal_transfers_to_method
   on public.work_internal_transfers (to_payment_method_id);
 
+-- ── work_orders (pedidos por obra) ──────────────────────────────────────────
+create table if not exists public.work_orders (
+  id                   uuid primary key default gen_random_uuid(),
+  work_id              uuid not null references public.works (id) on delete cascade,
+  order_date           date not null,
+  supplier             text not null check (char_length(trim(supplier)) between 2 and 160),
+  material             text not null check (char_length(trim(material)) between 2 and 1000),
+  description          text,
+  category             text,
+  amount               numeric(14,2) check (amount > 0),
+  quoted_at            date,
+  payable_movement_id  uuid references public.work_movements (id) on delete set null,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now(),
+  created_by           uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_work_orders_work on public.work_orders (work_id);
+create index if not exists idx_work_orders_date on public.work_orders (order_date desc);
+
+create trigger trg_work_orders_updated_at
+  before update on public.work_orders
+  for each row execute function public.set_updated_at();
+
+-- ── work_order_payments (abonos de pedidos) ─────────────────────────────────
+create table if not exists public.work_order_payments (
+  id                    uuid primary key default gen_random_uuid(),
+  order_id              uuid not null references public.work_orders (id) on delete cascade,
+  payment_date          date not null,
+  description           text not null check (char_length(trim(description)) between 2 and 160),
+  amount                numeric(14,2) not null check (amount > 0),
+  payment_method_id     uuid not null references public.payment_methods (id) on delete restrict,
+  work_movement_id      uuid references public.work_movements (id) on delete set null,
+  internal_transfer_id  uuid references public.work_internal_transfers (id) on delete set null,
+  created_at            timestamptz not null default now(),
+  created_by            uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_work_order_payments_order
+  on public.work_order_payments (order_id);
+create index if not exists idx_work_order_payments_date
+  on public.work_order_payments (payment_date desc);
+
 -- ── finance_manual_debtors (deudores manuales de Finanzas) ──────────────────
 create table if not exists public.finance_manual_debtors (
   id          uuid primary key default gen_random_uuid(),
@@ -263,6 +306,8 @@ alter table public.internal_transfers enable row level security;
 alter table public.works            enable row level security;
 alter table public.work_movements   enable row level security;
 alter table public.work_internal_transfers enable row level security;
+alter table public.work_orders      enable row level security;
+alter table public.work_order_payments enable row level security;
 alter table public.finance_manual_debtors enable row level security;
 alter table public.general_balance_entries enable row level security;
 alter table public.general_balance_account_movements enable row level security;
@@ -337,6 +382,24 @@ create policy "work_internal_transfers_select" on public.work_internal_transfers
 create policy "work_internal_transfers_insert" on public.work_internal_transfers
   for insert to authenticated with check (true);
 create policy "work_internal_transfers_delete" on public.work_internal_transfers
+  for delete to authenticated using (true);
+
+-- work_orders
+create policy "work_orders_select" on public.work_orders
+  for select to authenticated using (true);
+create policy "work_orders_insert" on public.work_orders
+  for insert to authenticated with check (true);
+create policy "work_orders_update" on public.work_orders
+  for update to authenticated using (true) with check (true);
+create policy "work_orders_delete" on public.work_orders
+  for delete to authenticated using (true);
+
+-- work_order_payments
+create policy "work_order_payments_select" on public.work_order_payments
+  for select to authenticated using (true);
+create policy "work_order_payments_insert" on public.work_order_payments
+  for insert to authenticated with check (true);
+create policy "work_order_payments_delete" on public.work_order_payments
   for delete to authenticated using (true);
 
 -- finance_manual_debtors

@@ -31,6 +31,13 @@ function amountTone(value: number) {
   return "text-muted-foreground";
 }
 
+function balanceRowTone(row: GeneralBalanceRow) {
+  if (row.source === "providers" && Math.abs(row.amount) > 0.001) {
+    return "text-destructive";
+  }
+  return amountTone(row.amount);
+}
+
 function Metric({
   label,
   value,
@@ -63,7 +70,15 @@ function Metric({
           >
             {label}
           </p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
+          <p
+            className={cn(
+              "mt-2 text-2xl font-semibold tabular-nums",
+              !accent && tone === "danger" && "text-destructive",
+              !accent && tone === "success" && "text-brand-foreground",
+            )}
+          >
+            {value}
+          </p>
           <p
             className={cn(
               "mt-1 text-xs",
@@ -118,7 +133,7 @@ export function GeneralBalanceView({ report }: { report: GeneralBalanceReport })
         <Metric
           label="Cuentas por pagar"
           value={signedCurrency(report.providersTotal)}
-          hint="Proveedores + traspasos"
+          hint="Pendiente de pedidos"
           icon={<BadgeDollarSign className="size-5" />}
           tone="danger"
         />
@@ -170,7 +185,7 @@ export function GeneralBalanceView({ report }: { report: GeneralBalanceReport })
                   <TableCell
                     className={cn(
                       "text-right font-semibold tabular-nums",
-                      amountTone(row.amount),
+                      balanceRowTone(row),
                     )}
                   >
                     {signedCurrency(row.amount)}

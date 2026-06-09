@@ -5,6 +5,7 @@ import {
   Hammer,
   Users,
   Wallet,
+  ClipboardList,
   Landmark,
   ArrowLeftRight,
   BadgeDollarSign,
@@ -42,6 +43,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "Proyectos", href: "/projects", icon: FolderKanban },
       { label: "Obras", href: "/obras", icon: Hammer },
+      { label: "Pedidos", href: "/pedidos", icon: ClipboardList },
       { label: "Clientes", href: "/clients", icon: Users, disabled: true },
       {
         label: "Finanzas",

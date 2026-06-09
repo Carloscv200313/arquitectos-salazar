@@ -1,6 +1,6 @@
 import "server-only";
 
-import { SEED_PAYMENT_METHODS, WORK_PROVIDERS } from "@/lib/constants";
+import { SEED_PAYMENT_METHODS } from "@/lib/constants";
 import { round2 } from "@/lib/calculations";
 import type {
   DebtReportRow,
@@ -14,30 +14,21 @@ import { getUtilityReport } from "./projects";
 import { getWorksPaymentMethodReport, listWorks } from "./works";
 import { getWorksAdministrationUtilityReport } from "./works";
 import { db, nowISO, uuid } from "./store";
+import { listWorkOrders } from "./orders";
 
 function accountIdFromMethodName(name: string) {
   return name.toLowerCase().replaceAll(" ", "-");
 }
 
 export async function getDebtReport(): Promise<DebtReportRow[]> {
-  const accountsPayable = db.methods.find(
-    (method) => method.name.toLowerCase() === "cuentas por pagar",
-  );
   const providerBalances = new Map<string, number>();
 
-  for (const provider of WORK_PROVIDERS) {
-    providerBalances.set(provider, 0);
-  }
-
-  if (accountsPayable) {
-    for (const movement of db.workMovements) {
-      if (movement.payment_method_id !== accountsPayable.id) continue;
-      if (!providerBalances.has(movement.supplier)) continue;
-
-      const sign = movement.movement_type === "income" ? 1 : -1;
+  for (const work of db.works) {
+    for (const order of await listWorkOrders(work.id)) {
+      if (order.amount === null || order.pending <= 0.001) continue;
       providerBalances.set(
-        movement.supplier,
-        round2((providerBalances.get(movement.supplier) ?? 0) + movement.amount * sign),
+        order.supplier,
+        round2((providerBalances.get(order.supplier) ?? 0) + order.pending),
       );
     }
   }
@@ -50,12 +41,12 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
     source: "manual",
   }));
 
-  const providers: DebtReportRow[] = WORK_PROVIDERS.map((provider) => ({
+  const providers: DebtReportRow[] = [...providerBalances.entries()].map(([provider, amount]) => ({
     id: `provider-${provider}`,
     name: provider,
-    amount: providerBalances.get(provider) ?? 0,
+    amount,
     type: "provider",
-    source: "works",
+    source: "orders",
   }));
 
   return [...debtors, ...providers];
@@ -81,11 +72,7 @@ export async function getGeneralBalanceReport(): Promise<GeneralBalanceReport> {
       .filter((row) => row.type === "provider")
       .reduce((sum, row) => sum + row.amount, 0),
   );
-  const accountsPayableInternalMovements =
-    byMethodName.get("cuentas por pagar")?.internalMovements ?? 0;
-  const accountsPayableTotal = round2(
-    providersTotal + accountsPayableInternalMovements,
-  );
+  const accountsPayableTotal = providersTotal;
   const worksReceivableTotal = round2(
     works
       .filter((work) => work.finance.balance < -0.001)
@@ -101,7 +88,7 @@ export async function getGeneralBalanceReport(): Promise<GeneralBalanceReport> {
         label: "Cuentas por pagar",
         amount: accountsPayableTotal,
         source: "providers",
-        description: "Proveedores más traspasos internos de Obras.",
+        description: "Saldo pendiente de pedidos a proveedores.",
       };
     }
 
@@ -168,41 +155,60 @@ export async function getGeneralBalanceAccountReport(
   const method = methodForAccount(account);
 
   if (method) {
-    for (const movement of db.workMovements) {
-      if (movement.payment_method_id !== method.id) continue;
-      history.push({
-        id: `work-${movement.id}`,
-        date: movement.movement_date,
-        description: movement.concept,
-        expenseAccount:
-          movement.movement_type === "expense" ? method.name : movement.supplier,
-        incomeAccount:
-          movement.movement_type === "income" ? method.name : movement.supplier,
-        amount: movement.amount,
-        source: "works",
-      });
+    if (account.id === "accounts-payable") {
+      for (const work of db.works) {
+        for (const order of await listWorkOrders(work.id)) {
+          if (order.amount === null || order.pending <= 0.001) continue;
+          history.push({
+            id: `order-payable-${order.id}`,
+            date: order.quoted_at ?? order.order_date,
+            description: `${order.material} · ${work.name}`,
+            expenseAccount: account.label,
+            incomeAccount: order.supplier,
+            amount: order.pending,
+            source: "orders",
+          });
+        }
+      }
+    } else {
+      for (const movement of db.workMovements) {
+        if (movement.payment_method_id !== method.id) continue;
+        history.push({
+          id: `work-${movement.id}`,
+          date: movement.movement_date,
+          description: movement.concept,
+          expenseAccount:
+            movement.movement_type === "expense" ? method.name : movement.supplier,
+          incomeAccount:
+            movement.movement_type === "income" ? method.name : movement.supplier,
+          amount: movement.amount,
+          source: "works",
+        });
+      }
     }
 
-    for (const transfer of db.workInternalTransfers) {
-      if (
-        transfer.from_payment_method_id !== method.id &&
-        transfer.to_payment_method_id !== method.id
-      ) {
-        continue;
+    if (account.id !== "accounts-payable") {
+      for (const transfer of db.workInternalTransfers) {
+        if (
+          transfer.from_payment_method_id !== method.id &&
+          transfer.to_payment_method_id !== method.id
+        ) {
+          continue;
+        }
+        const from = db.methods.find(
+          (item) => item.id === transfer.from_payment_method_id,
+        );
+        const to = db.methods.find((item) => item.id === transfer.to_payment_method_id);
+        history.push({
+          id: `work-transfer-${transfer.id}`,
+          date: transfer.transfer_date,
+          description: transfer.description,
+          expenseAccount: from?.name ?? "Sin cuenta",
+          incomeAccount: to?.name ?? "Sin cuenta",
+          amount: transfer.amount,
+          source: "internal-transfer",
+        });
       }
-      const from = db.methods.find(
-        (item) => item.id === transfer.from_payment_method_id,
-      );
-      const to = db.methods.find((item) => item.id === transfer.to_payment_method_id);
-      history.push({
-        id: `work-transfer-${transfer.id}`,
-        date: transfer.transfer_date,
-        description: transfer.description,
-        expenseAccount: from?.name ?? "Sin cuenta",
-        incomeAccount: to?.name ?? "Sin cuenta",
-        amount: transfer.amount,
-        source: "internal-transfer",
-      });
     }
   }
 

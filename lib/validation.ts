@@ -258,6 +258,69 @@ export type CreateWorkInput = z.infer<typeof createWorkSchema>;
 export type UpdateWorkInput = z.infer<typeof updateWorkSchema>;
 export type RegisterWorkMovementInput = z.infer<typeof registerWorkMovementSchema>;
 
+// ── Work orders / pedidos ───────────────────────────────────────
+export const createWorkOrderSchema = z.object({
+  workId: z.string().uuid("Obra inválida"),
+  orderDate: isoDate,
+  supplier: z.enum(WORK_PROVIDERS, { error: "Selecciona proveedor" }),
+  material: z
+    .string()
+    .trim()
+    .min(2, "Ingresa el material")
+    .max(1000, "Máximo 1000 caracteres"),
+  description: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+});
+
+export const quoteWorkOrderSchema = z
+  .object({
+    orderId: z.string().uuid("Pedido inválido"),
+    quoteDate: isoDate,
+    category: workCategory.refine((category) => category !== WORK_INCOME_CATEGORY, {
+      message: "Selecciona una categoría de salida",
+    }),
+    amount: money,
+    registerAdvance: z.boolean().default(false),
+    advanceAmount: z.number().positive().optional(),
+    advancePaymentMethodId: z.string().uuid("Selecciona forma de pago").optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.registerAdvance) return;
+    if (!data.advanceAmount || data.advanceAmount <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["advanceAmount"],
+        message: "Ingresa el adelanto",
+      });
+    } else if (data.advanceAmount > data.amount) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["advanceAmount"],
+        message: "El adelanto no puede superar el total",
+      });
+    }
+    if (!data.advancePaymentMethodId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["advancePaymentMethodId"],
+        message: "Selecciona forma de pago",
+      });
+    }
+  });
+
+export const registerWorkOrderPaymentSchema = z.object({
+  orderId: z.string().uuid("Pedido inválido"),
+  paymentDate: isoDate,
+  description: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
+  amount: money,
+  paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+});
+
+export type CreateWorkOrderInput = z.infer<typeof createWorkOrderSchema>;
+export type QuoteWorkOrderInput = z.infer<typeof quoteWorkOrderSchema>;
+export type RegisterWorkOrderPaymentInput = z.infer<
+  typeof registerWorkOrderPaymentSchema
+>;
+
 export const manualDebtorSchema = z.object({
   id: z.string().uuid("Deudor inválido").optional().or(z.literal("")),
   name,
