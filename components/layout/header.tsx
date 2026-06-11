@@ -14,7 +14,15 @@ import { AppBrand } from "./app-brand";
 import { SidebarNav } from "./sidebar-nav";
 import { UserChip } from "./user-chip";
 
-export function Header() {
+export function Header({
+  permissions,
+  name,
+  subtitle,
+}: {
+  permissions: string[] | null;
+  name: string;
+  subtitle: string;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,9 +39,9 @@ export function Header() {
             <SheetTitle className="sr-only">Menú de navegación</SheetTitle>
             <AppBrand />
           </SheetHeader>
-          <SidebarNav onNavigate={() => setOpen(false)} />
+          <SidebarNav onNavigate={() => setOpen(false)} permissions={permissions} />
           <div className="border-t p-3">
-            <UserChip />
+            <UserChip name={name} subtitle={subtitle} />
           </div>
         </SheetContent>
       </Sheet>
