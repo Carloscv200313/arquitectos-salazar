@@ -39,6 +39,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { registerInternalTransferAction } from "@/app/(dashboard)/projects/actions";
+import { ChartCard } from "@/components/charts/chart-card";
+import { CHART_COLORS } from "@/components/charts/palette";
+import { ComparisonBars, DonutChart } from "@/components/charts/charts";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
 import { round2 } from "@/lib/calculations";
 import { cn } from "@/lib/utils";
@@ -52,8 +55,23 @@ import type {
 function monthLabel(month: string) {
   const date = new Date(`${month}-01T00:00:00`);
   if (Number.isNaN(date.getTime())) return month;
-  return date.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  return date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 }
+
+function shortMonth(month: string) {
+  const date = new Date(`${month}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return month;
+  return date.toLocaleDateString("es-MX", { month: "short" });
+}
+
+const ACCOUNT_PALETTE = [
+  CHART_COLORS.brand,
+  CHART_COLORS.c2,
+  CHART_COLORS.c3,
+  CHART_COLORS.c4,
+  CHART_COLORS.c5,
+  CHART_COLORS.warning,
+];
 
 function signedCurrency(value: number) {
   if (Math.abs(value) < 0.001) return formatCurrency(0);
@@ -366,6 +384,26 @@ export function ProjectReports({
     (row) => Math.abs(row.finalBalance) > 0.001,
   ).length;
 
+  const utilityPoints = useMemo(
+    () =>
+      utilityRows.map((row) => ({
+        label: shortMonth(row.month),
+        values: { utilidad: row.utilityAmount },
+      })),
+    [utilityRows],
+  );
+  const accountSlices = useMemo(
+    () =>
+      paymentMethodRows
+        .filter((row) => Math.abs(row.finalBalance) > 0.001)
+        .map((row, i) => ({
+          label: row.methodName,
+          value: Math.abs(row.finalBalance),
+          color: ACCOUNT_PALETTE[i % ACCOUNT_PALETTE.length],
+        })),
+    [paymentMethodRows],
+  );
+
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -397,6 +435,37 @@ export function ProjectReports({
           icon={<TrendingUp className="size-5" />}
           tone="success"
         />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.4fr_0.9fr]">
+        <ChartCard
+          title="Utilidad mensual"
+          description="Utilidad (30% de ingresos) por mes."
+        >
+          {utilityPoints.length > 0 ? (
+            <ComparisonBars
+              points={utilityPoints}
+              series={[{ key: "utilidad", label: "Utilidad", color: CHART_COLORS.brand }]}
+              valueFormat="currency"
+            />
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Sin ingresos registrados para graficar.
+            </p>
+          )}
+        </ChartCard>
+        <ChartCard
+          title="Distribución por cuenta"
+          description="Participación de cada forma de pago en el saldo."
+        >
+          {accountSlices.length > 0 ? (
+            <DonutChart slices={accountSlices} valueFormat="currency" centerLabel="Saldo" />
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">
+              Sin saldos para mostrar.
+            </p>
+          )}
+        </ChartCard>
       </div>
 
       <div className="grid gap-5">

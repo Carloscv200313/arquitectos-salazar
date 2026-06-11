@@ -8,7 +8,13 @@
 // State lives on globalThis so it survives Next.js HMR in development.
 
 import {
+  EMPLOYEE_DEFAULT_WORK_TYPES,
+  PROJECT_RESPONSIBLES,
+  SALARY_PAYMENT_STATUSES,
+  SALARY_RECORD_STATUSES,
+  SALARY_WEEK_STATUSES,
   SEED_PAYMENT_METHODS,
+  TASK_TYPE_SEED,
   WORK_INCOME_CATEGORY,
   WORK_PROVIDERS,
   resolveTemplateWeights,
@@ -16,6 +22,8 @@ import {
 import { computeBreakdown, round2, type Addon } from "@/lib/calculations";
 import type {
   Client,
+  Employee,
+  EmployeeDefaultWorkType,
   GeneralBalanceAccountMovement,
   GeneralBalanceEntry,
   InternalTransfer,
@@ -24,7 +32,20 @@ import type {
   Project,
   ProjectAddon,
   ProjectPayment,
+  ProjectResponsible,
   ProjectTemplate,
+  SalaryActivityType,
+  SalaryAuditLog,
+  SalaryDayRecord,
+  SalaryPayment,
+  SalaryPaymentStatus,
+  SalaryPaymentType,
+  SalaryRecordStatus,
+  SalaryWeek,
+  SalaryWeekStatus,
+  SalaryWeekday,
+  TaskModuleType,
+  TaskType,
   Work,
   WorkMovement,
   WorkOrder,
@@ -44,13 +65,19 @@ interface DB {
   workMovements: WorkMovement[];
   workOrders: WorkOrder[];
   workOrderPayments: WorkOrderPayment[];
+  employees: Employee[];
+  taskTypes: TaskType[];
+  salaryWeeks: SalaryWeek[];
+  salaryDayRecords: SalaryDayRecord[];
+  salaryPayments: SalaryPayment[];
+  salaryAuditLogs: SalaryAuditLog[];
   manualDebtors: ManualDebtor[];
   generalBalanceEntries: GeneralBalanceEntry[];
   generalBalanceAccountMovements: GeneralBalanceAccountMovement[];
 }
 
 const SYSTEM_USER = "seed";
-const SEED_VERSION = 4;
+const SEED_VERSION = 11;
 
 const SEEDED_PROJECT_IDS = [
   "11111111-1111-4111-8111-111111111111",
@@ -90,6 +117,19 @@ interface SeedProject {
   addons: ProjectAddon[];
 }
 
+function responsiblesFor(index: number): Record<
+  "proposal" | "modeling_3d" | "plans" | "render",
+  ProjectResponsible
+> {
+  return {
+    proposal: PROJECT_RESPONSIBLES[index % PROJECT_RESPONSIBLES.length],
+    modeling_3d:
+      PROJECT_RESPONSIBLES[(index + 1) % PROJECT_RESPONSIBLES.length],
+    plans: PROJECT_RESPONSIBLES[(index + 2) % PROJECT_RESPONSIBLES.length],
+    render: PROJECT_RESPONSIBLES[(index + 3) % PROJECT_RESPONSIBLES.length],
+  };
+}
+
 function buildProject(
   name: string,
   clientId: string,
@@ -98,6 +138,7 @@ function buildProject(
   addonLines: Addon[] = [],
   template: ProjectTemplate = "diamante",
   id: string = uuid(),
+  responsibles = responsiblesFor(0),
 ): SeedProject {
   const ts = daysAgoISO(createdDaysAgo);
   const addons: ProjectAddon[] = addonLines.map((a) => ({
@@ -122,6 +163,10 @@ function buildProject(
     modeling_3d_amount: b.project.modeling_3d,
     plans_amount: b.project.plans,
     render_amount: b.project.render,
+    proposal_responsible: responsibles.proposal,
+    modeling_3d_responsible: responsibles.modeling_3d,
+    plans_responsible: responsibles.plans,
+    render_responsible: responsibles.render,
     created_at: ts,
     updated_at: ts,
     created_by: SYSTEM_USER,
@@ -161,10 +206,11 @@ function seed(): DB {
       [],
       "oro",
       SEEDED_PROJECT_IDS[0],
+      responsiblesFor(0),
     ),
     buildProject("Casa de Playa Asia", clients[0].id, 12800, 43, [
       { concept: "Levantamiento topográfico", amount: 800 },
-    ], "diamante", SEEDED_PROJECT_IDS[1]),
+    ], "diamante", SEEDED_PROJECT_IDS[1], responsiblesFor(1)),
     buildProject(
       "Remodelación Oficina Centro",
       clients[1].id,
@@ -173,6 +219,7 @@ function seed(): DB {
       [],
       "diamante",
       SEEDED_PROJECT_IDS[2],
+      responsiblesFor(2),
     ),
     buildProject(
       "Vivienda Unifamiliar La Molina",
@@ -182,6 +229,7 @@ function seed(): DB {
       [],
       "diamante",
       SEEDED_PROJECT_IDS[3],
+      responsiblesFor(3),
     ),
     buildProject(
       "Proyecto Ejecutivo San Isidro",
@@ -193,6 +241,7 @@ function seed(): DB {
       ],
       "diamante",
       SEEDED_PROJECT_IDS[4],
+      responsiblesFor(4),
     ),
   ];
 
@@ -491,6 +540,649 @@ function seed(): DB {
     amount: 3600,
   });
 
+  const employees: Employee[] = [
+    employee("Alejandra", EMPLOYEE_DEFAULT_WORK_TYPES[0]),
+    employee("Juanfer", EMPLOYEE_DEFAULT_WORK_TYPES[1]),
+    employee("Juan Jose", EMPLOYEE_DEFAULT_WORK_TYPES[1]),
+    employee("Esmeralda", EMPLOYEE_DEFAULT_WORK_TYPES[0]),
+    employee("Diana Rodríguez", EMPLOYEE_DEFAULT_WORK_TYPES[2], false),
+    employee("Patricia Aguirre", EMPLOYEE_DEFAULT_WORK_TYPES[0], false),
+  ];
+
+  const taskTypes: TaskType[] = TASK_TYPE_SEED.map((item) =>
+    taskType(item.name, item.moduleType),
+  );
+
+  const taskId = (name: string) => taskTypes.find((item) => item.name === name)?.id ?? null;
+  const employeeId = (name: string) =>
+    employees.find((item) => item.full_name === name)?.id ?? null;
+
+  const salaryWeeks: SalaryWeek[] = [
+    salaryWeek("2026-01-05", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-01-12", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-01-19", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-01-26", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-05-25", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-06-01", SALARY_WEEK_STATUSES[0]),
+    salaryWeek("2026-06-08", SALARY_WEEK_STATUSES[0]),
+  ];
+
+  const salaryDayRecords: SalaryDayRecord[] = [
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-05",
+      dayName: "monday",
+      activityType: "week",
+      notes: "Trabajo semanal general",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-06",
+      dayName: "tuesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-07",
+      dayName: "wednesday",
+      activityType: "project",
+      projectId: projects[4].id,
+      taskTypeId: taskId("Propuesta"),
+      notes: "Preparación de propuesta",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-08",
+      dayName: "thursday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-09",
+      dayName: "friday",
+      activityType: "pending",
+      status: SALARY_RECORD_STATUSES[2],
+      notes: "Pendiente de confirmación",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-05",
+      dayName: "monday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-06",
+      dayName: "tuesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-07",
+      dayName: "wednesday",
+      activityType: "work",
+      workId: works[1].id,
+      taskTypeId: taskId("Supervisión"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-08",
+      dayName: "thursday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-09",
+      dayName: "friday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-01-05",
+      dayName: "monday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-01-06",
+      dayName: "tuesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-01-07",
+      dayName: "wednesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-01-08",
+      dayName: "thursday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-05",
+      dayName: "monday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-06",
+      dayName: "tuesday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-07",
+      dayName: "wednesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-08",
+      dayName: "thursday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-12",
+      dayName: "monday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Modelado 3D"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-13",
+      dayName: "tuesday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Modelado 3D"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-01-12",
+      dayName: "monday",
+      activityType: "work",
+      workId: works[0].id,
+      taskTypeId: taskId("Obra"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-01-14",
+      dayName: "wednesday",
+      activityType: "absent",
+      notes: "No asistió",
+      status: SALARY_RECORD_STATUSES[2],
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-16",
+      dayName: "friday",
+      activityType: "project",
+      projectId: projects[1].id,
+      taskTypeId: taskId("Render"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[2].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-21",
+      dayName: "wednesday",
+      activityType: "project",
+      projectId: projects[4].id,
+      taskTypeId: taskId("Modelado 3D"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[2].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-22",
+      dayName: "thursday",
+      activityType: "project",
+      projectId: projects[1].id,
+      taskTypeId: taskId("Render"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[3].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-01-26",
+      dayName: "monday",
+      activityType: "work",
+      workId: works[1].id,
+      taskTypeId: taskId("Supervisión"),
+      status: SALARY_RECORD_STATUSES[2],
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[3].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-01-30",
+      dayName: "friday",
+      activityType: "work",
+      workId: works[0].id,
+      taskTypeId: taskId("Obra"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[4].id,
+      employeeId: employeeId("Diana Rodríguez")!,
+      workDate: "2026-05-25",
+      dayName: "monday",
+      activityType: "project",
+      projectId: projects[3].id,
+      taskTypeId: taskId("Propuesta"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[4].id,
+      employeeId: employeeId("Patricia Aguirre")!,
+      workDate: "2026-05-27",
+      dayName: "wednesday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Render"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-06-01",
+      dayName: "monday",
+      activityType: "project",
+      projectId: projects[4].id,
+      taskTypeId: taskId("Propuesta"),
+      notes: "Inicio de propuesta ejecutiva",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-06-03",
+      dayName: "wednesday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-06-02",
+      dayName: "tuesday",
+      activityType: "work",
+      workId: works[1].id,
+      taskTypeId: taskId("Supervisión"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-06-04",
+      dayName: "thursday",
+      activityType: "work",
+      workId: works[0].id,
+      taskTypeId: taskId("Obra"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-06-05",
+      dayName: "friday",
+      activityType: "project",
+      projectId: projects[0].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Diana Rodríguez")!,
+      workDate: "2026-06-01",
+      dayName: "monday",
+      activityType: "project",
+      projectId: projects[3].id,
+      taskTypeId: taskId("Costos"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Patricia Aguirre")!,
+      workDate: "2026-06-03",
+      dayName: "wednesday",
+      activityType: "project",
+      projectId: projects[1].id,
+      taskTypeId: taskId("Render"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Alejandra")!,
+      workDate: "2026-06-08",
+      dayName: "monday",
+      activityType: "week",
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Juanfer")!,
+      workDate: "2026-06-09",
+      dayName: "tuesday",
+      activityType: "work",
+      workId: works[3].id,
+      taskTypeId: taskId("Supervisión"),
+      status: SALARY_RECORD_STATUSES[2],
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Juan Jose")!,
+      workDate: "2026-06-10",
+      dayName: "wednesday",
+      activityType: "absent",
+      notes: "Falta por justificar",
+      status: SALARY_RECORD_STATUSES[2],
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Esmeralda")!,
+      workDate: "2026-06-11",
+      dayName: "thursday",
+      activityType: "project",
+      projectId: projects[4].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryDayRecord({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Diana Rodríguez")!,
+      workDate: "2026-06-12",
+      dayName: "friday",
+      activityType: "pending",
+      notes: "Pendiente de asignación",
+      status: SALARY_RECORD_STATUSES[2],
+    }),
+  ];
+
+  const salaryPayments: SalaryPayment[] = [
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 2000,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[0].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "project",
+      concept: "Propuesta",
+      amount: 1000,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[0].payment_date,
+      projectId: projects[4].id,
+      taskTypeId: taskId("Propuesta"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juanfer")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 1410,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[0].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Juan Jose")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 2560,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[0].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 1000,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[0].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[0].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "project",
+      concept: "Planos",
+      amount: 2970,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[0].payment_date,
+      projectId: projects[0].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "project",
+      concept: "Modelado 3D",
+      amount: 2770,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[1].payment_date,
+      projectId: projects[0].id,
+      taskTypeId: taskId("Modelado 3D"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[1].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "project",
+      concept: "Planos",
+      amount: 1500,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[1].payment_date,
+      projectId: projects[1].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[2].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "project",
+      concept: "Modelado 3D",
+      amount: 3760,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[2].payment_date,
+      projectId: projects[4].id,
+      taskTypeId: taskId("Modelado 3D"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[2].id,
+      employeeId: employeeId("Juanfer")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 2400,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[2].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[2].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "project",
+      concept: "Render",
+      amount: 3000,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[2].payment_date,
+      projectId: projects[1].id,
+      taskTypeId: taskId("Render"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[3].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "work",
+      concept: "Supervisión de obra",
+      amount: 3200,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[3].payment_date,
+      workId: works[1].id,
+      taskTypeId: taskId("Supervisión"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[3].id,
+      employeeId: employeeId("Juanfer")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 2400,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[3].payment_date,
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[3].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "work",
+      concept: "Planos de obra",
+      amount: 2800,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[3].payment_date,
+      workId: works[0].id,
+      taskTypeId: taskId("Obra"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[4].id,
+      employeeId: employeeId("Diana Rodríguez")!,
+      paymentType: "project",
+      concept: "Costos y presupuesto",
+      amount: 1850,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[4].payment_date,
+      projectId: projects[3].id,
+      taskTypeId: taskId("Costos"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[4].id,
+      employeeId: employeeId("Patricia Aguirre")!,
+      paymentType: "project",
+      concept: "Render de entrega",
+      amount: 2200,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[4].payment_date,
+      projectId: projects[0].id,
+      taskTypeId: taskId("Render"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "project",
+      concept: "Propuesta ejecutiva",
+      amount: 1600,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[5].payment_date,
+      projectId: projects[4].id,
+      taskTypeId: taskId("Propuesta"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Juanfer")!,
+      paymentType: "work",
+      concept: "Supervisión de obra",
+      amount: 2450,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[5].payment_date,
+      workId: works[1].id,
+      taskTypeId: taskId("Supervisión"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Juan Jose")!,
+      paymentType: "work",
+      concept: "Trabajo de obra semanal",
+      amount: 2300,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[5].payment_date,
+      workId: works[0].id,
+      taskTypeId: taskId("Obra"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "project",
+      concept: "Planos de coordinación",
+      amount: 2100,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[5].payment_date,
+      projectId: projects[0].id,
+      taskTypeId: taskId("Planos"),
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Diana Rodríguez")!,
+      paymentType: "project",
+      concept: "Costos preliminares",
+      amount: 1250,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[5].payment_date,
+      projectId: projects[3].id,
+      taskTypeId: taskId("Costos"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[5].id,
+      employeeId: employeeId("Patricia Aguirre")!,
+      paymentType: "bonus",
+      concept: "Bono de cierre visual",
+      amount: 600,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[5].payment_date,
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Alejandra")!,
+      paymentType: "week",
+      concept: "Pago semanal",
+      amount: 1800,
+      paymentMethodId: caja,
+      paymentDate: salaryWeeks[6].payment_date,
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+    salaryPayment({
+      salaryWeekId: salaryWeeks[6].id,
+      employeeId: employeeId("Esmeralda")!,
+      paymentType: "project",
+      concept: "Planos complementarios",
+      amount: 1750,
+      paymentMethodId: cuentaRosa,
+      paymentDate: salaryWeeks[6].payment_date,
+      projectId: projects[4].id,
+      taskTypeId: taskId("Planos"),
+      status: SALARY_PAYMENT_STATUSES[0],
+    }),
+  ];
+
+  const salaryAuditLogs: SalaryAuditLog[] = salaryWeeks.map((week) =>
+    salaryAuditLog(
+      "week_created",
+      `Semana salarial creada ${week.week_start_date}`,
+      week.id,
+      { status: week.status },
+    ),
+  );
+
   const manualDebtors: ManualDebtor[] = [
     manualDebtor("Juan Humberto", 6000),
     manualDebtor("Donato", 2690),
@@ -523,6 +1215,12 @@ function seed(): DB {
     workMovements,
     workOrders,
     workOrderPayments,
+    employees,
+    taskTypes,
+    salaryWeeks,
+    salaryDayRecords,
+    salaryPayments,
+    salaryAuditLogs,
     manualDebtors,
     generalBalanceEntries: [],
     generalBalanceAccountMovements: [],
@@ -633,6 +1331,149 @@ function manualDebtor(name: string, amount: number): ManualDebtor {
   };
 }
 
+function employee(
+  fullName: string,
+  defaultWorkType: EmployeeDefaultWorkType,
+  isActive = true,
+): Employee {
+  const ts = nowISO();
+  return {
+    id: uuid(),
+    full_name: fullName,
+    is_active: isActive,
+    default_work_type: defaultWorkType,
+    created_at: ts,
+    updated_at: ts,
+    created_by: SYSTEM_USER,
+  };
+}
+
+function taskType(name: string, moduleType: TaskModuleType, isActive = true): TaskType {
+  const ts = nowISO();
+  return {
+    id: uuid(),
+    name,
+    module_type: moduleType,
+    is_active: isActive,
+    created_at: ts,
+  };
+}
+
+function addDays(date: string, days: number) {
+  const current = new Date(`${date}T00:00:00`);
+  current.setDate(current.getDate() + days);
+  return current.toISOString().slice(0, 10);
+}
+
+function salaryWeek(
+  startDate: string,
+  status: SalaryWeekStatus = SALARY_WEEK_STATUSES[0],
+  id: string = uuid(),
+): SalaryWeek {
+  const ts = nowISO();
+  return {
+    id,
+    year: Number(startDate.slice(0, 4)),
+    month: Number(startDate.slice(5, 7)),
+    week_start_date: startDate,
+    week_end_date: addDays(startDate, 4),
+    payment_date: addDays(startDate, 4),
+    status,
+    created_at: ts,
+    updated_at: ts,
+    created_by: SYSTEM_USER,
+  };
+}
+
+function salaryDayRecord(data: {
+  salaryWeekId: string;
+  employeeId: string;
+  workDate: string;
+  dayName: SalaryWeekday;
+  activityType: SalaryActivityType | "week" | "free";
+  projectId?: string | null;
+  workId?: string | null;
+  taskTypeId?: string | null;
+  notes?: string | null;
+  status?: SalaryRecordStatus;
+}): SalaryDayRecord {
+  const ts = nowISO();
+  const activityType: SalaryActivityType =
+    data.activityType === "week" || data.activityType === "free"
+      ? data.workId
+        ? "work"
+        : data.projectId
+          ? "project"
+          : "pending"
+      : data.activityType;
+  return {
+    id: uuid(),
+    salary_week_id: data.salaryWeekId,
+    employee_id: data.employeeId,
+    work_date: data.workDate,
+    day_name: data.dayName,
+    activity_type: activityType,
+    project_id: data.projectId ?? null,
+    work_id: data.workId ?? null,
+    task_type_id: data.taskTypeId ?? null,
+    notes: data.notes ?? null,
+    status: data.status ?? SALARY_RECORD_STATUSES[1],
+    created_at: ts,
+    updated_at: ts,
+    created_by: SYSTEM_USER,
+  };
+}
+
+function salaryPayment(data: {
+  salaryWeekId: string;
+  employeeId: string;
+  paymentType: SalaryPaymentType;
+  concept: string;
+  amount: number;
+  paymentMethodId: string;
+  paymentDate: string;
+  projectId?: string | null;
+  workId?: string | null;
+  taskTypeId?: string | null;
+  notes?: string | null;
+  status?: SalaryPaymentStatus;
+}): SalaryPayment {
+  return {
+    id: uuid(),
+    salary_week_id: data.salaryWeekId,
+    employee_id: data.employeeId,
+    payment_type: data.paymentType,
+    concept: data.concept,
+    amount: round2(data.amount),
+    payment_method_id: data.paymentMethodId,
+    payment_date: data.paymentDate,
+    project_id: data.projectId ?? null,
+    work_id: data.workId ?? null,
+    task_type_id: data.taskTypeId ?? null,
+    notes: data.notes ?? null,
+    status: data.status ?? SALARY_PAYMENT_STATUSES[0],
+    created_at: nowISO(),
+    created_by: SYSTEM_USER,
+  };
+}
+
+function salaryAuditLog(
+  action: SalaryAuditLog["action"],
+  description: string,
+  salaryWeekId: string | null,
+  metadata: Record<string, unknown> | null = null,
+): SalaryAuditLog {
+  return {
+    id: uuid(),
+    salary_week_id: salaryWeekId,
+    action,
+    description,
+    metadata_json: metadata ? JSON.stringify(metadata) : null,
+    created_at: nowISO(),
+    created_by: SYSTEM_USER,
+  };
+}
+
 const globalForDb = globalThis as unknown as { __as_db?: DB };
 
 export const db: DB = globalForDb.__as_db ?? (globalForDb.__as_db = seed());
@@ -649,6 +1490,12 @@ if (!db.internalTransfers) db.internalTransfers = [];
 if (!db.workInternalTransfers) db.workInternalTransfers = [];
 if (!db.workOrders) db.workOrders = [];
 if (!db.workOrderPayments) db.workOrderPayments = [];
+if (!db.salaryWeeks) db.salaryWeeks = [];
+if (!db.salaryDayRecords) db.salaryDayRecords = [];
+if (!db.salaryPayments) db.salaryPayments = [];
+if (!db.salaryAuditLogs) db.salaryAuditLogs = [];
+if (!db.employees) db.employees = [];
+if (!db.taskTypes) db.taskTypes = [];
 if (!db.generalBalanceEntries) db.generalBalanceEntries = [];
 if (!db.generalBalanceAccountMovements) db.generalBalanceAccountMovements = [];
 if (!db.manualDebtors) {

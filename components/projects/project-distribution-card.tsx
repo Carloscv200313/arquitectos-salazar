@@ -11,7 +11,7 @@ import {
 import { round2 } from "@/lib/calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { ProjectWithFinance } from "@/lib/types";
+import type { InternalArea, PaymentWithMethod, ProjectWithFinance } from "@/lib/types";
 
 function Line({
   label,
@@ -28,7 +28,12 @@ function Line({
 }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b py-2 text-sm last:border-0">
-      <span className={cn("min-w-0 truncate", strong ? "font-medium" : muted ? "text-muted-foreground" : "")}>
+      <span
+        className={cn(
+          "block min-w-0 truncate",
+          strong ? "font-medium" : muted ? "text-muted-foreground" : "",
+        )}
+      >
         {label}
       </span>
       <div className="flex shrink-0 items-center gap-3 tabular-nums">
@@ -43,7 +48,58 @@ function Line({
   );
 }
 
-export function ProjectDistributionCard({ project }: { project: ProjectWithFinance }) {
+function AreaRow({
+  label,
+  responsible,
+  pct,
+  total,
+  paid,
+}: {
+  label: string;
+  responsible: string;
+  pct: number;
+  total: number;
+  paid: number;
+}) {
+  const safePaid = Math.min(round2(paid), total);
+  const progress = total > 0 ? Math.min(round2((safePaid / total) * 100), 100) : 0;
+
+  return (
+    <div className="border-b py-3 last:border-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-xs font-medium text-brand-foreground">{responsible}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3 tabular-nums">
+          <span className="text-xs text-muted-foreground">{formatPercent(pct * 100)}</span>
+          <span className="text-right font-semibold">{formatCurrency(total)}</span>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+          <span className="text-muted-foreground">Pagado {formatCurrency(safePaid)}</span>
+          <span className="font-medium text-brand-foreground">{progress.toFixed(0)}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-brand transition-[width]"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProjectDistributionCard({
+  project,
+  payments,
+}: {
+  project: ProjectWithFinance;
+  payments: PaymentWithMethod[];
+}) {
   const portion = round2(
     project.proposal_amount +
       project.modeling_3d_amount +
@@ -51,6 +107,20 @@ export function ProjectDistributionCard({ project }: { project: ProjectWithFinan
       project.render_amount,
   );
   const pctOf = (amount: number) => (portion > 0 ? amount / portion : 0);
+
+  const paidByArea = payments.reduce<Record<InternalArea, number>>(
+    (acc, payment) => {
+      if (payment.movement_type !== "expense" || !payment.internal_area) return acc;
+      acc[payment.internal_area] = round2(acc[payment.internal_area] + payment.amount);
+      return acc;
+    },
+    {
+      proposal: 0,
+      modeling_3d: 0,
+      plans: 0,
+      render: 0,
+    },
+  );
 
   return (
     <Card className="gap-0 py-0">
@@ -111,10 +181,34 @@ export function ProjectDistributionCard({ project }: { project: ProjectWithFinan
             </span>
           </div>
           <div className="rounded-xl border bg-muted/20 px-4 py-3">
-            <Line label={PROJECT_SLICE_LABELS.proposal} pct={pctOf(project.proposal_amount)} amount={project.proposal_amount} muted />
-            <Line label={PROJECT_SLICE_LABELS.modeling_3d} pct={pctOf(project.modeling_3d_amount)} amount={project.modeling_3d_amount} muted />
-            <Line label={PROJECT_SLICE_LABELS.plans} pct={pctOf(project.plans_amount)} amount={project.plans_amount} muted />
-            <Line label={PROJECT_SLICE_LABELS.render} pct={pctOf(project.render_amount)} amount={project.render_amount} muted />
+            <AreaRow
+              label={PROJECT_SLICE_LABELS.proposal}
+              responsible={project.proposal_responsible}
+              pct={pctOf(project.proposal_amount)}
+              total={project.proposal_amount}
+              paid={paidByArea.proposal}
+            />
+            <AreaRow
+              label={PROJECT_SLICE_LABELS.modeling_3d}
+              responsible={project.modeling_3d_responsible}
+              pct={pctOf(project.modeling_3d_amount)}
+              total={project.modeling_3d_amount}
+              paid={paidByArea.modeling_3d}
+            />
+            <AreaRow
+              label={PROJECT_SLICE_LABELS.plans}
+              responsible={project.plans_responsible}
+              pct={pctOf(project.plans_amount)}
+              total={project.plans_amount}
+              paid={paidByArea.plans}
+            />
+            <AreaRow
+              label={PROJECT_SLICE_LABELS.render}
+              responsible={project.render_responsible}
+              pct={pctOf(project.render_amount)}
+              total={project.render_amount}
+              paid={paidByArea.render}
+            />
           </div>
         </section>
       </div>

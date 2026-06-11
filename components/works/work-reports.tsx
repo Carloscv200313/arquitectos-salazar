@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/table";
 import { round2 } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
+import { ChartCard } from "@/components/charts/chart-card";
+import { CHART_COLORS } from "@/components/charts/palette";
+import { ComparisonBars, DonutChart } from "@/components/charts/charts";
 import type {
   PaymentMethodReportRow,
   WorkAdministrationUtilityRow,
@@ -27,7 +30,7 @@ import { cn } from "@/lib/utils";
 function monthLabel(month: string) {
   const date = new Date(`${month}-01T00:00:00`);
   if (Number.isNaN(date.getTime())) return month;
-  return date.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  return date.toLocaleDateString("es-MX", { month: "long", year: "numeric" });
 }
 
 function signedCurrency(value: number) {
@@ -141,8 +144,46 @@ export function WorkReports({
     (row) => Math.abs(row.finalBalance) > 0.001,
   ).length;
 
+  const balancePoints = [...works]
+    .sort((a, b) => Math.abs(b.finance.balance) - Math.abs(a.finance.balance))
+    .slice(0, 6)
+    .map((work) => ({
+      label: work.name.length > 14 ? `${work.name.slice(0, 13)}…` : work.name,
+      values: { entradas: work.finance.income, salidas: work.finance.expense },
+    }));
+
   return (
     <div className="flex flex-col gap-5">
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.4fr]">
+        <ChartCard title="Entradas vs Salidas" description="Distribución global de obras.">
+          {totalIncome + totalExpense > 0 ? (
+            <DonutChart
+              slices={[
+                { label: "Entradas", value: totalIncome, color: CHART_COLORS.brand },
+                { label: "Salidas", value: totalExpense, color: CHART_COLORS.c4 },
+              ]}
+              valueFormat="currency"
+              centerLabel="Movimiento"
+            />
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">Sin movimientos.</p>
+          )}
+        </ChartCard>
+        <ChartCard title="Balance por obra" description="Entradas y salidas de las obras con mayor actividad.">
+          {balancePoints.length > 0 ? (
+            <ComparisonBars
+              points={balancePoints}
+              series={[
+                { key: "entradas", label: "Entradas", color: CHART_COLORS.brand },
+                { key: "salidas", label: "Salidas", color: CHART_COLORS.c4 },
+              ]}
+              valueFormat="currency"
+            />
+          ) : (
+            <p className="py-10 text-center text-sm text-muted-foreground">Sin obras registradas.</p>
+          )}
+        </ChartCard>
+      </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Saldo total"

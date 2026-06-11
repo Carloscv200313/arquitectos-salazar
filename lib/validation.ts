@@ -1,7 +1,16 @@
 import { z } from "zod";
 import { computeBreakdown } from "./calculations";
 import {
+  EMPLOYEE_DEFAULT_WORK_TYPES,
   PROJECT_DISTRIBUTION,
+  PROJECT_RESPONSIBLES,
+  SALARY_ACTIVITY_TYPES,
+  SALARY_PAYMENT_STATUSES,
+  SALARY_PAYMENT_TYPES,
+  SALARY_RECORD_STATUSES,
+  SALARY_WEEK_STATUSES,
+  SALARY_WEEKDAY_LABELS,
+  TASK_MODULE_TYPES,
   WORK_CATEGORIES,
   WORK_INCOME_CATEGORY,
   WORK_PROVIDERS,
@@ -49,6 +58,13 @@ export const sliceWeightsSchema = z.object({
   render: z.number().min(0).max(1),
 });
 
+export const projectResponsiblesSchema = z.object({
+  proposal: z.enum(PROJECT_RESPONSIBLES),
+  modeling_3d: z.enum(PROJECT_RESPONSIBLES),
+  plans: z.enum(PROJECT_RESPONSIBLES),
+  render: z.enum(PROJECT_RESPONSIBLES),
+});
+
 function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number; render: number }) {
   const sum = w.proposal + w.modeling_3d + w.plans + w.render;
   return Math.abs(sum - 1) < 0.005;
@@ -62,6 +78,7 @@ export const createProjectSchema = z
     clientName: name.optional().or(z.literal("")),
     template: z.enum(["diamante", "oro", "especial"]).default("diamante"),
     weights: sliceWeightsSchema.optional(),
+    responsibles: projectResponsiblesSchema,
     projectAmount: money,
     addons,
     registerAnticipo: z.boolean().default(false),
@@ -117,6 +134,7 @@ export const updateProjectSchema = z
     name,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
+    responsibles: projectResponsiblesSchema,
     projectAmount: money,
     addons,
   })
@@ -186,6 +204,147 @@ export const registerInternalTransferSchema = z
 export type RegisterInternalTransferInput = z.infer<
   typeof registerInternalTransferSchema
 >;
+
+const employeeDefaultWorkType = z.enum(EMPLOYEE_DEFAULT_WORK_TYPES);
+const salaryWeekStatus = z.enum(SALARY_WEEK_STATUSES);
+const salaryWeekday = z.enum(
+  Object.keys(SALARY_WEEKDAY_LABELS) as [
+    keyof typeof SALARY_WEEKDAY_LABELS,
+    ...(keyof typeof SALARY_WEEKDAY_LABELS)[],
+  ],
+);
+const salaryActivityType = z.enum(SALARY_ACTIVITY_TYPES);
+const salaryPaymentType = z.enum(SALARY_PAYMENT_TYPES);
+const taskModuleType = z.enum(TASK_MODULE_TYPES);
+const salaryRecordStatus = z.enum(SALARY_RECORD_STATUSES);
+const salaryPaymentStatus = z.enum(SALARY_PAYMENT_STATUSES);
+
+export const employeeSchema = z.object({
+  id: z.string().uuid().optional().or(z.literal("")),
+  fullName: name,
+  isActive: z.boolean().default(true),
+  defaultWorkType: employeeDefaultWorkType,
+});
+
+export const taskTypeSchema = z.object({
+  id: z.string().uuid().optional().or(z.literal("")),
+  name,
+  moduleType: taskModuleType,
+  isActive: z.boolean().default(true),
+});
+
+export const saveSalaryWeekSchema = z
+  .object({
+    id: z.string().uuid().optional().or(z.literal("")),
+    startDate: isoDate,
+    paymentDate: isoDate.optional(),
+    status: salaryWeekStatus.default("draft"),
+  })
+  .superRefine((data, ctx) => {
+    const start = new Date(`${data.startDate}T00:00:00`);
+    if (start.getDay() !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["startDate"],
+        message: "La semana debe iniciar un lunes",
+      });
+    }
+    if (data.paymentDate && data.paymentDate < data.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["paymentDate"],
+        message: "La fecha de pago no puede ser menor al inicio",
+      });
+    }
+  });
+
+export const saveSalaryDayRecordSchema = z
+  .object({
+    id: z.string().uuid().optional().or(z.literal("")),
+    salaryWeekId: z.string().uuid("Semana inválida"),
+    employeeId: z.string().uuid("Empleado inválido"),
+    workDate: isoDate,
+    dayName: salaryWeekday,
+    activityType: salaryActivityType,
+    projectId: z.string().uuid().nullable().optional(),
+    workId: z.string().uuid().nullable().optional(),
+    taskTypeId: z.string().uuid().nullable().optional(),
+    notes: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+    status: salaryRecordStatus.default("recorded"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.activityType === "project" && !data.projectId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["projectId"],
+        message: "Selecciona proyecto",
+      });
+    }
+    if (data.activityType === "work" && !data.workId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["workId"],
+        message: "Selecciona obra",
+      });
+    }
+    if (data.activityType === "project" && !data.taskTypeId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["taskTypeId"],
+        message: "Selecciona tarea",
+      });
+    }
+  });
+
+export const saveSalaryPaymentSchema = z
+  .object({
+    id: z.string().uuid().optional().or(z.literal("")),
+    salaryWeekId: z.string().uuid("Semana inválida"),
+    employeeId: z.string().uuid("Empleado inválido"),
+    paymentType: salaryPaymentType,
+    concept,
+    amount: money,
+    paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+    paymentDate: isoDate,
+    projectId: z.string().uuid().nullable().optional(),
+    workId: z.string().uuid().nullable().optional(),
+    taskTypeId: z.string().uuid().nullable().optional(),
+    notes: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+    status: salaryPaymentStatus.default("paid"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.paymentType === "project" && !data.projectId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["projectId"],
+        message: "Selecciona proyecto",
+      });
+    }
+    if (data.paymentType === "work" && !data.workId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["workId"],
+        message: "Selecciona obra",
+      });
+    }
+    if (data.paymentType === "project" && !data.taskTypeId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["taskTypeId"],
+        message: "Selecciona tarea",
+      });
+    }
+  });
+
+export const updateSalaryWeekStatusSchema = z.object({
+  salaryWeekId: z.string().uuid("Semana inválida"),
+  status: salaryWeekStatus,
+});
+
+export type SaveSalaryWeekInput = z.infer<typeof saveSalaryWeekSchema>;
+export type SaveSalaryDayRecordInput = z.infer<typeof saveSalaryDayRecordSchema>;
+export type SaveSalaryPaymentInput = z.infer<typeof saveSalaryPaymentSchema>;
+export type UpdateSalaryWeekStatusInput = z.infer<typeof updateSalaryWeekStatusSchema>;
 
 const workStatus = z.enum(WORK_STATUSES);
 const workCategory = z.enum(WORK_CATEGORIES);

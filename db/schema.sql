@@ -65,6 +65,10 @@ create table if not exists public.projects (
   modeling_3d_amount numeric(14,2) not null default 0 check (modeling_3d_amount >= 0),
   plans_amount       numeric(14,2) not null default 0 check (plans_amount >= 0),
   render_amount      numeric(14,2) not null default 0 check (render_amount >= 0),
+  proposal_responsible text not null check (proposal_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
+  modeling_3d_responsible text not null check (modeling_3d_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
+  plans_responsible text not null check (plans_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
+  render_responsible text not null check (render_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   created_by         uuid references auth.users (id) on delete set null
@@ -281,6 +285,122 @@ create index if not exists idx_general_balance_account_movements_account
 create index if not exists idx_general_balance_account_movements_date
   on public.general_balance_account_movements (movement_date desc);
 
+-- ── salary_weeks (cabecera semanal de salarios) ─────────────────────────────
+create table if not exists public.salary_weeks (
+  id               uuid primary key default gen_random_uuid(),
+  year             integer not null check (year between 2000 and 2100),
+  month            integer not null check (month between 1 and 12),
+  week_start_date  date not null,
+  week_end_date    date not null,
+  payment_date     date not null,
+  status           text not null default 'draft' check (status in ('draft', 'paid')),
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  created_by       uuid references auth.users (id) on delete set null,
+  constraint chk_salary_weeks_range
+    check (week_end_date >= week_start_date),
+  constraint chk_salary_weeks_payment_date
+    check (payment_date >= week_start_date)
+);
+
+create index if not exists idx_salary_weeks_end_date
+  on public.salary_weeks (week_end_date desc);
+create index if not exists idx_salary_weeks_month
+  on public.salary_weeks (year desc, month desc, week_start_date desc);
+
+create trigger trg_salary_weeks_updated_at
+  before update on public.salary_weeks
+  for each row execute function public.set_updated_at();
+
+-- ── employees (catálogo dinámico para Salario) ──────────────────────────────
+create table if not exists public.employees (
+  id                 uuid primary key default gen_random_uuid(),
+  full_name          text not null check (char_length(trim(full_name)) between 2 and 120),
+  is_active          boolean not null default true,
+  default_work_type  text not null check (default_work_type in ('project', 'work', 'mixed', 'week')),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now(),
+  created_by         uuid references auth.users (id) on delete set null
+);
+
+create trigger trg_employees_updated_at
+  before update on public.employees
+  for each row execute function public.set_updated_at();
+
+-- ── task_types (catálogo de tareas) ─────────────────────────────────────────
+create table if not exists public.task_types (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null check (char_length(trim(name)) between 2 and 120),
+  module_type  text not null check (module_type in ('project', 'work', 'general')),
+  is_active    boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_task_types_name
+  on public.task_types (name);
+
+-- ── salary_day_records (actividad diaria por empleado) ──────────────────────
+create table if not exists public.salary_day_records (
+  id             uuid primary key default gen_random_uuid(),
+  salary_week_id uuid not null references public.salary_weeks (id) on delete cascade,
+  employee_id    uuid not null references public.employees (id) on delete restrict,
+  work_date      date not null,
+  day_name       text not null check (day_name in ('monday', 'tuesday', 'wednesday', 'thursday', 'friday')),
+  activity_type  text not null check (activity_type in ('project', 'work', 'absent', 'pending')),
+  project_id     uuid references public.projects (id) on delete set null,
+  work_id        uuid references public.works (id) on delete set null,
+  task_type_id   uuid references public.task_types (id) on delete set null,
+  notes          text,
+  status         text not null default 'recorded' check (status in ('draft', 'recorded', 'observed')),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  created_by     uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_salary_day_records_week
+  on public.salary_day_records (salary_week_id);
+create index if not exists idx_salary_day_records_employee
+  on public.salary_day_records (employee_id, work_date);
+
+create trigger trg_salary_day_records_updated_at
+  before update on public.salary_day_records
+  for each row execute function public.set_updated_at();
+
+-- ── salary_payments (pagos salariales) ──────────────────────────────────────
+create table if not exists public.salary_payments (
+  id                uuid primary key default gen_random_uuid(),
+  salary_week_id    uuid not null references public.salary_weeks (id) on delete cascade,
+  employee_id       uuid not null references public.employees (id) on delete restrict,
+  payment_type      text not null check (payment_type in ('week', 'project', 'work', 'bonus', 'discount', 'advance', 'adjustment')),
+  concept           text not null check (char_length(trim(concept)) between 2 and 160),
+  amount            numeric(14,2) not null check (amount > 0),
+  payment_method_id uuid not null references public.payment_methods (id) on delete restrict,
+  payment_date      date not null,
+  project_id        uuid references public.projects (id) on delete set null,
+  work_id           uuid references public.works (id) on delete set null,
+  task_type_id      uuid references public.task_types (id) on delete set null,
+  notes             text,
+  status            text not null default 'paid' check (status in ('paid')),
+  created_at        timestamptz not null default now(),
+  created_by        uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_salary_payments_week
+  on public.salary_payments (salary_week_id);
+create index if not exists idx_salary_payments_employee
+  on public.salary_payments (employee_id, payment_date desc);
+
+-- ── salary_audit_logs (auditoría) ───────────────────────────────────────────
+create table if not exists public.salary_audit_logs (
+  id             uuid primary key default gen_random_uuid(),
+  salary_week_id uuid references public.salary_weeks (id) on delete set null,
+  action         text not null check (action in ('week_created', 'week_updated', 'week_status_changed', 'day_record_saved', 'payment_saved')),
+  description    text not null check (char_length(trim(description)) between 2 and 200),
+  metadata_json  text,
+  created_at     timestamptz not null default now(),
+  created_by     uuid references auth.users (id) on delete set null
+);
+
 -- ── seed payment methods ─────────────────────────────────────────────────────
 insert into public.payment_methods (name)
 values
@@ -311,6 +431,12 @@ alter table public.work_order_payments enable row level security;
 alter table public.finance_manual_debtors enable row level security;
 alter table public.general_balance_entries enable row level security;
 alter table public.general_balance_account_movements enable row level security;
+alter table public.employees enable row level security;
+alter table public.task_types enable row level security;
+alter table public.salary_weeks enable row level security;
+alter table public.salary_day_records enable row level security;
+alter table public.salary_payments enable row level security;
+alter table public.salary_audit_logs enable row level security;
 
 -- clients
 create policy "clients_select" on public.clients
@@ -426,4 +552,62 @@ create policy "general_balance_account_movements_select" on public.general_balan
 create policy "general_balance_account_movements_insert" on public.general_balance_account_movements
   for insert to authenticated with check (true);
 create policy "general_balance_account_movements_delete" on public.general_balance_account_movements
+  for delete to authenticated using (true);
+
+-- salary_weeks
+create policy "salary_weeks_select" on public.salary_weeks
+  for select to authenticated using (true);
+create policy "salary_weeks_insert" on public.salary_weeks
+  for insert to authenticated with check (true);
+create policy "salary_weeks_update" on public.salary_weeks
+  for update to authenticated using (true) with check (true);
+create policy "salary_weeks_delete" on public.salary_weeks
+  for delete to authenticated using (true);
+
+-- employees
+create policy "employees_select" on public.employees
+  for select to authenticated using (true);
+create policy "employees_insert" on public.employees
+  for insert to authenticated with check (true);
+create policy "employees_update" on public.employees
+  for update to authenticated using (true) with check (true);
+create policy "employees_delete" on public.employees
+  for delete to authenticated using (true);
+
+-- task_types
+create policy "task_types_select" on public.task_types
+  for select to authenticated using (true);
+create policy "task_types_insert" on public.task_types
+  for insert to authenticated with check (true);
+create policy "task_types_update" on public.task_types
+  for update to authenticated using (true) with check (true);
+create policy "task_types_delete" on public.task_types
+  for delete to authenticated using (true);
+
+-- salary_day_records
+create policy "salary_day_records_select" on public.salary_day_records
+  for select to authenticated using (true);
+create policy "salary_day_records_insert" on public.salary_day_records
+  for insert to authenticated with check (true);
+create policy "salary_day_records_update" on public.salary_day_records
+  for update to authenticated using (true) with check (true);
+create policy "salary_day_records_delete" on public.salary_day_records
+  for delete to authenticated using (true);
+
+-- salary_payments
+create policy "salary_payments_select" on public.salary_payments
+  for select to authenticated using (true);
+create policy "salary_payments_insert" on public.salary_payments
+  for insert to authenticated with check (true);
+create policy "salary_payments_update" on public.salary_payments
+  for update to authenticated using (true) with check (true);
+create policy "salary_payments_delete" on public.salary_payments
+  for delete to authenticated using (true);
+
+-- salary_audit_logs
+create policy "salary_audit_logs_select" on public.salary_audit_logs
+  for select to authenticated using (true);
+create policy "salary_audit_logs_insert" on public.salary_audit_logs
+  for insert to authenticated with check (true);
+create policy "salary_audit_logs_delete" on public.salary_audit_logs
   for delete to authenticated using (true);

@@ -65,7 +65,7 @@ export default async function ProjectDetailPage({
 
       <FinanceOverview finance={project.finance} />
 
-      <ProjectDistributionCard project={project} />
+      <ProjectDistributionCard project={project} payments={payments} />
       <PaymentHistory payments={payments} />
     </div>
   );

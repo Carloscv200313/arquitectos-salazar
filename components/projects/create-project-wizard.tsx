@@ -30,8 +30,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { formatCurrency, todayISODate } from "@/lib/format";
+import { formatCurrency, formatPercent, todayISODate } from "@/lib/format";
+import { computeBreakdown } from "@/lib/calculations";
 import {
+  PROJECT_RESPONSIBLES,
   PROJECT_TEMPLATES,
   PROJECT_SLICE_LABELS,
   TEMPLATE_LABELS,
@@ -41,7 +43,7 @@ import {
   type ProjectSliceKey,
   type SliceWeights,
 } from "@/lib/constants";
-import type { Client, PaymentMethod } from "@/lib/types";
+import type { Client, InternalArea, PaymentMethod, ProjectResponsible } from "@/lib/types";
 import { DistributionPreview } from "./distribution-preview";
 import { createProjectAction } from "@/app/(dashboard)/projects/actions";
 
@@ -60,7 +62,58 @@ const TEMPLATE_ICONS: Record<ProjectTemplate, LucideIcon> = {
 };
 
 const SLICE_KEYS = Object.keys(PROJECT_SLICE_LABELS) as ProjectSliceKey[];
-const STEPS = ["Plantilla", "Datos", "Confirmar"];
+const STEPS = ["Plantilla", "Datos", "Responsables", "Confirmar"];
+
+const DEFAULT_RESPONSIBLES: Record<InternalArea, ProjectResponsible> = {
+  proposal: "Alejandra",
+  modeling_3d: "Esmeralda",
+  plans: "Alejandra",
+  render: "Esmeralda",
+};
+
+const AREA_TONE: Record<
+  InternalArea,
+  { border: string; bg: string; chip: string; text: string }
+> = {
+  proposal: {
+    border: "border-chart-1/35",
+    bg: "bg-chart-1/10",
+    chip: "bg-chart-1/18",
+    text: "text-brand-foreground",
+  },
+  modeling_3d: {
+    border: "border-chart-2/35",
+    bg: "bg-chart-2/10",
+    chip: "bg-chart-2/18",
+    text: "text-foreground",
+  },
+  plans: {
+    border: "border-chart-3/35",
+    bg: "bg-chart-3/10",
+    chip: "bg-chart-3/18",
+    text: "text-foreground",
+  },
+  render: {
+    border: "border-chart-4/35",
+    bg: "bg-chart-4/10",
+    chip: "bg-chart-4/18",
+    text: "text-foreground",
+  },
+};
+
+function buildEmployeeTotals(
+  responsibles: Record<InternalArea, ProjectResponsible>,
+  areaAmounts: Record<InternalArea, number>,
+) {
+  return PROJECT_RESPONSIBLES.map((person) => {
+    const assignedAreas = SLICE_KEYS.filter((area) => responsibles[area] === person);
+    return {
+      person,
+      assignedAreas,
+      amount: assignedAreas.reduce((sum, area) => sum + areaAmounts[area], 0),
+    };
+  }).filter((row) => row.assignedAreas.length > 0);
+}
 
 function FieldError({ children }: { children?: string }) {
   if (!children) return null;
@@ -99,6 +152,9 @@ export function CreateProjectWizard({
   const [clientName, setClientName] = useState("");
   const [projectAmount, setProjectAmount] = useState("");
   const [addons, setAddons] = useState<AddonRow[]>([]);
+  const [responsibles, setResponsibles] = useState<Record<InternalArea, ProjectResponsible>>(
+    DEFAULT_RESPONSIBLES,
+  );
 
   const [registerAnticipo, setRegisterAnticipo] = useState(false);
   const [anticipoAmount, setAnticipoAmount] = useState("");
@@ -147,6 +203,7 @@ export function CreateProjectWizard({
         clientName: clientMode === "new" ? clientName.trim() : "",
         template: template ?? "diamante",
         weights: template === "especial" ? weights : undefined,
+        responsibles,
         projectAmount: Number(projectAmount),
         addons: parsedAddons
           .filter((a) => a.amount > 0)
@@ -163,7 +220,7 @@ export function CreateProjectWizard({
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);
-        setStep(1); // back to data step to show errors
+        setStep(res.fieldErrors?.responsibles ? 2 : 1);
       }
     });
   }
@@ -511,6 +568,20 @@ export function CreateProjectWizard({
       )}
 
       {step === 2 && (
+        <StepResponsibles
+          base={base}
+          weights={weights}
+          responsibles={responsibles}
+          error={errors.responsibles}
+          onChange={(area, value) =>
+            setResponsibles((prev) => ({ ...prev, [area]: value }))
+          }
+          onBack={() => setStep(1)}
+          onNext={() => setStep(3)}
+        />
+      )}
+
+      {step === 3 && (
         <StepConfirm
           template={template ?? "diamante"}
           clientName={selectedClientName}
@@ -518,10 +589,11 @@ export function CreateProjectWizard({
           base={base}
           addons={parsedAddons}
           weights={weights}
+          responsibles={responsibles}
           registerAnticipo={registerAnticipo}
           anticipoAmount={Number(anticipoAmount) || 0}
           isPending={isPending}
-          onBack={() => setStep(1)}
+          onBack={() => setStep(2)}
           onConfirm={submit}
         />
       )}
@@ -566,6 +638,179 @@ function Stepper({ step }: { step: number }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function StepResponsibles({
+  base,
+  weights,
+  responsibles,
+  error,
+  onChange,
+  onBack,
+  onNext,
+}: {
+  base: number;
+  weights: SliceWeights;
+  responsibles: Record<InternalArea, ProjectResponsible>;
+  error?: string;
+  onChange: (area: InternalArea, value: ProjectResponsible) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const breakdown = computeBreakdown(base || 0, [], weights);
+  const areaAmounts: Record<InternalArea, number> = {
+    proposal: breakdown.project.proposal,
+    modeling_3d: breakdown.project.modeling_3d,
+    plans: breakdown.project.plans,
+    render: breakdown.project.render,
+  };
+  const employeeTotals = buildEmployeeTotals(responsibles, areaAmounts);
+  const internalTotal =
+    areaAmounts.proposal +
+    areaAmounts.modeling_3d +
+    areaAmounts.plans +
+    areaAmounts.render;
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1.35fr_0.95fr] lg:items-start">
+      <Card className="gap-0 py-0">
+        <div className="border-b px-5 py-4">
+          <h2 className="text-sm font-semibold">Responsables internos</h2>
+          <p className="text-xs text-muted-foreground">
+            Asigna cada trabajo y revisa cuánto corresponde pagar según la distribución.
+          </p>
+        </div>
+        <div className="grid gap-4 p-5 sm:grid-cols-2">
+          {SLICE_KEYS.map((area) => (
+            <div
+              key={area}
+              className={cn(
+                "rounded-2xl border p-4 transition-colors",
+                AREA_TONE[area].border,
+                "bg-background",
+              )}
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{PROJECT_SLICE_LABELS[area]}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatPercent(weights[area] * 100)} de la distribución interna
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-1 text-xs font-semibold",
+                    AREA_TONE[area].chip,
+                    AREA_TONE[area].text,
+                  )}
+                >
+                  {formatCurrency(areaAmounts[area])}
+                </span>
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Responsable</Label>
+                <Select
+                  value={responsibles[area]}
+                  onValueChange={(value) => value && onChange(area, value as ProjectResponsible)}
+                  items={PROJECT_RESPONSIBLES.map((person) => ({ label: person, value: person }))}
+                >
+                  <SelectTrigger className="w-full bg-background/80">
+                    <SelectValue placeholder="Selecciona responsable" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_RESPONSIBLES.map((person) => (
+                      <SelectItem key={person} value={person}>
+                        {person}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="border-t px-5 pb-5 pt-4">
+          <FieldError>{error}</FieldError>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onBack} className="flex-1">
+              <ArrowLeft className="size-4" /> Atrás
+            </Button>
+            <Button onClick={onNext} className="flex-1">
+              Continuar <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="gap-0 py-0 lg:sticky lg:top-24">
+        <div className="border-b px-5 py-4">
+          <h2 className="text-sm font-semibold">Vista rápida</h2>
+          <p className="text-xs text-muted-foreground">
+            Consolidado por trabajador según la asignación actual.
+          </p>
+        </div>
+        <div className="grid gap-3 p-5">
+          <div className="rounded-2xl border border-brand/20 bg-brand-muted/25 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Pago interno
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-brand-foreground">
+                  {formatCurrency(internalTotal)}
+                </p>
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p>{employeeTotals.length} responsables</p>
+                <p>{Math.round(PROYECTO_RATE * 100)}% del monto base</p>
+              </div>
+            </div>
+          </div>
+          {employeeTotals.map((row, index) => (
+            <div
+              key={row.person}
+              className={cn(
+                "rounded-2xl border px-4 py-3",
+                index === 0 ? "border-brand/25 bg-brand-muted/18" : "border-border bg-background",
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{row.person}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {row.assignedAreas.length} trabajo{row.assignedAreas.length === 1 ? "" : "s"} asignado
+                    {row.assignedAreas.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    index === 0 ? "text-brand-foreground" : "text-foreground",
+                  )}
+                >
+                  {formatCurrency(row.amount)}
+                </span>
+              </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {row.assignedAreas.map((area) => (
+                    <span
+                      key={`${row.person}-${area}`}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
+                        AREA_TONE[area].border,
+                        "bg-muted/30",
+                      )}
+                    >
+                      <span>{PROJECT_SLICE_LABELS[area]}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -663,6 +908,7 @@ function StepConfirm({
   base,
   addons,
   weights,
+  responsibles,
   registerAnticipo,
   anticipoAmount,
   isPending,
@@ -675,12 +921,22 @@ function StepConfirm({
   base: number;
   addons: { concept: string; amount: number }[];
   weights: SliceWeights;
+  responsibles: Record<InternalArea, ProjectResponsible>;
   registerAnticipo: boolean;
   anticipoAmount: number;
   isPending: boolean;
   onBack: () => void;
   onConfirm: () => void;
 }) {
+  const breakdown = computeBreakdown(base || 0, [], weights);
+  const areaAmounts: Record<InternalArea, number> = {
+    proposal: breakdown.project.proposal,
+    modeling_3d: breakdown.project.modeling_3d,
+    plans: breakdown.project.plans,
+    render: breakdown.project.render,
+  };
+  const employeeTotals = buildEmployeeTotals(responsibles, areaAmounts);
+
   return (
     <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr] lg:items-start">
       <Card className="gap-0 py-0">
@@ -706,6 +962,68 @@ function StepConfirm({
             value={registerAnticipo ? formatCurrency(anticipoAmount) : "Sin anticipo"}
           />
         </dl>
+        <div className="border-t px-5 py-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold">Responsables</h3>
+              <p className="text-xs text-muted-foreground">
+                Distribución final del pago interno por trabajador.
+              </p>
+            </div>
+            <span className="rounded-full bg-brand-muted/28 px-3 py-1 text-xs font-semibold text-brand-foreground">
+              {formatCurrency(
+                areaAmounts.proposal +
+                  areaAmounts.modeling_3d +
+                  areaAmounts.plans +
+                  areaAmounts.render,
+              )}
+            </span>
+          </div>
+          <div className="grid gap-3">
+            {employeeTotals.map((row, index) => (
+              <div
+                key={row.person}
+                className={cn(
+                  "rounded-2xl border px-4 py-3",
+                  index === 0 ? "border-brand/25 bg-brand-muted/16" : "border-border bg-background",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{row.person}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.assignedAreas.length} trabajo{row.assignedAreas.length === 1 ? "" : "s"} asignado
+                      {row.assignedAreas.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "text-sm font-semibold",
+                      index === 0 ? "text-brand-foreground" : "text-foreground",
+                    )}
+                  >
+                    {formatCurrency(row.amount)}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {row.assignedAreas.map((area) => (
+                    <span
+                      key={`${row.person}-${area}-confirm`}
+                      className={cn(
+                        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
+                        AREA_TONE[area].border,
+                        "bg-muted/30",
+                      )}
+                    >
+                      <span>{PROJECT_SLICE_LABELS[area]}</span>
+                      <span className="text-muted-foreground">{formatCurrency(areaAmounts[area])}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </Card>
 
       <div className="lg:sticky lg:top-24">

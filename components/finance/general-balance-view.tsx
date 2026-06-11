@@ -108,9 +108,9 @@ function Metric({
 }
 
 function sourceLabel(row: GeneralBalanceRow) {
-  if (row.source === "providers") return "Proveedores";
-  if (row.source === "receivable") return "Deudores + Obras por cobrar";
-  return "Obras";
+  if (row.source === "providers") return "Pedidos a proveedores";
+  if (row.source === "receivable") return "Deudores · Obras · Proyectos";
+  return "Proyectos · Obras · Pedidos · Salarios";
 }
 
 export function GeneralBalanceView({ report }: { report: GeneralBalanceReport }) {
@@ -139,8 +139,10 @@ export function GeneralBalanceView({ report }: { report: GeneralBalanceReport })
         />
         <Metric
           label="Cuentas por cobrar"
-          value={signedCurrency(report.debtorsTotal + report.worksReceivableTotal)}
-          hint="Deudores + obras por cobrar"
+          value={signedCurrency(
+            report.rows.find((row) => row.id === "accounts-receivable")?.amount ?? 0,
+          )}
+          hint="Deudores, obras y proyectos por cobrar"
           icon={<ArrowDownLeft className="size-5" />}
           tone="success"
         />

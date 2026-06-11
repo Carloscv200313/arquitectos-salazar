@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import type { Client, ProjectWithFinance } from "@/lib/types";
+import { PROJECT_RESPONSIBLES, PROJECT_SLICE_LABELS } from "@/lib/constants";
+import type { Client, InternalArea, ProjectResponsible, ProjectWithFinance } from "@/lib/types";
 import { weightsFromAmounts } from "@/lib/calculations";
 import { DistributionPreview } from "./distribution-preview";
 import { updateProjectAction } from "@/app/(dashboard)/projects/actions";
@@ -50,6 +51,12 @@ export function EditProjectForm({
   const [clientId, setClientId] = useState(project.client_id);
   const [clientName, setClientName] = useState("");
   const [projectAmount, setProjectAmount] = useState(String(project.project_amount));
+  const [responsibles, setResponsibles] = useState<Record<InternalArea, ProjectResponsible>>({
+    proposal: project.proposal_responsible,
+    modeling_3d: project.modeling_3d_responsible,
+    plans: project.plans_responsible,
+    render: project.render_responsible,
+  });
   const [addons, setAddons] = useState<AddonRow[]>(
     project.addons.map((a) => ({
       id: a.id,
@@ -88,6 +95,7 @@ export function EditProjectForm({
         name: name.trim(),
         clientId: clientMode === "existing" ? clientId : "",
         clientName: clientMode === "new" ? clientName.trim() : "",
+        responsibles,
         projectAmount: Number(projectAmount),
         addons: parsedAddons
           .filter((a) => a.amount > 0)
@@ -205,6 +213,48 @@ export function EditProjectForm({
               <p className="text-xs text-muted-foreground">
                 Este es el monto base que se le cobra al cliente antes de sumar adicionales.
               </p>
+            </div>
+
+            <div className="grid gap-3 border-t pt-4">
+              <div>
+                <h3 className="text-sm font-semibold">Responsables internos</h3>
+                <p className="text-xs text-muted-foreground">
+                  Define quién se encarga de propuesta, modelado, planos y render.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(Object.keys(PROJECT_SLICE_LABELS) as InternalArea[]).map((area) => (
+                  <div key={area} className="grid gap-1.5">
+                    <Label>{PROJECT_SLICE_LABELS[area]}</Label>
+                    <Select
+                      value={responsibles[area]}
+                      onValueChange={(value) =>
+                        value &&
+                        setResponsibles((prev) => ({
+                          ...prev,
+                          [area]: value as ProjectResponsible,
+                        }))
+                      }
+                      items={PROJECT_RESPONSIBLES.map((person) => ({
+                        label: person,
+                        value: person,
+                      }))}
+                    >
+                      <SelectTrigger className="w-full" aria-invalid={!!errors.responsibles}>
+                        <SelectValue placeholder="Selecciona responsable" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROJECT_RESPONSIBLES.map((person) => (
+                          <SelectItem key={person} value={person}>
+                            {person}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
+              </div>
+              <FieldError>{errors.responsibles}</FieldError>
             </div>
           </div>
         </Card>

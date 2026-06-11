@@ -94,6 +94,105 @@ export const PROJECT_SLICE_LABELS: Record<ProjectSliceKey, string> = {
   render: "Render",
 };
 
+export const PROJECT_RESPONSIBLES = [
+  "Alejandra",
+  "Juanfer",
+  "Juan Jose",
+  "Esmeralda",
+] as const;
+
+export const SALARY_ASSIGNMENT_LABELS = {
+  project: "PROYECTO",
+  work: "OBRA",
+  absent: "NO ASISTIÓ",
+  pending: "PENDIENTE",
+} as const;
+
+export const SALARY_WEEKDAY_LABELS = {
+  monday: "Lunes",
+  tuesday: "Martes",
+  wednesday: "Miércoles",
+  thursday: "Jueves",
+  friday: "Viernes",
+} as const;
+
+export const SALARY_WEEK_STATUSES = ["draft", "paid"] as const;
+
+export const SALARY_WEEK_STATUS_LABELS = {
+  draft: "Pendiente",
+  paid: "Pagada",
+} as const;
+
+export const SALARY_ACTIVITY_TYPES = [
+  "project",
+  "work",
+  "absent",
+  "pending",
+] as const;
+
+export const SALARY_PAYMENT_TYPES = [
+  "week",
+  "project",
+  "work",
+  "bonus",
+  "discount",
+  "advance",
+  "adjustment",
+] as const;
+
+export const SALARY_PAYMENT_TYPE_LABELS = {
+  week: "Pago semana",
+  project: "Pago proyecto",
+  work: "Pago obra",
+  bonus: "Bono",
+  discount: "Descuento",
+  advance: "Adelanto",
+  adjustment: "Ajuste manual",
+} as const;
+
+export const EMPLOYEE_DEFAULT_WORK_TYPES = [
+  "project",
+  "work",
+  "mixed",
+  "week",
+] as const;
+
+export const EMPLOYEE_DEFAULT_WORK_TYPE_LABELS = {
+  project: "Proyecto",
+  work: "Obra",
+  mixed: "Mixto",
+  week: "Semana",
+} as const;
+
+export const TASK_MODULE_TYPES = ["project", "work", "general"] as const;
+
+export const TASK_TYPE_SEED = [
+  { name: "Propuesta", moduleType: "project" },
+  { name: "Modelado 3D", moduleType: "project" },
+  { name: "Planos", moduleType: "project" },
+  { name: "Render", moduleType: "project" },
+  { name: "Costos", moduleType: "project" },
+  { name: "Supervisión", moduleType: "work" },
+  { name: "Obra", moduleType: "work" },
+  { name: "Otro", moduleType: "general" },
+] as const;
+
+export const SALARY_RECORD_STATUSES = ["draft", "recorded", "observed"] as const;
+
+export const SALARY_RECORD_STATUS_LABELS = {
+  draft: "Borrador",
+  recorded: "Registrado",
+  observed: "Observado",
+} as const;
+
+export const SALARY_PAYMENT_STATUSES = ["paid"] as const;
+
+export const SALARY_PAYMENT_STATUS_LABELS = {
+  paid: "Pagado",
+} as const;
+
+export const SALARY_PAYMENT_METHOD_NAMES = ["Caja", "Cuenta de Rosa"] as const;
+
 // Seed payment methods (mirror of the `payment_methods` table defaults).
 export const SEED_PAYMENT_METHODS = [
   "Cuentas por pagar",

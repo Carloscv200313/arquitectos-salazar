@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { PROJECT_SLICE_LABELS } from "@/lib/constants";
 import {
   createProjectSchema,
   registerInternalTransferSchema,
@@ -17,7 +18,8 @@ import {
   getProject,
   listMovements,
 } from "@/lib/data/projects";
-import { computeFinance, computeBreakdown } from "@/lib/calculations";
+import { computeFinance, computeBreakdown, round2 } from "@/lib/calculations";
+import type { InternalArea } from "@/lib/types";
 
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -35,6 +37,20 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
     if (!out[key]) out[key] = issue.message;
   }
   return out;
+}
+
+function areaBudget(project: Awaited<ReturnType<typeof getProject>>, area: InternalArea): number {
+  if (!project) return 0;
+  switch (area) {
+    case "proposal":
+      return project.proposal_amount;
+    case "modeling_3d":
+      return project.modeling_3d_amount;
+    case "plans":
+      return project.plans_amount;
+    case "render":
+      return project.render_amount;
+  }
 }
 
 export async function createProjectAction(
@@ -56,6 +72,7 @@ export async function createProjectAction(
       clientName: d.clientName || undefined,
       template: d.template,
       weights: d.weights,
+      responsibles: d.responsibles,
       projectAmount: d.projectAmount,
       addons: d.addons,
       anticipo: d.registerAnticipo
@@ -104,6 +121,7 @@ export async function updateProjectAction(
       name: d.name,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
+      responsibles: d.responsibles,
       projectAmount: d.projectAmount,
       addons: d.addons,
       userId: currentUserId(),
@@ -129,7 +147,10 @@ export async function registerMovementAction(
   }
   const d = parsed.data;
   try {
-    const project = await getProject(d.projectId);
+    const [project, existingPayments] = await Promise.all([
+      getProject(d.projectId),
+      listMovements(d.projectId),
+    ]);
     if (!project) return { ok: false, error: "Proyecto no encontrado." };
     if (d.movementType === "income" && d.amount > project.finance.pending + 0.001) {
       return {
@@ -137,6 +158,34 @@ export async function registerMovementAction(
         error: `El ingreso supera el saldo pendiente (${project.finance.pending.toFixed(2)}).`,
         fieldErrors: { amount: "Supera el saldo pendiente" },
       };
+    }
+    if (d.movementType === "expense" && d.internalArea) {
+      const areaLabel = PROJECT_SLICE_LABELS[d.internalArea];
+      const budget = areaBudget(project, d.internalArea);
+      const alreadyPaid = round2(
+        existingPayments.reduce((sum, payment) => {
+          if (payment.movement_type !== "expense") return sum;
+          if (payment.internal_area !== d.internalArea) return sum;
+          return sum + payment.amount;
+        }, 0),
+      );
+      const remaining = round2(Math.max(budget - alreadyPaid, 0));
+
+      if (d.amount > budget + 0.001) {
+        return {
+          ok: false,
+          error: `El egreso supera el presupuesto de ${areaLabel} (${budget.toFixed(2)}).`,
+          fieldErrors: { amount: "Supera el presupuesto del área" },
+        };
+      }
+
+      if (d.amount > remaining + 0.001) {
+        return {
+          ok: false,
+          error: `Solo quedan ${remaining.toFixed(2)} disponibles en esta área.`,
+          fieldErrors: { amount: "Supera el saldo restante del área" },
+        };
+      }
     }
     await registerMovement({
       projectId: d.projectId,

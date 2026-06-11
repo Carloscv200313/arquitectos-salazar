@@ -4,6 +4,7 @@
 export type PaymentStatus = "pending" | "partial" | "paid";
 export type MovementType = "income" | "expense";
 export type InternalArea = "proposal" | "modeling_3d" | "plans" | "render";
+export type ProjectResponsible = "Alejandra" | "Juanfer" | "Juan Jose" | "Esmeralda";
 
 export interface Client {
   id: string;
@@ -50,6 +51,10 @@ export interface Project {
   modeling_3d_amount: number;
   plans_amount: number;
   render_amount: number;
+  proposal_responsible: ProjectResponsible;
+  modeling_3d_responsible: ProjectResponsible;
+  plans_responsible: ProjectResponsible;
+  render_responsible: ProjectResponsible;
   created_at: string;
   updated_at: string;
   created_by: string | null;
@@ -298,7 +303,7 @@ export interface GeneralBalanceHistoryRow {
   expenseAccount: string;
   incomeAccount: string;
   amount: number;
-  source: "works" | "orders" | "internal-transfer" | "manual";
+  source: "works" | "projects" | "orders" | "internal-transfer" | "manual";
 }
 
 export interface GeneralBalanceAccountReport {
@@ -319,4 +324,189 @@ export interface FinanceUtilityReport {
   projectTotal: number;
   workTotal: number;
   total: number;
+}
+
+export type SalaryWeekday =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday";
+export type EmployeeDefaultWorkType = "project" | "work" | "mixed" | "week";
+export type SalaryWeekStatus = "draft" | "paid";
+export type SalaryActivityType =
+  | "project"
+  | "work"
+  | "absent"
+  | "pending";
+export type SalaryPaymentType =
+  | "week"
+  | "project"
+  | "work"
+  | "bonus"
+  | "discount"
+  | "advance"
+  | "adjustment";
+export type SalaryReferenceType = "project" | "work";
+export type TaskModuleType = "project" | "work" | "general";
+export type SalaryRecordStatus = "draft" | "recorded" | "observed";
+export type SalaryPaymentStatus = "paid";
+export type SalaryAuditAction =
+  | "week_created"
+  | "week_updated"
+  | "week_status_changed"
+  | "day_record_saved"
+  | "payment_saved";
+
+export interface Employee {
+  id: string;
+  full_name: string;
+  is_active: boolean;
+  default_work_type: EmployeeDefaultWorkType;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface TaskType {
+  id: string;
+  name: string;
+  module_type: TaskModuleType;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SalaryWeek {
+  id: string;
+  year: number;
+  month: number;
+  week_start_date: string;
+  week_end_date: string;
+  payment_date: string;
+  status: SalaryWeekStatus;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface SalaryDayRecord {
+  id: string;
+  salary_week_id: string;
+  employee_id: string;
+  work_date: string;
+  day_name: SalaryWeekday;
+  activity_type: SalaryActivityType;
+  project_id: string | null;
+  work_id: string | null;
+  task_type_id: string | null;
+  notes: string | null;
+  status: SalaryRecordStatus;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface SalaryPayment {
+  id: string;
+  salary_week_id: string;
+  employee_id: string;
+  payment_type: SalaryPaymentType;
+  concept: string;
+  amount: number;
+  payment_method_id: string;
+  payment_date: string;
+  project_id: string | null;
+  work_id: string | null;
+  task_type_id: string | null;
+  notes: string | null;
+  status: SalaryPaymentStatus;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface SalaryAuditLog {
+  id: string;
+  salary_week_id: string | null;
+  action: SalaryAuditAction;
+  description: string;
+  metadata_json: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface SalaryDayRecordWithRelations extends SalaryDayRecord {
+  employee: Employee | null;
+  project: Project | null;
+  work: Work | null;
+  taskType: TaskType | null;
+}
+
+export interface SalaryPaymentWithRelations extends SalaryPayment {
+  employee: Employee | null;
+  method: PaymentMethod | null;
+  project: Project | null;
+  work: Work | null;
+  taskType: TaskType | null;
+}
+
+export interface SalaryEmployeeWeekSummary {
+  employee: Employee;
+  dayRecords: Partial<Record<SalaryWeekday, SalaryDayRecordWithRelations>>;
+  payments: SalaryPaymentWithRelations[];
+  totals: {
+    cash: number;
+    account: number;
+    projectOrWork: number;
+    total: number;
+  };
+}
+
+export interface SalaryWeekWithRows extends SalaryWeek {
+  employees: SalaryEmployeeWeekSummary[];
+  totals: {
+    total: number;
+    byMethod: Array<{
+      methodId: string;
+      methodName: string;
+      total: number;
+    }>;
+    byPaymentType: Array<{
+      paymentType: SalaryPaymentType;
+      total: number;
+    }>;
+    pendingPayments: number;
+  };
+}
+
+export interface SalaryMonthOption {
+  year: number;
+  month: number;
+  label: string;
+}
+
+export interface SalaryReport {
+  months: SalaryMonthOption[];
+  selected: {
+    year: number;
+    month: number;
+  };
+  employees: Employee[];
+  taskTypes: TaskType[];
+  taskRates: Array<{
+    taskTypeId: string;
+    taskTypeName: string;
+    employeeId: string | null;
+    amount: number;
+  }>;
+  weeks: SalaryWeekWithRows[];
+  paymentMethods: PaymentMethod[];
+  totals: {
+    totalPaid: number;
+    totalPending: number;
+    totalCash: number;
+    totalAccount: number;
+    totalProject: number;
+    totalWork: number;
+  };
+  recentPayments: SalaryPaymentWithRelations[];
 }

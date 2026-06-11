@@ -5,29 +5,90 @@ import { round2 } from "@/lib/calculations";
 import type {
   PaymentMethod,
   WorkOrder,
+  WorkOrderPaymentWithMethod,
   WorkOrderStatus,
   WorkOrderWithRelations,
   WorkWithFinance,
 } from "@/lib/types";
-import { db, nowISO, uuid } from "./store";
+import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
+import { getCurrentUserId } from "@/features/auth/get-user";
 import { getWork, listWorks } from "./works";
 
-function accountsPayableMethod(): PaymentMethod {
-  const method = db.methods.find(
-    (item) => item.name.toLowerCase() === "cuentas por pagar" && item.is_active,
-  );
-  if (!method) throw new Error("No existe la forma de pago Cuentas por pagar");
-  return method;
+type Row = Record<string, unknown>;
+
+function sb() {
+  return createAdminClient();
 }
 
-function orderPayments(orderId: string) {
-  return db.workOrderPayments
-    .filter((payment) => payment.order_id === orderId)
-    .map((payment) => ({
-      ...payment,
-      method:
-        db.methods.find((method) => method.id === payment.payment_method_id) ?? null,
-    }))
+function mapMethod(r: Row): PaymentMethod {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    is_active: true,
+    created_at: r.created_at as string,
+  };
+}
+
+function mapOrder(r: Row): WorkOrder {
+  return {
+    id: r.id as string,
+    work_id: r.work_id as string,
+    order_date: r.order_date as string,
+    supplier: r.supplier as string,
+    material: r.material as string,
+    description: (r.description as string) ?? null,
+    category: (r.category as string) ?? null,
+    amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
+    quoted_at: (r.quoted_at as string) ?? null,
+    payable_movement_id: (r.payable_movement_id as string) ?? null,
+    created_at: r.created_at as string,
+    updated_at: (r.updated_at as string) ?? (r.created_at as string),
+    created_by: (r.created_by as string) ?? null,
+  };
+}
+
+function mapPayment(r: Row): WorkOrderPaymentWithMethod {
+  return {
+    id: r.id as string,
+    order_id: r.order_id as string,
+    payment_date: r.payment_date as string,
+    description: r.description as string,
+    amount: Number(r.amount),
+    payment_method_id: (r.payment_method_id as string) ?? "",
+    work_movement_id: (r.work_movement_id as string) ?? null,
+    internal_transfer_id: (r.internal_transfer_id as string) ?? null,
+    created_at: r.created_at as string,
+    created_by: (r.created_by as string) ?? null,
+    method: r.method ? mapMethod(r.method as Row) : null,
+  };
+}
+
+async function accountsPayableMethodId(): Promise<string> {
+  const { data } = await sb()
+    .from("payment_accounts")
+    .select("id")
+    .eq("status", 1)
+    .ilike("name", "cuentas por pagar")
+    .maybeSingle();
+  if (!data) throw new Error("No existe la forma de pago Cuentas por pagar");
+  return data.id as string;
+}
+
+function statusFor(amount: number | null, paid: number, pending: number): WorkOrderStatus {
+  if (amount === null) return "pending_quote";
+  if (pending <= 0.001) return "paid";
+  if (paid > 0.001) return "partial";
+  return "quoted";
+}
+
+async function paymentsOf(orderId: string): Promise<WorkOrderPaymentWithMethod[]> {
+  const { data } = await sb()
+    .from("work_order_payments")
+    .select("*, method:payment_accounts(id, name, created_at)")
+    .eq("order_id", orderId)
+    .eq("status", 1);
+  return (data ?? [])
+    .map(mapPayment)
     .sort((a, b) => {
       const byDate = a.payment_date.localeCompare(b.payment_date);
       if (byDate !== 0) return byDate;
@@ -35,29 +96,14 @@ function orderPayments(orderId: string) {
     });
 }
 
-function statusFor(order: WorkOrder, paid: number, pending: number): WorkOrderStatus {
-  if (order.amount === null) return "pending_quote";
-  if (pending <= 0.001) return "paid";
-  if (paid > 0.001) return "partial";
-  return "quoted";
-}
-
 async function enrich(order: WorkOrder): Promise<WorkOrderWithRelations | null> {
   const work = await getWork(order.work_id);
   if (!work) return null;
-  const payments = orderPayments(order.id);
-  const paid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  const payments = await paymentsOf(order.id);
+  const paid = round2(payments.reduce((s, p) => s + p.amount, 0));
   const amount = order.amount ?? 0;
   const pending = order.amount === null ? 0 : round2(Math.max(amount - paid, 0));
-
-  return {
-    ...order,
-    work,
-    payments,
-    paid,
-    pending,
-    status: statusFor(order, paid, pending),
-  };
+  return { ...order, work, payments, paid, pending, status: statusFor(order.amount, paid, pending) };
 }
 
 export async function listOrderWorks(): Promise<
@@ -71,26 +117,31 @@ export async function listOrderWorks(): Promise<
     }
   >
 > {
-  const works = await listWorks();
+  if (!isAdminConfigured()) return [];
+  const client = sb();
+  const [works, ordersRes, paymentsRes] = await Promise.all([
+    listWorks(),
+    client.from("work_orders").select("id, work_id, amount").eq("status", 1),
+    client.from("work_order_payments").select("order_id, amount").eq("status", 1),
+  ]);
+
+  const orders = ordersRes.data ?? [];
+  const paidByOrder = new Map<string, number>();
+  for (const p of paymentsRes.data ?? []) {
+    const id = p.order_id as string;
+    paidByOrder.set(id, round2((paidByOrder.get(id) ?? 0) + Number(p.amount)));
+  }
+
   return works.map((work) => {
-    const orders = db.workOrders.filter((order) => order.work_id === work.id);
-    const ordersAmount = round2(
-      orders.reduce((sum, order) => sum + (order.amount ?? 0), 0),
-    );
+    const workOrders = orders.filter((o) => (o.work_id as string) === work.id);
+    const ordersAmount = round2(workOrders.reduce((s, o) => s + Number(o.amount ?? 0), 0));
     const ordersPaid = round2(
-      orders.reduce(
-        (sum, order) =>
-          sum +
-          db.workOrderPayments
-            .filter((payment) => payment.order_id === order.id)
-            .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
-        0,
-      ),
+      workOrders.reduce((s, o) => s + (paidByOrder.get(o.id as string) ?? 0), 0),
     );
     return {
       ...work,
-      ordersCount: orders.length,
-      pendingOrdersCount: orders.filter((order) => order.amount === null).length,
+      ordersCount: workOrders.length,
+      pendingOrdersCount: workOrders.filter((o) => o.amount === null).length,
       ordersAmount,
       ordersPaid,
       ordersPending: round2(Math.max(ordersAmount - ordersPaid, 0)),
@@ -99,18 +150,21 @@ export async function listOrderWorks(): Promise<
 }
 
 export async function listWorkOrders(workId: string): Promise<WorkOrderWithRelations[]> {
-  const rows = await Promise.all(
-    db.workOrders
-      .filter((order) => order.work_id === workId)
-      .sort((a, b) => b.order_date.localeCompare(a.order_date))
-      .map((order) => enrich(order)),
-  );
+  if (!isAdminConfigured()) return [];
+  const { data } = await sb()
+    .from("work_orders")
+    .select("*")
+    .eq("work_id", workId)
+    .eq("status", 1)
+    .order("order_date", { ascending: false });
+  const rows = await Promise.all((data ?? []).map((r) => enrich(mapOrder(r))));
   return rows.filter((row): row is WorkOrderWithRelations => row !== null);
 }
 
 export async function getWorkOrder(id: string): Promise<WorkOrderWithRelations | null> {
-  const order = db.workOrders.find((item) => item.id === id);
-  return order ? enrich(order) : null;
+  if (!isAdminConfigured()) return null;
+  const { data } = await sb().from("work_orders").select("*").eq("id", id).maybeSingle();
+  return data ? enrich(mapOrder(data)) : null;
 }
 
 export interface CreateWorkOrderData {
@@ -123,30 +177,23 @@ export interface CreateWorkOrderData {
 }
 
 export async function createWorkOrder(data: CreateWorkOrderData): Promise<string> {
-  const work = db.works.find((item) => item.id === data.workId);
-  if (!work) throw new Error("Obra no encontrada");
   if (!WORK_PROVIDERS.includes(data.supplier as (typeof WORK_PROVIDERS)[number])) {
     throw new Error("Proveedor inválido");
   }
-
-  const ts = nowISO();
-  const id = uuid();
-  db.workOrders.push({
-    id,
-    work_id: data.workId,
-    order_date: data.orderDate,
-    supplier: data.supplier.trim(),
-    material: data.material.trim(),
-    description: data.description?.trim() || null,
-    category: null,
-    amount: null,
-    quoted_at: null,
-    payable_movement_id: null,
-    created_at: ts,
-    updated_at: ts,
-    created_by: data.userId,
-  });
-  return id;
+  const { data: order, error } = await sb()
+    .from("work_orders")
+    .insert({
+      work_id: data.workId,
+      order_date: data.orderDate,
+      supplier: data.supplier.trim(),
+      material: data.material.trim(),
+      description: data.description?.trim() || null,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return order.id as string;
 }
 
 export interface QuoteWorkOrderData {
@@ -160,82 +207,86 @@ export interface QuoteWorkOrderData {
 }
 
 export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<void> {
-  const order = db.workOrders.find((item) => item.id === data.orderId);
-  if (!order) throw new Error("Pedido no encontrado");
+  const client = sb();
+  const userId = await getCurrentUserId();
+  const { data: orderRow } = await client
+    .from("work_orders")
+    .select("*")
+    .eq("id", data.orderId)
+    .maybeSingle();
+  if (!orderRow) throw new Error("Pedido no encontrado");
+  const order = mapOrder(orderRow);
   if (order.amount !== null) throw new Error("El pedido ya tiene monto");
-
-  const work = db.works.find((item) => item.id === order.work_id);
-  if (!work) throw new Error("Obra no encontrada");
 
   const amount = round2(data.amount);
   const advance = round2(data.advanceAmount ?? 0);
   if (advance > amount) throw new Error("El adelanto no puede superar el total");
 
-  const payableMethod = accountsPayableMethod();
-  const advanceMethod = data.advancePaymentMethodId
-    ? db.methods.find(
-        (method) => method.id === data.advancePaymentMethodId && method.is_active,
-      )
-    : null;
-  if (advance > 0 && !advanceMethod) throw new Error("Forma de pago inválida");
+  const payableMethodId = await accountsPayableMethodId();
+  if (advance > 0 && !data.advancePaymentMethodId) {
+    throw new Error("Forma de pago inválida");
+  }
 
-  const ts = nowISO();
-  order.amount = amount;
-  order.category = data.category;
-  order.quoted_at = data.quoteDate;
-  order.updated_at = ts;
+  const updates: Record<string, unknown> = {
+    amount,
+    category: data.category,
+    quoted_at: data.quoteDate,
+  };
 
-  if (advance > 0 && advanceMethod) {
-    const movementId = uuid();
-    db.workMovements.push({
-      id: movementId,
-      work_id: order.work_id,
-      receipt: `PED-${order.id.slice(0, 8)}-A`,
-      movement_date: data.quoteDate,
-      concept: `Adelanto pedido: ${order.material}`,
-      supplier: order.supplier,
-      category: data.category,
-      movement_type: "expense",
-      amount: advance,
-      payment_method_id: advanceMethod.id,
-      observations: order.description,
-      created_at: ts,
-      created_by: data.userId,
-    });
-    db.workOrderPayments.push({
-      id: uuid(),
+  if (advance > 0 && data.advancePaymentMethodId) {
+    const { data: mv, error } = await client
+      .from("work_movements")
+      .insert({
+        work_id: order.work_id,
+        receipt: `PED-${order.id.slice(0, 8)}-A`,
+        movement_date: data.quoteDate,
+        concept: `Adelanto pedido: ${order.material}`,
+        supplier: order.supplier,
+        category: data.category,
+        movement_type: "expense",
+        amount: advance,
+        payment_method_id: data.advancePaymentMethodId,
+        observations: order.description,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    await client.from("work_order_payments").insert({
       order_id: order.id,
       payment_date: data.quoteDate,
       description: "Adelanto del pedido",
       amount: advance,
-      payment_method_id: advanceMethod.id,
-      work_movement_id: movementId,
-      internal_transfer_id: null,
-      created_at: ts,
-      created_by: data.userId,
+      payment_method_id: data.advancePaymentMethodId,
+      work_movement_id: mv.id,
+      created_by: userId,
     });
   }
 
   const payableAmount = round2(amount - advance);
   if (payableAmount > 0) {
-    const movementId = uuid();
-    db.workMovements.push({
-      id: movementId,
-      work_id: order.work_id,
-      receipt: `PED-${order.id.slice(0, 8)}-P`,
-      movement_date: data.quoteDate,
-      concept: `Pedido por pagar: ${order.material}`,
-      supplier: order.supplier,
-      category: data.category,
-      movement_type: "expense",
-      amount: payableAmount,
-      payment_method_id: payableMethod.id,
-      observations: order.description,
-      created_at: ts,
-      created_by: data.userId,
-    });
-    order.payable_movement_id = movementId;
+    const { data: mv, error } = await client
+      .from("work_movements")
+      .insert({
+        work_id: order.work_id,
+        receipt: `PED-${order.id.slice(0, 8)}-P`,
+        movement_date: data.quoteDate,
+        concept: `Pedido por pagar: ${order.material}`,
+        supplier: order.supplier,
+        category: data.category,
+        movement_type: "expense",
+        amount: payableAmount,
+        payment_method_id: payableMethodId,
+        observations: order.description,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    updates.payable_movement_id = mv.id;
   }
+
+  await client.from("work_orders").update(updates).eq("id", order.id);
 }
 
 export interface RegisterWorkOrderPaymentData {
@@ -250,47 +301,41 @@ export interface RegisterWorkOrderPaymentData {
 export async function registerWorkOrderPayment(
   data: RegisterWorkOrderPaymentData,
 ): Promise<void> {
+  const client = sb();
+  const userId = await getCurrentUserId();
   const order = await getWorkOrder(data.orderId);
   if (!order) throw new Error("Pedido no encontrado");
   if (order.amount === null) throw new Error("Primero registra el monto del pedido");
 
   const amount = round2(data.amount);
-  if (amount > order.pending + 0.001) {
-    throw new Error("El abono supera el saldo pendiente");
-  }
+  if (amount > order.pending + 0.001) throw new Error("El abono supera el saldo pendiente");
 
-  const method = db.methods.find(
-    (item) => item.id === data.paymentMethodId && item.is_active,
-  );
-  if (!method) throw new Error("Forma de pago inválida");
-  const payableMethod = accountsPayableMethod();
-  if (method.id === payableMethod.id) {
+  const payableMethodId = await accountsPayableMethodId();
+  if (data.paymentMethodId === payableMethodId) {
     throw new Error("El abono debe salir de una cuenta real");
   }
 
-  const ts = nowISO();
-  const transferId = uuid();
-  db.workInternalTransfers.push({
-    id: transferId,
-    description:
-      data.description?.trim() || `Abono pedido: ${order.material}`,
-    amount,
-    transfer_date: data.paymentDate,
-    from_payment_method_id: method.id,
-    to_payment_method_id: payableMethod.id,
-    created_at: ts,
-    created_by: data.userId,
-  });
-  db.workOrderPayments.push({
-    id: uuid(),
+  const { data: transfer, error } = await client
+    .from("work_internal_transfers")
+    .insert({
+      description: data.description?.trim() || `Abono pedido: ${order.material}`,
+      amount,
+      transfer_date: data.paymentDate,
+      from_payment_method_id: data.paymentMethodId,
+      to_payment_method_id: payableMethodId,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await client.from("work_order_payments").insert({
     order_id: order.id,
     payment_date: data.paymentDate,
     description: data.description?.trim() || "Abono del pedido",
     amount,
-    payment_method_id: method.id,
-    work_movement_id: null,
-    internal_transfer_id: transferId,
-    created_at: ts,
-    created_by: data.userId,
+    payment_method_id: data.paymentMethodId,
+    internal_transfer_id: transfer.id,
+    created_by: userId,
   });
 }

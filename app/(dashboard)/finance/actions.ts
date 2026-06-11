@@ -3,9 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
+  deleteSalaryPayment,
   registerGeneralBalanceAccountMovement,
   registerGeneralBalanceEntry,
+  saveSalaryDayRecord,
+  saveSalaryPayment,
+  saveSalaryWeek,
   saveManualDebtor,
+  updateSalaryWeekStatus,
 } from "@/lib/data/finance";
 import { registerWorkInternalTransfer } from "@/lib/data/works";
 import {
@@ -13,6 +18,10 @@ import {
   generalBalanceEntrySchema,
   manualDebtorSchema,
   registerInternalTransferSchema,
+  saveSalaryDayRecordSchema,
+  saveSalaryPaymentSchema,
+  saveSalaryWeekSchema,
+  updateSalaryWeekStatusSchema,
 } from "@/lib/validation";
 
 export type ActionResult<T = undefined> =
@@ -26,7 +35,7 @@ function currentUserId(): string | null {
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
   for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "form");
+    const key = issue.path.length ? issue.path.join(".") : "form";
     if (!out[key]) out[key] = issue.message;
   }
   return out;
@@ -148,5 +157,167 @@ export async function registerFinanceInternalTransferAction(
     return { ok: true, data: undefined };
   } catch {
     return { ok: false, error: "No se pudo registrar el traspaso interno." };
+  }
+}
+
+export async function saveSalaryWeekAction(
+  raw: unknown,
+): Promise<ActionResult<{ weekId: string }>> {
+  const parsed = saveSalaryWeekSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos de la semana salarial.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const weekId = await saveSalaryWeek({
+      id: d.id || undefined,
+      startDate: d.startDate,
+      paymentDate: d.paymentDate || d.startDate,
+      status: d.status,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/salario");
+    return { ok: true, data: { weekId } };
+  } catch {
+    return { ok: false, error: "No se pudo guardar la semana salarial." };
+  }
+}
+
+export async function saveSalaryDayRecordAction(
+  raw: unknown,
+): Promise<ActionResult<{ recordId: string }>> {
+  const parsed = saveSalaryDayRecordSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos de la actividad diaria.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const recordId = await saveSalaryDayRecord({
+      id: d.id || undefined,
+      salaryWeekId: d.salaryWeekId,
+      employeeId: d.employeeId,
+      workDate: d.workDate,
+      dayName: d.dayName,
+      activityType: d.activityType,
+      projectId: d.projectId ?? null,
+      workId: d.workId ?? null,
+      taskTypeId: d.taskTypeId ?? null,
+      notes: d.notes?.trim() || null,
+      status: d.status,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/salario");
+    return { ok: true, data: { recordId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar la actividad.",
+    };
+  }
+}
+
+export async function saveSalaryPaymentAction(
+  raw: unknown,
+): Promise<ActionResult<{ paymentId: string }>> {
+  const parsed = saveSalaryPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del pago.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const paymentId = await saveSalaryPayment({
+      id: d.id || undefined,
+      salaryWeekId: d.salaryWeekId,
+      employeeId: d.employeeId,
+      paymentType: d.paymentType,
+      concept: d.concept,
+      amount: d.amount,
+      paymentMethodId: d.paymentMethodId,
+      paymentDate: d.paymentDate,
+      projectId: d.projectId ?? null,
+      workId: d.workId ?? null,
+      taskTypeId: d.taskTypeId ?? null,
+      notes: d.notes?.trim() || null,
+      status: d.status,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/salario");
+    return { ok: true, data: { paymentId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar el pago.",
+    };
+  }
+}
+
+export async function deleteSalaryPaymentAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = z.object({ paymentId: z.string().min(1) }).safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Pago inválido." };
+  }
+
+  try {
+    await deleteSalaryPayment({
+      paymentId: parsed.data.paymentId,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/salario");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar el pago.",
+    };
+  }
+}
+
+export async function updateSalaryWeekStatusAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = updateSalaryWeekStatusSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa el estado solicitado.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    await updateSalaryWeekStatus({
+      salaryWeekId: d.salaryWeekId,
+      status: d.status,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/salario");
+    if (d.status === "paid") {
+      revalidatePath("/projects");
+      revalidatePath("/obras");
+    }
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+    };
   }
 }
