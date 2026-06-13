@@ -126,6 +126,24 @@ create table if not exists public.task_types (
   created_by  uuid references auth.users(id)
 );
 
+create table if not exists public.providers (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null unique,
+  status      smallint not null default 1,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  uuid references auth.users(id)
+);
+
+create table if not exists public.work_categories (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null unique,
+  status      smallint not null default 1,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  uuid references auth.users(id)
+);
+
 create table if not exists public.system_settings (
   id            uuid primary key default gen_random_uuid(),
   setting_key   text not null unique,
@@ -499,6 +517,38 @@ insert into public.task_types (name, module_type) values
   ('Supervisión', 'work'),
   ('Obra', 'work'),
   ('Otro', 'general')
+on conflict (name) do nothing;
+
+insert into public.providers (name) values
+  ('Estribadora'),
+  ('Concretos LOPAR'),
+  ('Materiales Aguilar'),
+  ('Mat. Gonzalez'),
+  ('Mat. Quezada'),
+  ('Caracol Betania'),
+  ('Caracol Ayotlán'),
+  ('Alfarería León'),
+  ('Logonza'),
+  ('Maderería Paisa'),
+  ('Master Block')
+on conflict (name) do nothing;
+
+insert into public.work_categories (name) values
+  ('Carpintería'),
+  ('Material de construcción'),
+  ('Material de obras'),
+  ('Instalaciones'),
+  ('Maquinaria'),
+  ('Equipo y herramientas'),
+  ('Herrería'),
+  ('Aluminio'),
+  ('Tabla roca'),
+  ('Honorarios'),
+  ('Servicio'),
+  ('Pintura'),
+  ('Cantera'),
+  ('Granito'),
+  ('Yeso')
 on conflict (name) do nothing;
 
 insert into public.help_items (title, content, section, order_index) values

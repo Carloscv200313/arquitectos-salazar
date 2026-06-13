@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
+import { WORK_PROVIDERS, WORK_EXPENSE_CATEGORIES } from "@/lib/constants";
 
 export interface Employee {
   id: string;
@@ -19,6 +20,16 @@ export interface TaskType {
   id: string;
   name: string;
   module_type: "project" | "work" | "general";
+  status: number;
+}
+export interface Provider {
+  id: string;
+  name: string;
+  status: number;
+}
+export interface WorkCategory {
+  id: string;
+  name: string;
   status: number;
 }
 export interface HelpItem {
@@ -149,6 +160,89 @@ export async function updateTaskType(input: {
 
 export async function hideTaskType(id: string) {
   const { error } = await createAdminClient().from("task_types").update({ status: 0 }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/* ------------------------------------------------------------- Providers */
+
+export async function listProviders(): Promise<Provider[]> {
+  if (!isAdminConfigured()) return [];
+  const { data } = await createAdminClient()
+    .from("providers")
+    .select("id, name, status")
+    .eq("status", 1)
+    .order("name");
+  return (data as Provider[]) ?? [];
+}
+
+/** Active provider names for form selects. Falls back to the seed list. */
+export async function listProviderNames(): Promise<string[]> {
+  const rows = await listProviders();
+  if (rows.length > 0) return rows.map((p) => p.name);
+  return [...WORK_PROVIDERS];
+}
+
+export async function createProvider(input: { name: string }) {
+  const { error } = await createAdminClient().from("providers").insert({
+    name: input.name.trim(),
+    created_by: await getCurrentUserId(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateProvider(input: { id: string; name: string }) {
+  const { error } = await createAdminClient()
+    .from("providers")
+    .update({ name: input.name.trim() })
+    .eq("id", input.id);
+  if (error) throw new Error(error.message);
+}
+
+export async function hideProvider(id: string) {
+  const { error } = await createAdminClient().from("providers").update({ status: 0 }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/* ------------------------------------------------------- Work categories */
+
+export async function listWorkCategories(): Promise<WorkCategory[]> {
+  if (!isAdminConfigured()) return [];
+  const { data } = await createAdminClient()
+    .from("work_categories")
+    .select("id, name, status")
+    .eq("status", 1)
+    .order("name");
+  return (data as WorkCategory[]) ?? [];
+}
+
+/** Active expense category names for form selects. Falls back to the seed list. */
+export async function listWorkCategoryNames(): Promise<string[]> {
+  const rows = await listWorkCategories();
+  if (rows.length > 0) return rows.map((c) => c.name);
+  return [...WORK_EXPENSE_CATEGORIES];
+}
+
+export async function createWorkCategory(input: { name: string }) {
+  const { error } = await createAdminClient().from("work_categories").insert({
+    name: input.name.trim(),
+    created_by: await getCurrentUserId(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateWorkCategory(input: { id: string; name: string }) {
+  const { error } = await createAdminClient()
+    .from("work_categories")
+    .update({ name: input.name.trim() })
+    .eq("id", input.id);
+  if (error) throw new Error(error.message);
+}
+
+export async function hideWorkCategory(id: string) {
+  const { error } = await createAdminClient()
+    .from("work_categories")
+    .update({ status: 0 })
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 

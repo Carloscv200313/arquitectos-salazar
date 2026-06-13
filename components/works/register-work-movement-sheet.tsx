@@ -21,11 +21,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  WORK_EXPENSE_CATEGORIES,
-  WORK_INCOME_CATEGORY,
-  WORK_PROVIDERS,
-} from "@/lib/constants";
+import { WORK_INCOME_CATEGORY } from "@/lib/constants";
 import { formatCurrency, todayISODate } from "@/lib/format";
 import { registerWorkMovementAction } from "@/app/(dashboard)/obras/actions";
 import type { PaymentMethod } from "@/lib/types";
@@ -36,12 +32,16 @@ export function RegisterWorkMovementSheet({
   workId,
   workName,
   methods,
+  providers,
+  categories,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   workId: string;
   workName: string;
   methods: PaymentMethod[];
+  providers: string[];
+  categories: string[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [movementType, setMovementType] = useState<"income" | "expense">("expense");
@@ -55,8 +55,8 @@ export function RegisterWorkMovementSheet({
   const [observations, setObservations] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const categoryItems = WORK_EXPENSE_CATEGORIES.map((item) => ({ label: item, value: item }));
-  const providerItems = WORK_PROVIDERS.map((item) => ({ label: item, value: item }));
+  const categoryItems = categories.map((item) => ({ label: item, value: item }));
+  const providerItems = providers.map((item) => ({ label: item, value: item }));
   const methodItems = methods.map((method) => ({ label: method.name, value: method.id }));
 
   function reset() {
@@ -181,7 +181,7 @@ export function RegisterWorkMovementSheet({
                   <SelectValue placeholder="Selecciona proveedor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {WORK_PROVIDERS.map((item) => (
+                  {providers.map((item) => (
                     <SelectItem key={item} value={item}>
                       {item}
                     </SelectItem>
@@ -208,7 +208,7 @@ export function RegisterWorkMovementSheet({
                     <SelectValue placeholder="Selecciona categoría" />
                   </SelectTrigger>
                   <SelectContent>
-                    {WORK_EXPENSE_CATEGORIES.map((item) => (
+                    {categories.map((item) => (
                       <SelectItem key={item} value={item}>
                         {item}
                       </SelectItem>

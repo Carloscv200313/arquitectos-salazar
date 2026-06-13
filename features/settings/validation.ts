@@ -18,6 +18,16 @@ export const taskTypeSchema = z.object({
   moduleType: z.enum(["project", "work", "general"]).default("general"),
 });
 
+export const providerSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(2, "Nombre muy corto").max(80, "Máximo 80 caracteres"),
+});
+
+export const workCategorySchema = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(2, "Nombre muy corto").max(80, "Máximo 80 caracteres"),
+});
+
 export const profileNameSchema = z.object({
   fullName: z.string().trim().min(2, "Nombre muy corto"),
 });

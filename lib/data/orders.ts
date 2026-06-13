@@ -1,6 +1,5 @@
 import "server-only";
 
-import { WORK_PROVIDERS } from "@/lib/constants";
 import { round2 } from "@/lib/calculations";
 import type {
   PaymentMethod,
@@ -177,7 +176,7 @@ export interface CreateWorkOrderData {
 }
 
 export async function createWorkOrder(data: CreateWorkOrderData): Promise<string> {
-  if (!WORK_PROVIDERS.includes(data.supplier as (typeof WORK_PROVIDERS)[number])) {
+  if (!data.supplier || data.supplier.trim().length < 2) {
     throw new Error("Proveedor inválido");
   }
   const { data: order, error } = await sb()

@@ -10,7 +10,9 @@ import {
   LogOut,
   Pencil,
   Plus,
+  Tags,
   Trash2,
+  Truck,
   UserCog,
   UserRound,
   Users,
@@ -49,17 +51,21 @@ import {
   changePasswordAction,
   hideEmployeeAction,
   hidePaymentAccountAction,
+  hideProviderAction,
   hideTaskTypeAction,
+  hideWorkCategoryAction,
   saveEmployeeAction,
   savePaymentAccountAction,
+  saveProviderAction,
   saveTaskTypeAction,
+  saveWorkCategoryAction,
   updateProfileNameAction,
   type ActionResult,
 } from "@/features/settings/actions";
 import { signOutAction } from "@/features/auth/actions";
 import { UsersSection } from "@/components/settings/users-section";
 import type { CurrentUser } from "@/features/auth/get-user";
-import type { Employee, PaymentAccount, TaskType } from "@/services/config.service";
+import type { Employee, PaymentAccount, Provider, TaskType, WorkCategory } from "@/services/config.service";
 import type { AppUser, Role } from "@/services/users.service";
 
 const WORK_TYPE_LABELS: Record<string, string> = {
@@ -442,6 +448,8 @@ export function SettingsView({
   employees,
   accounts,
   taskTypes,
+  providers,
+  workCategories,
   users,
   roles,
   canManageUsers,
@@ -451,6 +459,8 @@ export function SettingsView({
   employees: Employee[];
   accounts: PaymentAccount[];
   taskTypes: TaskType[];
+  providers: Provider[];
+  workCategories: WorkCategory[];
   users: AppUser[];
   roles: Role[];
   canManageUsers: boolean;
@@ -476,6 +486,12 @@ export function SettingsView({
           </TabsTrigger>
           <TabsTrigger value="tareas">
             <Wrench className="size-4" /> Tipos de tarea
+          </TabsTrigger>
+          <TabsTrigger value="proveedores">
+            <Truck className="size-4" /> Proveedores
+          </TabsTrigger>
+          <TabsTrigger value="categorias">
+            <Tags className="size-4" /> Categorías
           </TabsTrigger>
           {canManageUsers ? (
             <TabsTrigger value="usuarios">
@@ -560,6 +576,42 @@ export function SettingsView({
             buildRaw={(v, id) => ({ id, name: v.name, moduleType: v.moduleType })}
             saveAction={saveTaskTypeAction}
             hideAction={hideTaskTypeAction}
+          />
+        </TabsContent>
+
+        <TabsContent value="proveedores">
+          <CrudSection
+            title="Proveedores"
+            description="Proveedores disponibles en pedidos y movimientos de obra."
+            addLabel="Nuevo proveedor"
+            items={providers}
+            columns={[
+              { label: "Nombre", render: (i) => <span className="font-medium">{i.name as string}</span> },
+            ]}
+            fields={[{ name: "name", label: "Nombre", type: "text" }]}
+            defaults={{ name: "" }}
+            toRow={(i) => ({ name: i.name as string })}
+            buildRaw={(v, id) => ({ id, name: v.name })}
+            saveAction={saveProviderAction}
+            hideAction={hideProviderAction}
+          />
+        </TabsContent>
+
+        <TabsContent value="categorias">
+          <CrudSection
+            title="Categorías de obra"
+            description="Categorías de gasto disponibles en pedidos y movimientos de obra."
+            addLabel="Nueva categoría"
+            items={workCategories}
+            columns={[
+              { label: "Nombre", render: (i) => <span className="font-medium">{i.name as string}</span> },
+            ]}
+            fields={[{ name: "name", label: "Nombre", type: "text" }]}
+            defaults={{ name: "" }}
+            toRow={(i) => ({ name: i.name as string })}
+            buildRaw={(v, id) => ({ id, name: v.name })}
+            saveAction={saveWorkCategoryAction}
+            hideAction={hideWorkCategoryAction}
           />
         </TabsContent>
 

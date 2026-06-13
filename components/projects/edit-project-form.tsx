@@ -17,9 +17,14 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import { PROJECT_RESPONSIBLES, PROJECT_SLICE_LABELS } from "@/lib/constants";
+import {
+  RESPONSIBLE_OPTIONS,
+  PROJECT_SLICE_LABELS,
+  PROYECTO_RATE,
+  type SliceWeights,
+} from "@/lib/constants";
 import type { Client, InternalArea, ProjectResponsible, ProjectWithFinance } from "@/lib/types";
-import { weightsFromAmounts } from "@/lib/calculations";
+import { weightsFromAmounts, computeBreakdown, round2 } from "@/lib/calculations";
 import { DistributionPreview } from "./distribution-preview";
 import { updateProjectAction } from "@/app/(dashboard)/projects/actions";
 
@@ -35,18 +40,23 @@ function FieldError({ children }: { children?: string }) {
   return <p className="text-xs text-destructive">{children}</p>;
 }
 
+const SLICE_KEYS = Object.keys(PROJECT_SLICE_LABELS) as InternalArea[];
+
 export function EditProjectForm({
   project,
   clients,
+  paidByArea,
 }: {
   project: ProjectWithFinance;
   clients: Client[];
+  paidByArea: Record<InternalArea, number>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [name, setName] = useState(project.name);
+  const [address, setAddress] = useState(project.address ?? "");
   const [clientMode, setClientMode] = useState<ClientMode>("existing");
   const [clientId, setClientId] = useState(project.client_id);
   const [clientName, setClientName] = useState("");
@@ -65,17 +75,40 @@ export function EditProjectForm({
     })),
   );
 
-  const base = Number(projectAmount);
-  const weights = weightsFromAmounts({
+  const initialWeights = weightsFromAmounts({
     proposal: project.proposal_amount,
     modeling_3d: project.modeling_3d_amount,
     plans: project.plans_amount,
     render: project.render_amount,
   });
+  const [weightInputs, setWeightInputs] = useState<Record<InternalArea, string>>({
+    proposal: String(round2(initialWeights.proposal * 100)),
+    modeling_3d: String(round2(initialWeights.modeling_3d * 100)),
+    plans: String(round2(initialWeights.plans * 100)),
+    render: String(round2(initialWeights.render * 100)),
+  });
+
+  const base = Number(projectAmount);
   const parsedAddons = addons.map((a) => ({
     concept: a.concept,
     amount: Number(a.amount) || 0,
   }));
+
+  const weightSum = SLICE_KEYS.reduce((s, k) => s + (Number(weightInputs[k]) || 0), 0);
+  const weightsValid = Math.abs(weightSum - 100) < 0.5;
+  const weights: SliceWeights = {
+    proposal: (Number(weightInputs.proposal) || 0) / 100,
+    modeling_3d: (Number(weightInputs.modeling_3d) || 0) / 100,
+    plans: (Number(weightInputs.plans) || 0) / 100,
+    render: (Number(weightInputs.render) || 0) / 100,
+  };
+  // New amount per area = portion (50% of base) split by the edited weights.
+  const areaAmounts = computeBreakdown(base || 0, [], weights).project;
+  // An area cannot drop below what was already paid (spent) in it.
+  const areaErrors = SLICE_KEYS.filter(
+    (k) => areaAmounts[k] < paidByArea[k] - 0.001,
+  );
+  const hasAreaError = areaErrors.length > 0;
 
   function updateAddon(id: string, patch: Partial<AddonRow>) {
     setAddons((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
@@ -89,13 +122,26 @@ export function EditProjectForm({
 
   function submit() {
     setErrors({});
+    if (!weightsValid) {
+      setErrors({ weights: "Los porcentajes deben sumar 100%" });
+      return;
+    }
+    if (hasAreaError) {
+      const k = areaErrors[0];
+      setErrors({
+        weights: `${PROJECT_SLICE_LABELS[k]}: el monto (${areaAmounts[k].toFixed(2)}) queda menor que lo ya pagado (${paidByArea[k].toFixed(2)})`,
+      });
+      return;
+    }
     startTransition(async () => {
       const res = await updateProjectAction({
         id: project.id,
         name: name.trim(),
+        address: address.trim(),
         clientId: clientMode === "existing" ? clientId : "",
         clientName: clientMode === "new" ? clientName.trim() : "",
         responsibles,
+        weights,
         projectAmount: Number(projectAmount),
         addons: parsedAddons
           .filter((a) => a.amount > 0)
@@ -133,6 +179,18 @@ export function EditProjectForm({
                 aria-invalid={!!errors.name}
               />
               <FieldError>{errors.name}</FieldError>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label htmlFor="address">Domicilio</Label>
+              <Input
+                id="address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Ej. Av. Los Pinos 123, Asia"
+                aria-invalid={!!errors.address}
+              />
+              <FieldError>{errors.address}</FieldError>
             </div>
 
             <div className="grid gap-1.5">
@@ -235,7 +293,7 @@ export function EditProjectForm({
                           [area]: value as ProjectResponsible,
                         }))
                       }
-                      items={PROJECT_RESPONSIBLES.map((person) => ({
+                      items={RESPONSIBLE_OPTIONS.map((person) => ({
                         label: person,
                         value: person,
                       }))}
@@ -244,7 +302,7 @@ export function EditProjectForm({
                         <SelectValue placeholder="Selecciona responsable" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PROJECT_RESPONSIBLES.map((person) => (
+                        {RESPONSIBLE_OPTIONS.map((person) => (
                           <SelectItem key={person} value={person}>
                             {person}
                           </SelectItem>
@@ -255,6 +313,66 @@ export function EditProjectForm({
                 ))}
               </div>
               <FieldError>{errors.responsibles}</FieldError>
+            </div>
+
+            <div className="grid gap-3 border-t pt-4">
+              <div>
+                <h3 className="text-sm font-semibold">Distribución del proyecto</h3>
+                <p className="text-xs text-muted-foreground">
+                  Reparten el {Math.round(PROYECTO_RATE * 100)}% del monto base. Deben sumar 100%.
+                  Un área no puede quedar por debajo de lo ya pagado en ella.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {SLICE_KEYS.map((area) => {
+                  const overpaid = areaAmounts[area] < paidByArea[area] - 0.001;
+                  return (
+                    <div key={area} className="grid gap-1.5">
+                      <Label htmlFor={`w-${area}`}>{PROJECT_SLICE_LABELS[area]}</Label>
+                      <div className="relative">
+                        <Input
+                          id={`w-${area}`}
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={weightInputs[area]}
+                          onChange={(e) =>
+                            setWeightInputs((p) => ({ ...p, [area]: e.target.value }))
+                          }
+                          className="pr-7"
+                          aria-invalid={overpaid}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                          %
+                        </span>
+                      </div>
+                      <p
+                        className={cn(
+                          "text-xs tabular-nums",
+                          overpaid ? "text-destructive" : "text-muted-foreground",
+                        )}
+                      >
+                        {formatCurrency(areaAmounts[area])}
+                        {paidByArea[area] > 0 && ` · pagado ${formatCurrency(paidByArea[area])}`}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div
+                className={cn(
+                  "flex items-center justify-between rounded-lg px-3 py-2 text-sm",
+                  weightsValid
+                    ? "bg-brand-muted/50 text-brand-foreground"
+                    : "bg-destructive/10 text-destructive",
+                )}
+              >
+                <span className="font-medium">Suma</span>
+                <span className="font-semibold tabular-nums">{weightSum.toFixed(1)}% / 100%</span>
+              </div>
+              <FieldError>{errors.weights}</FieldError>
             </div>
           </div>
         </Card>
@@ -330,7 +448,11 @@ export function EditProjectForm({
             <DistributionPreview base={base} addons={parsedAddons} weights={weights} />
           </div>
           <div className="flex flex-col gap-2 border-t p-5">
-            <Button onClick={submit} disabled={isPending} className="w-full">
+            <Button
+              onClick={submit}
+              disabled={isPending || !weightsValid || hasAreaError}
+              className="w-full"
+            >
               {isPending && <Loader2 className="size-4 animate-spin" />}
               Guardar cambios
             </Button>

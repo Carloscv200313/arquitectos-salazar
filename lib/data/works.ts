@@ -56,6 +56,7 @@ function mapWork(r: Row): Work {
     id: r.id as string,
     client_id: r.client_id as string,
     name: r.name as string,
+    address: (r.address as string) ?? null,
     status: (r.work_status as WorkStatus) ?? "active",
     description: (r.description as string) ?? null,
     created_at: r.created_at as string,
@@ -154,7 +155,12 @@ export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFina
     .map(enrichRow)
     .filter((w): w is WorkWithFinance => w !== null)
     .filter((w) => {
-      if (search && !w.name.toLowerCase().includes(search)) return false;
+      if (
+        search &&
+        !w.name.toLowerCase().includes(search) &&
+        !(w.address?.toLowerCase().includes(search) ?? false)
+      )
+        return false;
       if (client && !w.client.name.toLowerCase().includes(client)) return false;
       if (filters.status && filters.status !== "all") {
         if (filters.status === "debtor") return w.finance.balance < -0.001;
@@ -349,6 +355,7 @@ export async function registerWorkInternalTransfer(
 
 export interface CreateWorkData {
   name: string;
+  address?: string;
   clientId?: string;
   clientName?: string;
   status: WorkStatus;
@@ -363,6 +370,7 @@ export async function createWork(data: CreateWorkData): Promise<string> {
     .insert({
       client_id: clientId,
       name: data.name.trim(),
+      address: data.address?.trim() || null,
       work_status: data.status,
       description: data.description?.trim() || null,
       created_by: await getCurrentUserId(),
@@ -383,6 +391,7 @@ export async function updateWork(data: UpdateWorkData): Promise<void> {
     .from("works")
     .update({
       name: data.name.trim(),
+      address: data.address?.trim() || null,
       client_id: clientId,
       work_status: data.status,
       description: data.description?.trim() || null,

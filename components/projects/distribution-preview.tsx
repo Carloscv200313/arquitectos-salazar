@@ -2,8 +2,8 @@
 
 import { computeBreakdown, type Addon } from "@/lib/calculations";
 import {
-  MARKUP,
   MARKUP_LABELS,
+  MARKUP_TOTAL_RATE,
   PROYECTO_RATE,
   PROJECT_DISTRIBUTION,
   PROJECT_MARKUP_LABEL,
@@ -133,16 +133,14 @@ export function DistributionPreview({
         </div>
       </div>
 
-      {/* Referencial: oficina / utilidad (el otro 50%) */}
+      {/* Referencial: utilidad (el otro 50%) */}
       <div className="rounded-xl border bg-muted/25 p-4">
         <SectionTitle>Referencia interna</SectionTitle>
         <div className="divide-y divide-border/60">
-          <Row label={MARKUP_LABELS.office} pct={MARKUP.office} amount={b.markup.office} muted />
-          <Row label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={b.markup.utility} muted />
+          <Row label={MARKUP_LABELS.utility} pct={MARKUP_TOTAL_RATE} amount={b.markupTotal} muted />
         </div>
         <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground">
-          {PROJECT_MARKUP_LABEL} 50%, oficina y utilidad son referencias internas. No se
-          suman al total a cobrar.
+          Este gasto es para utilidad y gasto de oficina.
         </p>
       </div>
     </div>

@@ -34,13 +34,13 @@ export function LoginForm() {
     <form onSubmit={submit} className="grid gap-7">
       <div className="grid gap-2">
         <label htmlFor="email" className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-          Correo electrónico
+          Usuario
         </label>
         <input
           id="email"
           type="text"
           autoComplete="username"
-          placeholder="usuario@salazar.com"
+          placeholder="Usuario"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required

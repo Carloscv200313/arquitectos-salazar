@@ -3,7 +3,9 @@ import { SettingsView } from "@/components/settings/settings-view";
 import {
   listEmployees,
   listPaymentAccounts,
+  listProviders,
   listTaskTypes,
+  listWorkCategories,
 } from "@/services/config.service";
 import { listRoles, listUsers } from "@/services/users.service";
 import { getCurrentAppUser } from "@/features/auth/get-user";
@@ -16,13 +18,16 @@ export default async function ConfiguracionPage() {
   const profile = await getCurrentAppUser();
   const canManageUsers = profile ? hasPermission(profile.permissions, "users.view") : false;
 
-  const [employees, accounts, taskTypes, users, roles] = await Promise.all([
-    listEmployees(),
-    listPaymentAccounts(),
-    listTaskTypes(),
-    canManageUsers ? listUsers() : Promise.resolve([]),
-    canManageUsers ? listRoles() : Promise.resolve([]),
-  ]);
+  const [employees, accounts, taskTypes, providers, workCategories, users, roles] =
+    await Promise.all([
+      listEmployees(),
+      listPaymentAccounts(),
+      listTaskTypes(),
+      listProviders(),
+      listWorkCategories(),
+      canManageUsers ? listUsers() : Promise.resolve([]),
+      canManageUsers ? listRoles() : Promise.resolve([]),
+    ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -43,6 +48,8 @@ export default async function ConfiguracionPage() {
         employees={employees}
         accounts={accounts}
         taskTypes={taskTypes}
+        providers={providers}
+        workCategories={workCategories}
         users={users}
         roles={roles}
         canManageUsers={canManageUsers}

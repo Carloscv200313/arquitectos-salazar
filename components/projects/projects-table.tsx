@@ -58,6 +58,7 @@ export function ProjectsTable({
             <TableRow className="hover:bg-transparent">
               <TableHead className="min-w-48">Proyecto</TableHead>
               <TableHead className="min-w-40">Cliente</TableHead>
+              <TableHead className="min-w-40">Domicilio</TableHead>
               <TableHead className="text-right">Monto proyecto</TableHead>
               <TableHead className="text-right">Ingresos</TableHead>
               <TableHead className="text-right">Por cobrar</TableHead>
@@ -84,6 +85,9 @@ export function ProjectsTable({
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {p.client.name}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {p.address?.trim() ? p.address : <span className="text-muted-foreground/50">—</span>}
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
                   {formatCurrency(p.total_amount)}

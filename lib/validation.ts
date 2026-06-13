@@ -3,7 +3,7 @@ import { computeBreakdown } from "./calculations";
 import {
   EMPLOYEE_DEFAULT_WORK_TYPES,
   PROJECT_DISTRIBUTION,
-  PROJECT_RESPONSIBLES,
+  RESPONSIBLE_OPTIONS,
   SALARY_ACTIVITY_TYPES,
   SALARY_PAYMENT_STATUSES,
   SALARY_PAYMENT_TYPES,
@@ -11,9 +11,7 @@ import {
   SALARY_WEEK_STATUSES,
   SALARY_WEEKDAY_LABELS,
   TASK_MODULE_TYPES,
-  WORK_CATEGORIES,
   WORK_INCOME_CATEGORY,
-  WORK_PROVIDERS,
   WORK_STATUSES,
 } from "./constants";
 
@@ -37,6 +35,14 @@ const concept = z
   .min(2, "Ingresa un concepto")
   .max(160, "Máximo 160 caracteres");
 
+// Domicilio / dirección de la obra (opcional).
+const address = z
+  .string()
+  .trim()
+  .max(200, "Máximo 200 caracteres")
+  .optional()
+  .or(z.literal(""));
+
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida")
@@ -59,10 +65,10 @@ export const sliceWeightsSchema = z.object({
 });
 
 export const projectResponsiblesSchema = z.object({
-  proposal: z.enum(PROJECT_RESPONSIBLES),
-  modeling_3d: z.enum(PROJECT_RESPONSIBLES),
-  plans: z.enum(PROJECT_RESPONSIBLES),
-  render: z.enum(PROJECT_RESPONSIBLES),
+  proposal: z.enum(RESPONSIBLE_OPTIONS),
+  modeling_3d: z.enum(RESPONSIBLE_OPTIONS),
+  plans: z.enum(RESPONSIBLE_OPTIONS),
+  render: z.enum(RESPONSIBLE_OPTIONS),
 });
 
 function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number; render: number }) {
@@ -74,6 +80,7 @@ function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number;
 export const createProjectSchema = z
   .object({
     name,
+    address,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
     template: z.enum(["diamante", "oro", "especial"]).default("diamante"),
@@ -132,9 +139,11 @@ export const updateProjectSchema = z
   .object({
     id: z.string().uuid("Proyecto inválido"),
     name,
+    address,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
     responsibles: projectResponsiblesSchema,
+    weights: sliceWeightsSchema.optional(),
     projectAmount: money,
     addons,
   })
@@ -146,6 +155,13 @@ export const updateProjectSchema = z
         code: "custom",
         path: ["clientId"],
         message: "Selecciona o crea un cliente",
+      });
+    }
+    if (data.weights && !weightsSumOk(data.weights)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["weights"],
+        message: "Los porcentajes deben sumar 100%",
       });
     }
   });
@@ -347,12 +363,13 @@ export type SaveSalaryPaymentInput = z.infer<typeof saveSalaryPaymentSchema>;
 export type UpdateSalaryWeekStatusInput = z.infer<typeof updateSalaryWeekStatusSchema>;
 
 const workStatus = z.enum(WORK_STATUSES);
-const workCategory = z.enum(WORK_CATEGORIES);
+const workCategory = z.string().trim().min(2, "Selecciona una categoría").max(80, "Máximo 80 caracteres");
 
 // ── Works ────────────────────────────────────────────────────────
 export const createWorkSchema = z
   .object({
     name,
+    address,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
     status: workStatus.default("active"),
@@ -401,15 +418,6 @@ export const registerWorkMovementSchema = z
         path: ["supplier"],
         message: "Selecciona proveedor",
       });
-    } else if (
-      data.movementType === "expense" &&
-      !WORK_PROVIDERS.includes(data.supplier as (typeof WORK_PROVIDERS)[number])
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["supplier"],
-        message: "Selecciona un proveedor autorizado",
-      });
     }
   });
 
@@ -421,7 +429,7 @@ export type RegisterWorkMovementInput = z.infer<typeof registerWorkMovementSchem
 export const createWorkOrderSchema = z.object({
   workId: z.string().uuid("Obra inválida"),
   orderDate: isoDate,
-  supplier: z.enum(WORK_PROVIDERS, { error: "Selecciona proveedor" }),
+  supplier: z.string().trim().min(2, "Selecciona proveedor").max(80, "Máximo 80 caracteres"),
   material: z
     .string()
     .trim()

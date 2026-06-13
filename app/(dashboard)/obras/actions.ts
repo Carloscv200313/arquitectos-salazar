@@ -49,6 +49,7 @@ export async function createWorkAction(
     const d = parsed.data;
     const workId = await createWork({
       name: d.name,
+      address: d.address || undefined,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
       status: d.status,
@@ -79,6 +80,7 @@ export async function updateWorkAction(
     await updateWork({
       id: d.id,
       name: d.name,
+      address: d.address || undefined,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
       status: d.status,

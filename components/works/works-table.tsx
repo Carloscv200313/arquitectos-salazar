@@ -34,9 +34,13 @@ function amountTone(value: number, positive = true) {
 export function WorksTable({
   works,
   methods,
+  providers,
+  categories,
 }: {
   works: WorkWithFinance[];
   methods: PaymentMethod[];
+  providers: string[];
+  categories: string[];
 }) {
   const router = useRouter();
   const [movementTarget, setMovementTarget] = useState<WorkWithFinance | null>(null);
@@ -50,6 +54,7 @@ export function WorksTable({
             <TableRow className="hover:bg-transparent">
               <TableHead className="min-w-52">Obra</TableHead>
               <TableHead className="min-w-40">Cliente</TableHead>
+              <TableHead className="min-w-40">Domicilio</TableHead>
               <TableHead className="text-right">Entradas</TableHead>
               <TableHead className="text-right">Salidas</TableHead>
               <TableHead className="text-right">Saldo</TableHead>
@@ -75,6 +80,9 @@ export function WorksTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{work.client.name}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {work.address?.trim() ? work.address : <span className="text-muted-foreground/50">—</span>}
+                </TableCell>
                 <TableCell className={cn("text-right font-medium tabular-nums", amountTone(work.finance.income))}>
                   {formatCurrency(work.finance.income)}
                 </TableCell>
@@ -138,6 +146,8 @@ export function WorksTable({
           workId={movementTarget.id}
           workName={movementTarget.name}
           methods={methods}
+          providers={providers}
+          categories={categories}
         />
       )}
       {deleteTarget && (

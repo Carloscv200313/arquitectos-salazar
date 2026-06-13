@@ -86,6 +86,7 @@ function mapProjectBase(r: Row) {
     id: r.id as string,
     client_id: r.client_id as string,
     name: r.name as string,
+    address: (r.address as string) ?? null,
     template: (r.template as ProjectTemplate) ?? "diamante",
     project_amount: Number(r.project_amount),
     office_amount: Number(r.office_amount),
@@ -163,7 +164,12 @@ export async function listProjects(filters: ProjectFilters = {}): Promise<Projec
     .map(enrichRow)
     .filter((p): p is ProjectWithFinance => p !== null)
     .filter((p) => {
-      if (search && !p.name.toLowerCase().includes(search)) return false;
+      if (
+        search &&
+        !p.name.toLowerCase().includes(search) &&
+        !(p.address?.toLowerCase().includes(search) ?? false)
+      )
+        return false;
       if (client && !p.client.name.toLowerCase().includes(client)) return false;
       if (filters.status && filters.status !== "all" && p.finance.status !== filters.status)
         return false;
@@ -343,6 +349,7 @@ async function findOrCreateClient(
 
 export interface CreateProjectData {
   name: string;
+  address?: string;
   clientId?: string;
   clientName?: string;
   template: ProjectTemplate;
@@ -366,6 +373,7 @@ export async function createProject(data: CreateProjectData): Promise<string> {
     .insert({
       client_id: clientId,
       name: data.name.trim(),
+      address: data.address?.trim() || null,
       template: data.template,
       project_amount: b.base,
       office_amount: b.markup.office,
@@ -416,9 +424,11 @@ export async function createProject(data: CreateProjectData): Promise<string> {
 export interface UpdateProjectData {
   id: string;
   name: string;
+  address?: string;
   clientId?: string;
   clientName?: string;
   responsibles: Record<InternalArea, ProjectResponsible>;
+  weights?: SliceWeights;
   projectAmount: number;
   addons: Addon[];
   userId: string | null;
@@ -434,18 +444,21 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
   if (!existing) throw new Error("Proyecto no encontrado");
 
   const clientId = await findOrCreateClient(data.clientId, data.clientName);
-  const weights = weightsFromAmounts({
-    proposal: Number(existing.proposal_amount),
-    modeling_3d: Number(existing.modeling_3d_amount),
-    plans: Number(existing.plans_amount),
-    render: Number(existing.render_amount),
-  });
+  const weights =
+    data.weights ??
+    weightsFromAmounts({
+      proposal: Number(existing.proposal_amount),
+      modeling_3d: Number(existing.modeling_3d_amount),
+      plans: Number(existing.plans_amount),
+      render: Number(existing.render_amount),
+    });
   const b = computeBreakdown(data.projectAmount, data.addons, weights);
 
   const { error } = await client
     .from("projects")
     .update({
       name: data.name.trim(),
+      address: data.address?.trim() || null,
       client_id: clientId,
       project_amount: b.base,
       office_amount: b.markup.office,

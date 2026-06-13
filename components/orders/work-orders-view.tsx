@@ -47,10 +47,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  WORK_EXPENSE_CATEGORIES,
-  WORK_PROVIDERS,
-} from "@/lib/constants";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod, WorkOrderWithRelations, WorkWithFinance } from "@/lib/types";
@@ -136,10 +132,12 @@ function NewOrderSheet({
   open,
   onOpenChange,
   work,
+  providers,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   work: WorkWithFinance;
+  providers: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -148,7 +146,7 @@ function NewOrderSheet({
   const [material, setMaterial] = useState("");
   const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const providerItems = WORK_PROVIDERS.map((item) => ({ label: item, value: item }));
+  const providerItems = providers.map((item) => ({ label: item, value: item }));
 
   function reset() {
     setOrderDate(todayISODate());
@@ -210,7 +208,7 @@ function NewOrderSheet({
                 <SelectValue placeholder="Selecciona proveedor" />
               </SelectTrigger>
               <SelectContent>
-                {WORK_PROVIDERS.map((item) => (
+                {providers.map((item) => (
                   <SelectItem key={item} value={item}>{item}</SelectItem>
                 ))}
               </SelectContent>
@@ -264,11 +262,13 @@ function QuoteOrderSheet({
   onOpenChange,
   order,
   methods,
+  categories,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: WorkOrderWithRelations;
   methods: PaymentMethod[];
+  categories: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -279,7 +279,7 @@ function QuoteOrderSheet({
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [advancePaymentMethodId, setAdvancePaymentMethodId] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const categoryItems = WORK_EXPENSE_CATEGORIES.map((item) => ({ label: item, value: item }));
+  const categoryItems = categories.map((item) => ({ label: item, value: item }));
   const methodItems = realPaymentMethods(methods).map((method) => ({
     label: method.name,
     value: method.id,
@@ -352,7 +352,7 @@ function QuoteOrderSheet({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {WORK_EXPENSE_CATEGORIES.map((item) => (
+                {categories.map((item) => (
                   <SelectItem key={item} value={item}>{item}</SelectItem>
                 ))}
               </SelectContent>
@@ -654,10 +654,14 @@ export function WorkOrdersView({
   work,
   orders,
   methods,
+  providers,
+  categories,
 }: {
   work: WorkWithFinance;
   orders: WorkOrderWithRelations[];
   methods: PaymentMethod[];
+  providers: string[];
+  categories: string[];
 }) {
   const [newOpen, setNewOpen] = useState(false);
   const [quoteTarget, setQuoteTarget] = useState<WorkOrderWithRelations | null>(null);
@@ -854,13 +858,14 @@ export function WorkOrdersView({
         </Card>
       </div>
 
-      <NewOrderSheet open={newOpen} onOpenChange={setNewOpen} work={work} />
+      <NewOrderSheet open={newOpen} onOpenChange={setNewOpen} work={work} providers={providers} />
       {quoteTarget && (
         <QuoteOrderSheet
           open={!!quoteTarget}
           onOpenChange={(open) => !open && setQuoteTarget(null)}
           order={quoteTarget}
           methods={methods}
+          categories={categories}
         />
       )}
       {paymentTarget && (

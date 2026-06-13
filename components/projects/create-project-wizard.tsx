@@ -34,6 +34,7 @@ import { formatCurrency, formatPercent, todayISODate } from "@/lib/format";
 import { computeBreakdown } from "@/lib/calculations";
 import {
   PROJECT_RESPONSIBLES,
+  RESPONSIBLE_OPTIONS,
   PROJECT_TEMPLATES,
   PROJECT_SLICE_LABELS,
   TEMPLATE_LABELS,
@@ -145,6 +146,7 @@ export function CreateProjectWizard({
   });
 
   const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
   const [clientMode, setClientMode] = useState<ClientMode>(
     clients.length > 0 ? "existing" : "new",
   );
@@ -199,6 +201,7 @@ export function CreateProjectWizard({
     startTransition(async () => {
       const res = await createProjectAction({
         name: name.trim(),
+        address: address.trim(),
         clientId: clientMode === "existing" ? clientId : "",
         clientName: clientMode === "new" ? clientName.trim() : "",
         template: template ?? "diamante",
@@ -260,6 +263,18 @@ export function CreateProjectWizard({
                     aria-invalid={!!errors.name}
                   />
                   <FieldError>{errors.name}</FieldError>
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label htmlFor="address">Domicilio</Label>
+                  <Input
+                    id="address"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Ej. Av. Los Pinos 123, Asia"
+                    aria-invalid={!!errors.address}
+                  />
+                  <FieldError>{errors.address}</FieldError>
                 </div>
 
                 <div className="grid gap-1.5">
@@ -714,13 +729,13 @@ function StepResponsibles({
                 <Select
                   value={responsibles[area]}
                   onValueChange={(value) => value && onChange(area, value as ProjectResponsible)}
-                  items={PROJECT_RESPONSIBLES.map((person) => ({ label: person, value: person }))}
+                  items={RESPONSIBLE_OPTIONS.map((person) => ({ label: person, value: person }))}
                 >
                   <SelectTrigger className="w-full bg-background/80">
                     <SelectValue placeholder="Selecciona responsable" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PROJECT_RESPONSIBLES.map((person) => (
+                    {RESPONSIBLE_OPTIONS.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

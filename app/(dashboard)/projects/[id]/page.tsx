@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, User, CalendarDays } from "lucide-react";
+import { ArrowLeft, User, CalendarDays, MapPin } from "lucide-react";
 import { getProject, listMovements, listPaymentMethods } from "@/lib/data/projects";
 import { StatusBadge } from "@/components/projects/status-badge";
 import { FinanceOverview } from "@/components/projects/finance-overview";
@@ -50,6 +50,11 @@ export default async function ProjectDetailPage({
             <span className="inline-flex items-center gap-1.5">
               <User className="size-4" /> {project.client.name}
             </span>
+            {project.address?.trim() && (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin className="size-4" /> {project.address}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays className="size-4" /> Creado {formatDate(project.created_at)}
             </span>

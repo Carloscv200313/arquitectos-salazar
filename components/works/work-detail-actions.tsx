@@ -12,10 +12,14 @@ export function WorkDetailActions({
   workId,
   workName,
   methods,
+  providers,
+  categories,
 }: {
   workId: string;
   workName: string;
   methods: PaymentMethod[];
+  providers: string[];
+  categories: string[];
 }) {
   const [movementOpen, setMovementOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -48,6 +52,8 @@ export function WorkDetailActions({
         workId={workId}
         workName={workName}
         methods={methods}
+        providers={providers}
+        categories={categories}
       />
       <DeleteWorkDialog
         open={deleteOpen}

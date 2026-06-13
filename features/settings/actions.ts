@@ -5,15 +5,21 @@ import {
   changePassword,
   createEmployee,
   createPaymentAccount,
+  createProvider,
   createTaskType,
+  createWorkCategory,
   hideEmployee,
   hidePaymentAccount,
+  hideProvider,
   hideTaskType,
+  hideWorkCategory,
   listHelpItems,
   updateEmployee,
   updatePaymentAccount,
+  updateProvider,
   updateProfileName,
   updateTaskType,
+  updateWorkCategory,
   type HelpItem,
 } from "@/services/config.service";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -22,7 +28,9 @@ import {
   passwordSchema,
   paymentAccountSchema,
   profileNameSchema,
+  providerSchema,
   taskTypeSchema,
+  workCategorySchema,
 } from "./validation";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -103,6 +111,40 @@ export async function hideTaskTypeAction(id: string): Promise<ActionResult> {
   const g = guard();
   if (g) return g;
   return run(() => hideTaskType(id));
+}
+
+/* Providers */
+export async function saveProviderAction(raw: unknown): Promise<ActionResult> {
+  const g = guard();
+  if (g) return g;
+  const parsed = providerSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  const d = parsed.data;
+  return run(() =>
+    d.id ? updateProvider({ id: d.id, name: d.name }) : createProvider({ name: d.name }),
+  );
+}
+export async function hideProviderAction(id: string): Promise<ActionResult> {
+  const g = guard();
+  if (g) return g;
+  return run(() => hideProvider(id));
+}
+
+/* Work categories */
+export async function saveWorkCategoryAction(raw: unknown): Promise<ActionResult> {
+  const g = guard();
+  if (g) return g;
+  const parsed = workCategorySchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
+  const d = parsed.data;
+  return run(() =>
+    d.id ? updateWorkCategory({ id: d.id, name: d.name }) : createWorkCategory({ name: d.name }),
+  );
+}
+export async function hideWorkCategoryAction(id: string): Promise<ActionResult> {
+  const g = guard();
+  if (g) return g;
+  return run(() => hideWorkCategory(id));
 }
 
 /* Profile */

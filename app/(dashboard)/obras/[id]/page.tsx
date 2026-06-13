@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, User } from "lucide-react";
+import { ArrowLeft, CalendarDays, User, MapPin } from "lucide-react";
 import {
   getWork,
   getWorkAdministrationUtilities,
@@ -8,6 +8,7 @@ import {
   listWorkMovements,
 } from "@/lib/data/works";
 import { listPaymentMethods } from "@/lib/data/projects";
+import { listProviderNames, listWorkCategoryNames } from "@/services/config.service";
 import {
   WorkCategorySummaryTable,
   WorkFinanceOverview,
@@ -34,13 +35,16 @@ export default async function WorkDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [work, movements, categorySummary, administrationUtilities, methods] = await Promise.all([
-    getWork(id),
-    listWorkMovements(id),
-    getWorkCategorySummary(id),
-    getWorkAdministrationUtilities(id),
-    listPaymentMethods(),
-  ]);
+  const [work, movements, categorySummary, administrationUtilities, methods, providers, categories] =
+    await Promise.all([
+      getWork(id),
+      listWorkMovements(id),
+      getWorkCategorySummary(id),
+      getWorkAdministrationUtilities(id),
+      listPaymentMethods(),
+      listProviderNames(),
+      listWorkCategoryNames(),
+    ]);
   if (!work) notFound();
 
   return (
@@ -61,6 +65,11 @@ export default async function WorkDetailPage({
             <span className="inline-flex items-center gap-1.5">
               <User className="size-4" /> {work.client.name}
             </span>
+            {work.address?.trim() && (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin className="size-4" /> {work.address}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <CalendarDays className="size-4" /> Creado {formatDate(work.created_at)}
             </span>
@@ -71,7 +80,7 @@ export default async function WorkDetailPage({
             </p>
           )}
         </div>
-        <WorkDetailActions workId={work.id} workName={work.name} methods={methods} />
+        <WorkDetailActions workId={work.id} workName={work.name} methods={methods} providers={providers} categories={categories} />
       </div>
 
       <WorkFinanceOverview finance={work.finance} />

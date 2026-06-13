@@ -34,6 +34,7 @@ export function WorkForm({
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [name, setName] = useState(work?.name ?? "");
+  const [address, setAddress] = useState(work?.address ?? "");
   const [status, setStatus] = useState(work?.status ?? "active");
   const [description, setDescription] = useState(work?.description ?? "");
   const [clientMode, setClientMode] = useState<ClientMode>(
@@ -54,6 +55,7 @@ export function WorkForm({
       const payload = {
         id: work?.id,
         name,
+        address,
         clientId: clientMode === "existing" ? clientId : "",
         clientName: clientMode === "new" ? clientName : "",
         status,
@@ -94,6 +96,18 @@ export function WorkForm({
               aria-invalid={!!errors.name}
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="work-address">Domicilio</Label>
+            <Input
+              id="work-address"
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+              placeholder="Ej. Av. Los Pinos 123, Asia"
+              aria-invalid={!!errors.address}
+            />
+            {errors.address && <p className="text-xs text-destructive">{errors.address}</p>}
           </div>
 
           <div className="grid gap-2">

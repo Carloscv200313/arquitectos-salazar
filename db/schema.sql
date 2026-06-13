@@ -49,6 +49,8 @@ create table if not exists public.projects (
   id                 uuid primary key default gen_random_uuid(),
   client_id          uuid not null references public.clients (id) on delete restrict,
   name               text not null check (char_length(trim(name)) between 2 and 120),
+  -- domicilio / dirección de la obra (opcional)
+  address            text check (address is null or char_length(trim(address)) between 2 and 200),
   -- distribution template for the internal areas
   template           text not null default 'diamante' check (template in ('diamante', 'oro', 'especial')),
   -- base amount charged to the client
@@ -65,10 +67,10 @@ create table if not exists public.projects (
   modeling_3d_amount numeric(14,2) not null default 0 check (modeling_3d_amount >= 0),
   plans_amount       numeric(14,2) not null default 0 check (plans_amount >= 0),
   render_amount      numeric(14,2) not null default 0 check (render_amount >= 0),
-  proposal_responsible text not null check (proposal_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
-  modeling_3d_responsible text not null check (modeling_3d_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
-  plans_responsible text not null check (plans_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
-  render_responsible text not null check (render_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda')),
+  proposal_responsible text not null check (proposal_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
+  modeling_3d_responsible text not null check (modeling_3d_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
+  plans_responsible text not null check (plans_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
+  render_responsible text not null check (render_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   created_by         uuid references auth.users (id) on delete set null
@@ -135,6 +137,8 @@ create table if not exists public.works (
   id           uuid primary key default gen_random_uuid(),
   client_id    uuid not null references public.clients (id) on delete restrict,
   name         text not null check (char_length(trim(name)) between 2 and 120),
+  -- domicilio / dirección de la obra (opcional)
+  address      text check (address is null or char_length(trim(address)) between 2 and 200),
   status       text not null default 'active' check (status in ('active', 'finished')),
   description  text,
   created_at   timestamptz not null default now(),

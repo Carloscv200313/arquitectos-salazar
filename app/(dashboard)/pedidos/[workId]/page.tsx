@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { listPaymentMethods } from "@/lib/data/projects";
 import { listWorkOrders } from "@/lib/data/orders";
 import { getWork } from "@/lib/data/works";
+import { listProviderNames, listWorkCategoryNames } from "@/services/config.service";
 
 export const metadata = { title: "Pedidos de obra" };
 
@@ -15,10 +16,12 @@ export default async function WorkOrdersPage({
   params: Promise<{ workId: string }>;
 }) {
   const { workId } = await params;
-  const [work, orders, methods] = await Promise.all([
+  const [work, orders, methods, providers, categories] = await Promise.all([
     getWork(workId),
     listWorkOrders(workId),
     listPaymentMethods(),
+    listProviderNames(),
+    listWorkCategoryNames(),
   ]);
 
   if (!work) notFound();
@@ -43,7 +46,7 @@ export default async function WorkOrdersPage({
         </div>
       </div>
 
-      <WorkOrdersView work={work} orders={orders} methods={methods} />
+      <WorkOrdersView work={work} orders={orders} methods={methods} providers={providers} categories={categories} />
     </div>
   );
 }

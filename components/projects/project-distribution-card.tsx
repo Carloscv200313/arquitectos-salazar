@@ -1,8 +1,8 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  MARKUP,
   MARKUP_LABELS,
+  MARKUP_TOTAL_RATE,
   PROYECTO_RATE,
   PROJECT_MARKUP_LABEL,
   PROJECT_SLICE_LABELS,
@@ -161,12 +161,16 @@ export function ProjectDistributionCard({
               Referencia interna
             </p>
             <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line label={MARKUP_LABELS.office} pct={MARKUP.office} amount={project.office_amount} muted />
-              <Line label={MARKUP_LABELS.utility} pct={MARKUP.utility} amount={project.utility_amount} muted />
+              <Line
+                label={MARKUP_LABELS.utility}
+                pct={MARKUP_TOTAL_RATE}
+                amount={round2(project.office_amount + project.utility_amount)}
+                muted
+              />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              {PROJECT_MARKUP_LABEL} 50%, oficina y utilidad son referencias internas. No se
-              suman al total a cobrar.
+              Este gasto es para utilidad y gasto de oficina. {PROJECT_MARKUP_LABEL} 50%, es una
+              referencia interna y no se suma al total a cobrar.
             </p>
           </div>
         </section>

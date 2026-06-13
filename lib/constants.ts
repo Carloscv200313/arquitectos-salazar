@@ -101,6 +101,15 @@ export const PROJECT_RESPONSIBLES = [
   "Esmeralda",
 ] as const;
 
+// Valor para áreas sin responsable asignado.
+export const UNASSIGNED_RESPONSIBLE = "Sin asignar";
+
+// Opciones de los selectores: personas + "Sin asignar".
+export const RESPONSIBLE_OPTIONS = [
+  ...PROJECT_RESPONSIBLES,
+  UNASSIGNED_RESPONSIBLE,
+] as const;
+
 export const SALARY_ASSIGNMENT_LABELS = {
   project: "PROYECTO",
   work: "OBRA",

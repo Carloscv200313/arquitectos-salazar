@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { listWorks, type WorkFilters } from "@/lib/data/works";
 import { listPaymentMethods } from "@/lib/data/projects";
+import { listProviderNames, listWorkCategoryNames } from "@/services/config.service";
 import { WorksOverview } from "@/components/works/works-overview";
 import { WorksTable } from "@/components/works/works-table";
 import { WorksFilters } from "@/components/works/works-filters";
@@ -30,9 +31,11 @@ export default async function WorksPage({
     client: sp.client,
     status,
   };
-  const [works, methods] = await Promise.all([
+  const [works, methods, providers, categories] = await Promise.all([
     listWorks(filters),
     listPaymentMethods(),
+    listProviderNames(),
+    listWorkCategoryNames(),
   ]);
 
   return (
@@ -70,7 +73,7 @@ export default async function WorksPage({
               No hay obras para mostrar.
             </div>
           ) : (
-            <WorksTable works={works} methods={methods} />
+            <WorksTable works={works} methods={methods} providers={providers} categories={categories} />
           )}
         </div>
       </Card>

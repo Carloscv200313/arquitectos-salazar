@@ -4,7 +4,12 @@
 export type PaymentStatus = "pending" | "partial" | "paid";
 export type MovementType = "income" | "expense";
 export type InternalArea = "proposal" | "modeling_3d" | "plans" | "render";
-export type ProjectResponsible = "Alejandra" | "Juanfer" | "Juan Jose" | "Esmeralda";
+export type ProjectResponsible =
+  | "Alejandra"
+  | "Juanfer"
+  | "Juan Jose"
+  | "Esmeralda"
+  | "Sin asignar";
 
 export interface Client {
   id: string;
@@ -35,6 +40,8 @@ export interface Project {
   id: string;
   client_id: string;
   name: string;
+  // Domicilio / dirección de la obra
+  address: string | null;
   // Distribution template that defines the internal area weights
   template: ProjectTemplate;
   // Base amount of the project (the input). Markup is computed on top of this.
@@ -140,6 +147,8 @@ export interface Work {
   id: string;
   client_id: string;
   name: string;
+  // Domicilio / dirección de la obra
+  address: string | null;
   status: WorkStatus;
   description: string | null;
   created_at: string;

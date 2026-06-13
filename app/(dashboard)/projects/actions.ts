@@ -18,7 +18,7 @@ import {
   getProject,
   listMovements,
 } from "@/lib/data/projects";
-import { computeFinance, computeBreakdown, round2 } from "@/lib/calculations";
+import { computeFinance, computeBreakdown, round2, weightsFromAmounts } from "@/lib/calculations";
 import type { InternalArea } from "@/lib/types";
 
 export type ActionResult<T = undefined> =
@@ -68,6 +68,7 @@ export async function createProjectAction(
   try {
     const projectId = await createProject({
       name: d.name,
+      address: d.address || undefined,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
       template: d.template,
@@ -105,7 +106,10 @@ export async function updateProjectAction(
   }
   const d = parsed.data;
   try {
-    const existing = await getProject(d.id);
+    const [existing, payments] = await Promise.all([
+      getProject(d.id),
+      listMovements(d.id),
+    ]);
     if (!existing) return { ok: false, error: "Proyecto no encontrado." };
     // The new total (base + addons) cannot be lower than what's already collected.
     const newTotal = computeBreakdown(d.projectAmount, d.addons).total;
@@ -116,12 +120,45 @@ export async function updateProjectAction(
         fieldErrors: { projectAmount: "El total queda menor que lo ya cobrado" },
       };
     }
+
+    // Each area's new budget cannot drop below what was already paid (spent) in it.
+    const weights =
+      d.weights ??
+      weightsFromAmounts({
+        proposal: existing.proposal_amount,
+        modeling_3d: existing.modeling_3d_amount,
+        plans: existing.plans_amount,
+        render: existing.render_amount,
+      });
+    const newAreaAmounts = computeBreakdown(d.projectAmount, d.addons, weights).project;
+    const paidByArea = payments.reduce<Record<InternalArea, number>>(
+      (acc, p) => {
+        if (p.movement_type !== "expense" || !p.internal_area) return acc;
+        acc[p.internal_area] = round2(acc[p.internal_area] + p.amount);
+        return acc;
+      },
+      { proposal: 0, modeling_3d: 0, plans: 0, render: 0 },
+    );
+    const offending = (Object.keys(newAreaAmounts) as InternalArea[]).find(
+      (area) => newAreaAmounts[area] < paidByArea[area] - 0.001,
+    );
+    if (offending) {
+      const label = PROJECT_SLICE_LABELS[offending];
+      return {
+        ok: false,
+        error: `El monto de ${label} (${newAreaAmounts[offending].toFixed(2)}) no puede ser menor a lo ya pagado en esa área (${paidByArea[offending].toFixed(2)}).`,
+        fieldErrors: { weights: `${label}: el monto queda menor que lo ya pagado` },
+      };
+    }
+
     await updateProject({
       id: d.id,
       name: d.name,
+      address: d.address || undefined,
       clientId: d.clientId || undefined,
       clientName: d.clientName || undefined,
       responsibles: d.responsibles,
+      weights: d.weights,
       projectAmount: d.projectAmount,
       addons: d.addons,
       userId: currentUserId(),
