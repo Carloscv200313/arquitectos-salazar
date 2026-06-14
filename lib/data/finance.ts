@@ -2,6 +2,12 @@ import "server-only";
 
 import { SALARY_PAYMENT_METHOD_NAMES, SEED_PAYMENT_METHODS } from "@/lib/constants";
 import { round2 } from "@/lib/calculations";
+import {
+  SALARY_RECEIPT_PREFIX,
+  formatCodeWithPrefix,
+  parseSeqWithPrefix,
+  type ReceiptData,
+} from "@/lib/receipt";
 import type {
   DebtReportRow,
   Employee,
@@ -1201,4 +1207,121 @@ export async function updateSalaryWeekStatus(data: {
 
   await client.from("salary_weeks").update({ week_status: data.status }).eq("id", data.salaryWeekId);
   await audit("week_status_changed", data.salaryWeekId, `Semana marcada como ${data.status}`);
+}
+
+/* ───────────────────────── Comprobantes de pago a empleados ──────────────── */
+
+type SalaryRefType = "project" | "work";
+
+/** ISO yyyy-mm-dd → "dd/mm/yy". */
+function shortDate(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y.slice(-2)}`;
+}
+
+async function getOrCreateSalaryReceiptCode(
+  weekId: string,
+  employeeId: string,
+  refType: SalaryRefType,
+  refId: string,
+): Promise<string> {
+  const client = sb();
+
+  const { data: existing } = await client
+    .from("salary_receipts")
+    .select("code")
+    .eq("salary_week_id", weekId)
+    .eq("employee_id", employeeId)
+    .eq("ref_type", refType)
+    .eq("ref_id", refId)
+    .maybeSingle();
+  if (existing?.code) return existing.code as string;
+
+  const { data: top } = await client
+    .from("salary_receipts")
+    .select("code")
+    .like("code", `${SALARY_RECEIPT_PREFIX}-%`)
+    .order("code", { ascending: false })
+    .limit(1);
+  const seq = parseSeqWithPrefix(SALARY_RECEIPT_PREFIX, top?.[0]?.code as string | undefined) + 1;
+  const code = formatCodeWithPrefix(SALARY_RECEIPT_PREFIX, seq);
+
+  const { error } = await client.from("salary_receipts").insert({
+    salary_week_id: weekId,
+    employee_id: employeeId,
+    ref_type: refType,
+    ref_id: refId,
+    code,
+  });
+  if (error) {
+    // Carrera con otra inserción: relee el código ya existente.
+    const { data: again } = await client
+      .from("salary_receipts")
+      .select("code")
+      .eq("salary_week_id", weekId)
+      .eq("employee_id", employeeId)
+      .eq("ref_type", refType)
+      .eq("ref_id", refId)
+      .maybeSingle();
+    if (again?.code) return again.code as string;
+    throw new Error(error.message);
+  }
+  return code;
+}
+
+/** Comprobante de pago a un empleado por todo lo trabajado en un proyecto/obra esa semana. */
+export async function getSalaryReceipt(
+  weekId: string,
+  employeeId: string,
+  refType: SalaryRefType,
+  refId: string,
+): Promise<ReceiptData | null> {
+  if (!isAdminConfigured()) return null;
+  const client = sb();
+
+  const [{ data: week }, { data: emp }, { data: pays }] = await Promise.all([
+    client
+      .from("salary_weeks")
+      .select("payment_date, week_start_date, week_end_date")
+      .eq("id", weekId)
+      .maybeSingle(),
+    client.from("employees").select("full_name").eq("id", employeeId).maybeSingle(),
+    client
+      .from("salary_payments")
+      .select("amount, project_id, work_id")
+      .eq("salary_week_id", weekId)
+      .eq("employee_id", employeeId)
+      .eq("status", 1),
+  ]);
+  if (!week || !emp) return null;
+
+  const refCol = refType === "project" ? "project_id" : "work_id";
+  const amount = round2(
+    (pays ?? [])
+      .filter((p) => (p as Row)[refCol] === refId)
+      .reduce((s, p) => s + Number((p as Row).amount), 0),
+  );
+  if (amount <= 0) return null;
+
+  const refTable = refType === "project" ? "projects" : "works";
+  const { data: ref } = await client
+    .from(refTable)
+    .select("name")
+    .eq("id", refId)
+    .maybeSingle();
+
+  const code = await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
+
+  return {
+    docType: "pago",
+    kind: refType === "project" ? "proyecto" : "obra",
+    code,
+    amount,
+    concept: `Pago de mano de obra (${shortDate(week.week_start_date as string)} - ${shortDate(
+      week.week_end_date as string,
+    )})`,
+    date: week.payment_date as string,
+    clientName: (emp.full_name as string) ?? "",
+    subjectName: (ref?.name as string) ?? "",
+  };
 }

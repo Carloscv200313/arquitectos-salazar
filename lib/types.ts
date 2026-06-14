@@ -76,6 +76,7 @@ export interface ProjectPayment {
   payment_date: string;
   payment_method_id: string;
   internal_area: InternalArea | null;
+  receipt_code: string | null;
   created_at: string;
   created_by: string | null;
 }

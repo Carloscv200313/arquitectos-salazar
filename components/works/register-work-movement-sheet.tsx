@@ -91,6 +91,9 @@ export function RegisterWorkMovementSheet({
         toast.success("Movimiento registrado", {
           description: `${formatCurrency(Number(amount))} · ${concept}`,
         });
+        if (result.data?.isIncome && result.data.movementId) {
+          window.open(`/recibo/obra/${result.data.movementId}`, "_blank");
+        }
         reset();
         onOpenChange(false);
       } else {
@@ -145,11 +148,13 @@ export function RegisterWorkMovementSheet({
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="receipt">Recibo</Label>
-              <Input id="receipt" value={receipt} onChange={(e) => setReceipt(e.target.value)} aria-invalid={!!errors.receipt} />
-              {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
-            </div>
+            {movementType === "expense" && (
+              <div className="grid gap-2">
+                <Label htmlFor="receipt">Recibo</Label>
+                <Input id="receipt" value={receipt} onChange={(e) => setReceipt(e.target.value)} aria-invalid={!!errors.receipt} />
+                {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="movement-date">Fecha</Label>
               <Input id="movement-date" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} aria-invalid={!!errors.movementDate} />

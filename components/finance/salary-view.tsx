@@ -9,9 +9,11 @@ import {
   ChevronRight,
   ClipboardPen,
   Download,
+  Eye,
   FolderKanban,
   Loader2,
   Plus,
+  Printer,
   ReceiptText,
   ShieldCheck,
   Trash2,
@@ -108,6 +110,12 @@ type SalaryPaymentDraft = {
   workId: string | null;
   taskTypeId: string | null;
 };
+type SalaryReceiptGroup = {
+  kind: "proyecto" | "obra";
+  refId: string;
+  name: string;
+  amount: number;
+};
 
 function money(value: string) {
   return Number(value || 0);
@@ -128,6 +136,25 @@ function activityTone(activity: SalaryActivityType) {
 
 function currencyOrDash(value: number | null) {
   return value === null ? "—" : formatCurrency(value);
+}
+
+function salaryReceiptGroups(payments: SalaryPaymentWithRelations[]) {
+  const map = new Map<string, SalaryReceiptGroup>();
+  for (const payment of payments) {
+    const isProject = !!payment.project_id;
+    const isWork = !!payment.work_id;
+    if (!isProject && !isWork) continue;
+
+    const kind = isProject ? "proyecto" : "obra";
+    const refId = (isProject ? payment.project_id : payment.work_id) as string;
+    const name = payment.project?.name ?? payment.work?.name ?? "Sin nombre";
+    const key = `${kind}:${refId}`;
+    const current = map.get(key) ?? { kind, refId, name, amount: 0 };
+    current.amount = round2(current.amount + payment.amount);
+    map.set(key, current);
+  }
+
+  return [...map.values()].filter((group) => group.amount > 0);
 }
 
 // Resolve the cell label strictly by activity type so a stale project/work id
@@ -980,6 +1007,12 @@ function EmployeeDetailSheet({
     };
   }, [paymentHistory]);
 
+  // Comprobantes de pago: un recibo por proyecto/obra trabajado en la semana
+  // (suma todas las tareas/días dentro del mismo proyecto u obra).
+  const receiptGroups = useMemo(() => {
+    return salaryReceiptGroups(paymentHistory);
+  }, [paymentHistory]);
+
   function openInlinePayment(item: (typeof groupedWork)[number]) {
     setActivePaymentKey((current) => (current === item.key ? null : item.key));
     const paidTotal = matchingPaymentTotal(item);
@@ -1391,6 +1424,44 @@ function EmployeeDetailSheet({
                 </TableBody>
               </Table>
             </Card>
+
+            {week && employeeSummary && receiptGroups.length > 0 ? (
+              <Card className="gap-0 overflow-hidden p-0">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-semibold">Comprobantes de pago</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Un comprobante por cada proyecto u obra trabajado esta semana.
+                  </p>
+                </div>
+                <div className="divide-y">
+                  {receiptGroups.map((g) => (
+                    <div
+                      key={`${g.kind}:${g.refId}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{g.name}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {g.kind === "obra" ? "Obra" : "Proyecto"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="font-semibold tabular-nums">{formatCurrency(g.amount)}</span>
+                        <a
+                          href={`/comprobante/${g.kind}/${week.id}/${employeeSummary.employee.id}/${g.refId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+                          title="Imprimir comprobante"
+                        >
+                          <Printer className="size-3.5" /> Comprobante
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
           </div>
         ) : null}
       </SheetContent>
@@ -1844,6 +1915,239 @@ export function SalaryWeekDetailView({
   );
 }
 
+function SalaryReceiptsSheet({
+  open,
+  onOpenChange,
+  week,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  week: SalaryWeekWithRows | null;
+}) {
+  const employeesWithReceipts = useMemo(
+    () =>
+      week?.employees.map((row) => ({
+        row,
+        receipts: salaryReceiptGroups(row.payments),
+      })) ?? [],
+    [week],
+  );
+  const totalReceipts = employeesWithReceipts.reduce((sum, item) => sum + item.receipts.length, 0);
+  const [expandedEmployeeId, setExpandedEmployeeId] = useState<string | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<{
+    employeeId: string;
+    employeeName: string;
+    receipt: SalaryReceiptGroup;
+  } | null>(null);
+  const [receiptPreviewLoading, setReceiptPreviewLoading] = useState(false);
+
+  const selectedUrl =
+    week && selectedReceipt
+      ? `/comprobante/${selectedReceipt.receipt.kind}/${week.id}/${selectedReceipt.employeeId}/${selectedReceipt.receipt.refId}?preview=1`
+      : null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full overflow-y-auto sm:!w-[min(92vw,1180px)] sm:!max-w-none">
+        <SheetHeader>
+          <SheetTitle>Comprobantes de pago</SheetTitle>
+          <SheetDescription>
+            {week
+              ? `${formatDate(week.week_start_date)} - ${formatDate(week.week_end_date)} · ${totalReceipts} comprobante${totalReceipts === 1 ? "" : "s"}`
+              : "Selecciona una semana para revisar sus comprobantes."}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="grid min-h-0 flex-1 gap-4 px-4 pb-4 lg:grid-cols-[380px_1fr]">
+          <div className="min-h-0 overflow-hidden rounded-xl border">
+            <div className="border-b bg-muted/30 px-4 py-3">
+              <h3 className="font-semibold">Empleados</h3>
+              <p className="text-sm text-muted-foreground">
+                Abre un empleado y selecciona un comprobante.
+              </p>
+            </div>
+            <div className="max-h-[calc(100vh-180px)] overflow-y-auto divide-y">
+              {employeesWithReceipts.map(({ row, receipts }) => {
+                const expanded = expandedEmployeeId === row.employee.id;
+                return (
+                  <div key={row.employee.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                      onClick={() => setExpandedEmployeeId(expanded ? null : row.employee.id)}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{row.employee.full_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {receipts.length} comprobante{receipts.length === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className={cn(
+                          "size-4 shrink-0 text-muted-foreground transition-transform",
+                          expanded ? "rotate-90" : "",
+                        )}
+                      />
+                    </button>
+                    {expanded ? (
+                      <div className="bg-muted/20 px-3 pb-3">
+                        {receipts.length > 0 ? (
+                          <div className="grid gap-2">
+                            {receipts.map((receipt) => {
+                              const selected =
+                                selectedReceipt?.employeeId === row.employee.id &&
+                                selectedReceipt.receipt.kind === receipt.kind &&
+                                selectedReceipt.receipt.refId === receipt.refId;
+                              return (
+                                <button
+                                  key={`${receipt.kind}:${receipt.refId}`}
+                                  type="button"
+                                  className={cn(
+                                    "rounded-lg border bg-card px-3 py-2 text-left transition-colors hover:bg-accent",
+                                    selected ? "border-brand bg-brand/10" : "",
+                                  )}
+                                  onClick={() => {
+                                    setReceiptPreviewLoading(true);
+                                    setSelectedReceipt({
+                                      employeeId: row.employee.id,
+                                      employeeName: row.employee.full_name,
+                                      receipt,
+                                    });
+                                  }}
+                                >
+                                  <span className="flex items-center justify-between gap-3">
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-sm font-medium">{receipt.name}</span>
+                                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                                        {receipt.kind === "obra" ? "Obra" : "Proyecto"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 font-semibold tabular-nums">
+                                      {formatCurrency(receipt.amount)}
+                                    </span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="rounded-lg border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">
+                            Este empleado todavía no tiene comprobantes.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {employeesWithReceipts.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  No hay empleados en esta semana.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="min-h-[520px] overflow-hidden rounded-xl border bg-background">
+            {selectedUrl && selectedReceipt ? (
+              <div className="flex h-full min-h-[520px] flex-col">
+                <div className="flex flex-col gap-2 border-b bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{selectedReceipt.receipt.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedReceipt.employeeName} · {formatCurrency(selectedReceipt.receipt.amount)}
+                    </p>
+                  </div>
+                  <a
+                    href={selectedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                  >
+                    <Eye className="size-4" />
+                    Abrir vista
+                  </a>
+                </div>
+                <div className="relative min-h-0 flex-1 bg-muted/20">
+                  {receiptPreviewLoading ? <ReceiptPreviewSkeleton /> : null}
+                  <iframe
+                    key={selectedUrl}
+                    title={`Comprobante de ${selectedReceipt.employeeName}`}
+                    src={selectedUrl}
+                    className={cn(
+                      "absolute inset-0 size-full bg-white transition-opacity duration-200",
+                      receiptPreviewLoading ? "opacity-0" : "opacity-100",
+                    )}
+                    onLoad={() => setReceiptPreviewLoading(false)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full min-h-[520px] flex-col items-center justify-center px-6 text-center">
+                <ReceiptText className="size-10 text-muted-foreground" />
+                <h3 className="mt-3 font-semibold">Selecciona un comprobante</h3>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Primero abre un empleado y luego elige uno de sus comprobantes para ver la versión imprimible.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function ReceiptPreviewSkeleton() {
+  return (
+    <div className="absolute inset-0 flex items-start justify-center overflow-hidden bg-muted/20 p-8">
+      <div className="w-full max-w-[720px] animate-pulse rounded-[28px] border-2 border-border bg-card p-8 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-36 rounded-full bg-muted" />
+          <div className="h-7 w-64 rounded-md bg-muted" />
+          <div className="ml-auto h-11 w-36 rounded-lg bg-muted" />
+        </div>
+
+        <div className="mt-10 grid gap-7">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="flex items-end gap-4">
+              <div className="h-5 w-36 rounded bg-muted" />
+              <div className="h-6 flex-1 border-b border-border">
+                <div className="h-5 w-3/4 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-10 flex items-end gap-3">
+          <div className="h-5 w-6 rounded bg-muted" />
+          <div className="h-6 w-16 border-b border-border">
+            <div className="h-5 w-10 rounded bg-muted" />
+          </div>
+          <div className="h-5 w-6 rounded bg-muted" />
+          <div className="h-6 w-32 border-b border-border">
+            <div className="h-5 w-24 rounded bg-muted" />
+          </div>
+          <div className="h-5 w-10 rounded bg-muted" />
+          <div className="h-6 w-16 border-b border-border">
+            <div className="h-5 w-10 rounded bg-muted" />
+          </div>
+        </div>
+
+        <div className="mt-12 grid grid-cols-3 items-end gap-8">
+          <div className="h-16 rounded-lg bg-muted" />
+          <div className="grid gap-2">
+            <div className="mx-auto h-3 w-40 rounded bg-muted" />
+            <div className="mx-auto h-3 w-32 rounded bg-muted" />
+            <div className="mx-auto h-3 w-36 rounded bg-muted" />
+          </div>
+          <div className="h-8 border-b border-border" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SalaryView({
   report,
 }: {
@@ -1853,6 +2157,7 @@ export function SalaryView({
 }) {
   const [weekSheetOpen, setWeekSheetOpen] = useState(false);
   const [editingWeek, setEditingWeek] = useState<SalaryWeekWithRows | null>(null);
+  const [receiptsWeek, setReceiptsWeek] = useState<SalaryWeekWithRows | null>(null);
 
   function openCreateWeek() {
     setEditingWeek(null);
@@ -1964,13 +2269,24 @@ export function SalaryView({
                     {formatCurrency(week.totals.total)}
                   </TableCell>
                   <TableCell className="px-5 text-right">
-                    <Link
-                      href={`/finance/salario/${week.id}`}
-                      className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-                    >
-                      Abrir
-                      <ChevronRight className="size-4" />
-                    </Link>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setReceiptsWeek(week)}
+                      >
+                        <ReceiptText className="size-4" />
+                        Comprobantes de pago
+                      </Button>
+                      <Link
+                        href={`/finance/salario/${week.id}`}
+                        className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                      >
+                        Abrir
+                        <ChevronRight className="size-4" />
+                      </Link>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1986,6 +2302,12 @@ export function SalaryView({
       </Card>
 
       <WeekSheet open={weekSheetOpen} onOpenChange={setWeekSheetOpen} week={editingWeek} />
+      <SalaryReceiptsSheet
+        key={receiptsWeek?.id ?? "salary-receipts"}
+        open={!!receiptsWeek}
+        onOpenChange={(open) => !open && setReceiptsWeek(null)}
+        week={receiptsWeek}
+      />
     </div>
   );
 }

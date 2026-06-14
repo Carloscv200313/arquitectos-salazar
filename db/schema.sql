@@ -93,6 +93,7 @@ create table if not exists public.project_payments (
   payment_date       date not null,
   payment_method_id  uuid not null references public.payment_methods (id) on delete restrict,
   internal_area      text check (internal_area in ('proposal', 'modeling_3d', 'plans', 'render')),
+  receipt_code       text,
   created_at         timestamptz not null default now(),
   created_by         uuid references auth.users (id) on delete set null
 );

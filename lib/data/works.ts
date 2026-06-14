@@ -1,6 +1,12 @@
 import "server-only";
 
 import { WORK_CATEGORIES } from "@/lib/constants";
+import {
+  RECEIPT_PREFIX,
+  formatReceiptCode,
+  parseReceiptSeq,
+  type ReceiptData,
+} from "@/lib/receipt";
 import { round2 } from "@/lib/calculations";
 import type {
   WorkAdministrationUtilityRow,
@@ -402,7 +408,7 @@ export async function updateWork(data: UpdateWorkData): Promise<void> {
 
 export interface RegisterWorkMovementData {
   workId: string;
-  receipt: string;
+  receipt?: string;
   movementDate: string;
   concept: string;
   supplier?: string;
@@ -414,21 +420,65 @@ export interface RegisterWorkMovementData {
   userId: string | null;
 }
 
-export async function registerWorkMovement(data: RegisterWorkMovementData): Promise<void> {
-  const { error } = await sb().from("work_movements").insert({
-    work_id: data.workId,
-    receipt: data.receipt.trim(),
-    movement_date: data.movementDate,
-    concept: data.concept.trim(),
-    supplier: data.supplier?.trim() || "Cliente",
-    category: data.category,
-    movement_type: data.movementType,
-    amount: data.amount,
-    payment_method_id: data.paymentMethodId,
-    observations: data.observations?.trim() || null,
-    created_by: await getCurrentUserId(),
-  });
+async function nextWorkReceiptCode(): Promise<string> {
+  const { data } = await sb()
+    .from("work_movements")
+    .select("receipt")
+    .like("receipt", `${RECEIPT_PREFIX.obra}-%`)
+    .order("receipt", { ascending: false })
+    .limit(1);
+  const seq = parseReceiptSeq("obra", data?.[0]?.receipt as string | undefined) + 1;
+  return formatReceiptCode("obra", seq);
+}
+
+export async function registerWorkMovement(
+  data: RegisterWorkMovementData,
+): Promise<{ id: string; receiptCode: string | null }> {
+  // Income ("abono"): auto receipt code (OBR-...). Expense: keep the typed receipt.
+  const receipt =
+    data.movementType === "income" ? await nextWorkReceiptCode() : (data.receipt ?? "").trim();
+  const { data: row, error } = await sb()
+    .from("work_movements")
+    .insert({
+      work_id: data.workId,
+      receipt,
+      movement_date: data.movementDate,
+      concept: data.concept.trim(),
+      supplier: data.supplier?.trim() || "Cliente",
+      category: data.category,
+      movement_type: data.movementType,
+      amount: data.amount,
+      payment_method_id: data.paymentMethodId,
+      observations: data.observations?.trim() || null,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  return { id: row.id as string, receiptCode: data.movementType === "income" ? receipt : null };
+}
+
+export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | null> {
+  if (!isAdminConfigured()) return null;
+  const { data } = await sb()
+    .from("work_movements")
+    .select(
+      "amount, concept, movement_date, receipt, movement_type, work:works(name, client:clients(name))",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!data || data.movement_type !== "income") return null;
+  const work = data.work as { name?: string; client?: { name?: string } } | null;
+  return {
+    docType: "abono",
+    kind: "obra",
+    code: (data.receipt as string) ?? null,
+    amount: Number(data.amount),
+    concept: data.concept as string,
+    date: data.movement_date as string,
+    clientName: work?.client?.name ?? "",
+    subjectName: work?.name ?? "",
+  };
 }
 
 export async function deleteWork(id: string): Promise<void> {

@@ -394,7 +394,7 @@ export const updateWorkSchema = createWorkSchema.extend({
 export const registerWorkMovementSchema = z
   .object({
     workId: z.string().uuid("Obra inválida"),
-    receipt: z.string().trim().min(1, "Ingresa el recibo").max(80, "Máximo 80 caracteres"),
+    receipt: z.string().trim().max(80, "Máximo 80 caracteres").optional().or(z.literal("")),
     movementDate: isoDate,
     concept,
     supplier: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
@@ -410,6 +410,14 @@ export const registerWorkMovementSchema = z
         code: "custom",
         path: ["category"],
         message: "Las entradas solo pueden usar Abono de obra",
+      });
+    }
+    // El recibo de las entradas se genera automático; en salidas es obligatorio.
+    if (data.movementType === "expense" && (!data.receipt || data.receipt.trim().length < 1)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["receipt"],
+        message: "Ingresa el recibo",
       });
     }
     if (data.movementType === "expense" && (!data.supplier || data.supplier.trim().length < 2)) {

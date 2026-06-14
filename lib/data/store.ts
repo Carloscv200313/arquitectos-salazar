@@ -1246,6 +1246,7 @@ function payment(
     payment_date: date,
     payment_method_id: methodId,
     internal_area: internalArea,
+    receipt_code: null,
     created_at: nowISO(),
     created_by: SYSTEM_USER,
   };

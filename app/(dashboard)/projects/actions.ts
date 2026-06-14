@@ -173,7 +173,7 @@ export async function updateProjectAction(
 
 export async function registerMovementAction(
   raw: unknown,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ paymentId: string; receiptCode: string | null }>> {
   const parsed = registerMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -224,7 +224,7 @@ export async function registerMovementAction(
         };
       }
     }
-    await registerMovement({
+    const created = await registerMovement({
       projectId: d.projectId,
       movementType: d.movementType,
       concept: d.concept,
@@ -236,7 +236,7 @@ export async function registerMovementAction(
     });
     revalidatePath("/projects");
     revalidatePath(`/projects/${d.projectId}`);
-    return { ok: true, data: undefined };
+    return { ok: true, data: { paymentId: created.id, receiptCode: created.receiptCode } };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
   }

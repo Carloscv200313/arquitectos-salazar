@@ -86,7 +86,7 @@ const publicAbonoSchema = z.object({
 });
 
 export type PublicAbonoResult =
-  | { ok: true }
+  | { ok: true; receiptKind: "proyecto" | "obra"; receiptId: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResult> {
@@ -113,7 +113,7 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
           fieldErrors: { amount: "Supera el saldo pendiente" },
         };
       }
-      await registerMovement({
+      const created = await registerMovement({
         projectId: d.id,
         movementType: "income",
         concept: d.concept,
@@ -125,19 +125,15 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
       });
       revalidatePath("/projects");
       revalidatePath(`/projects/${d.id}`);
-      return { ok: true };
+      return { ok: true, receiptKind: "proyecto", receiptId: created.id };
     }
 
     // kind === "work" — ledger, no fixed total to cap against.
     const work = await getWork(d.id);
     if (!work) return { ok: false, error: "Obra no encontrada." };
-    const receipt = `ABONO-${d.paymentDate.replace(/-/g, "")}-${Math.random()
-      .toString(36)
-      .slice(2, 6)
-      .toUpperCase()}`;
-    await registerWorkMovement({
+    const created = await registerWorkMovement({
       workId: d.id,
-      receipt,
+      receipt: "", // income auto-genera código OBR
       movementDate: d.paymentDate,
       concept: d.concept,
       supplier: "Cliente",
@@ -150,7 +146,7 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.id}`);
-    return { ok: true };
+    return { ok: true, receiptKind: "obra", receiptId: created.id };
   } catch {
     return { ok: false, error: "No se pudo registrar el abono. Intenta nuevamente." };
   }

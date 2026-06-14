@@ -144,6 +144,20 @@ create table if not exists public.work_categories (
   created_by  uuid references auth.users(id)
 );
 
+-- Comprobantes de pago a empleados (uno por empleado · proyecto/obra · semana).
+create table if not exists public.salary_receipts (
+  id              uuid primary key default gen_random_uuid(),
+  salary_week_id  uuid not null references public.salary_weeks(id) on delete cascade,
+  employee_id     uuid not null references public.employees(id) on delete cascade,
+  ref_type        text not null check (ref_type in ('project','work')),
+  ref_id          uuid not null,
+  code            text not null,
+  created_at      timestamptz not null default now(),
+  -- sin FK: el sistema usa sesión propia (tabla users), no auth.users
+  created_by      uuid,
+  unique (salary_week_id, employee_id, ref_type, ref_id)
+);
+
 create table if not exists public.system_settings (
   id            uuid primary key default gen_random_uuid(),
   setting_key   text not null unique,
@@ -240,6 +254,7 @@ create table if not exists public.project_payments (
   payment_date      date not null,
   payment_method_id uuid references public.payment_accounts(id),
   internal_area     text check (internal_area in ('proposal','modeling_3d','plans','render')),
+  receipt_code      text,
   status            smallint not null default 1,
   created_at        timestamptz not null default now(),
   created_by        uuid references auth.users(id)

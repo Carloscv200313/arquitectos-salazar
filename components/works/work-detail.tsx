@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ListChecks, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ListChecks, Receipt, Wallet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -228,6 +228,7 @@ export function WorkMovementsTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Salida</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
             <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
+            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Recibo</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -266,11 +267,27 @@ export function WorkMovementsTable({
               <TableCell className="px-5 text-muted-foreground">
                 {movement.method?.name ?? "Sin forma"}
               </TableCell>
+              <TableCell className="px-5 text-right">
+                {movement.movement_type === "income" ? (
+                  <a
+                    href={`/recibo/obra/${movement.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+                    title="Imprimir recibo"
+                  >
+                    <Receipt className="size-3.5" />
+                    {movement.receipt}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
             </TableRow>
           ))}
           {movements.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={9} className="h-20 text-center text-muted-foreground">
                 Sin movimientos registrados.
               </TableCell>
             </TableRow>

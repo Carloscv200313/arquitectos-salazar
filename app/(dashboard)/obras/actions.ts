@@ -97,7 +97,7 @@ export async function updateWorkAction(
 
 export async function registerWorkMovementAction(
   raw: unknown,
-): Promise<ActionResult> {
+): Promise<ActionResult<{ movementId: string; receiptCode: string | null; isIncome: boolean }>> {
   const parsed = registerWorkMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -109,7 +109,7 @@ export async function registerWorkMovementAction(
 
   try {
     const d = parsed.data;
-    await registerWorkMovement({
+    const created = await registerWorkMovement({
       workId: d.workId,
       receipt: d.receipt,
       movementDate: d.movementDate,
@@ -124,7 +124,14 @@ export async function registerWorkMovementAction(
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
-    return { ok: true, data: undefined };
+    return {
+      ok: true,
+      data: {
+        movementId: created.id,
+        receiptCode: created.receiptCode,
+        isIncome: d.movementType === "income",
+      },
+    };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
   }

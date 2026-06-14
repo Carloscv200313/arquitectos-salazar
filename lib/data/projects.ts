@@ -12,6 +12,12 @@ import {
   type Addon,
 } from "@/lib/calculations";
 import { MARKUP, resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
+import {
+  RECEIPT_PREFIX,
+  formatReceiptCode,
+  parseReceiptSeq,
+  type ReceiptData,
+} from "@/lib/receipt";
 import type {
   Client,
   InternalArea,
@@ -66,6 +72,7 @@ function mapPayment(r: Row): ProjectPayment {
     payment_date: r.payment_date as string,
     payment_method_id: (r.payment_method_id as string) ?? "",
     internal_area: (r.internal_area as InternalArea) ?? null,
+    receipt_code: (r.receipt_code as string) ?? null,
     created_at: r.created_at as string,
     created_by: (r.created_by as string) ?? null,
   };
@@ -414,6 +421,7 @@ export async function createProject(data: CreateProjectData): Promise<string> {
       payment_date: data.anticipo.date,
       payment_method_id: data.anticipo.methodId,
       internal_area: null,
+      receipt_code: await nextProjectReceiptCode(),
       created_by: userId,
     });
   }
@@ -500,18 +508,62 @@ export interface RegisterPaymentData {
   userId: string | null;
 }
 
-export async function registerMovement(data: RegisterPaymentData): Promise<void> {
-  const { error } = await sb().from("project_payments").insert({
-    project_id: data.projectId,
-    movement_type: data.movementType,
-    concept: data.concept.trim(),
-    amount: data.amount,
-    payment_date: data.paymentDate,
-    payment_method_id: data.paymentMethodId,
-    internal_area: data.internalArea ?? null,
-    created_by: await getCurrentUserId(),
-  });
+async function nextProjectReceiptCode(): Promise<string> {
+  const { data } = await sb()
+    .from("project_payments")
+    .select("receipt_code")
+    .like("receipt_code", `${RECEIPT_PREFIX.proyecto}-%`)
+    .order("receipt_code", { ascending: false })
+    .limit(1);
+  const seq = parseReceiptSeq("proyecto", data?.[0]?.receipt_code as string | undefined) + 1;
+  return formatReceiptCode("proyecto", seq);
+}
+
+export async function registerMovement(
+  data: RegisterPaymentData,
+): Promise<{ id: string; receiptCode: string | null }> {
+  // Income payments ("abonos") get an auto receipt code for the printable receipt.
+  const receiptCode = data.movementType === "income" ? await nextProjectReceiptCode() : null;
+  const { data: row, error } = await sb()
+    .from("project_payments")
+    .insert({
+      project_id: data.projectId,
+      movement_type: data.movementType,
+      concept: data.concept.trim(),
+      amount: data.amount,
+      payment_date: data.paymentDate,
+      payment_method_id: data.paymentMethodId,
+      internal_area: data.internalArea ?? null,
+      receipt_code: receiptCode,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  return { id: row.id as string, receiptCode };
+}
+
+export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData | null> {
+  if (!isAdminConfigured()) return null;
+  const { data } = await sb()
+    .from("project_payments")
+    .select(
+      "amount, concept, payment_date, receipt_code, movement_type, project:projects(name, client:clients(name))",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!data || data.movement_type !== "income") return null;
+  const project = data.project as { name?: string; client?: { name?: string } } | null;
+  return {
+    docType: "abono",
+    kind: "proyecto",
+    code: (data.receipt_code as string) ?? null,
+    amount: Number(data.amount),
+    concept: data.concept as string,
+    date: data.payment_date as string,
+    clientName: project?.client?.name ?? "",
+    subjectName: project?.name ?? "",
+  };
 }
 
 export interface RegisterInternalTransferData {
