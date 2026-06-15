@@ -10,9 +10,18 @@ import {
 import { Receipt } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { MOVEMENT_TYPE_LABELS, PROJECT_SLICE_LABELS } from "@/lib/constants";
-import type { PaymentWithMethod } from "@/lib/types";
+import type { PaymentMethod, PaymentWithMethod } from "@/lib/types";
+import { ProjectMovementActions } from "./movement-actions";
 
-export function PaymentHistory({ payments }: { payments: PaymentWithMethod[] }) {
+export function PaymentHistory({
+  payments,
+  projectId,
+  methods,
+}: {
+  payments: PaymentWithMethod[];
+  projectId: string;
+  methods: PaymentMethod[];
+}) {
   return (
     <Card id="historial" className="p-5 scroll-mt-24">
       <div className="flex items-center justify-between">
@@ -45,6 +54,7 @@ export function PaymentHistory({ payments }: { payments: PaymentWithMethod[] }) 
                 <TableHead>Fecha</TableHead>
                 <TableHead className="text-right">Monto</TableHead>
                 <TableHead className="text-right">Recibo</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -97,6 +107,9 @@ export function PaymentHistory({ payments }: { payments: PaymentWithMethod[] }) 
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <ProjectMovementActions payment={p} projectId={projectId} methods={methods} />
                   </TableCell>
                 </TableRow>
               ))}

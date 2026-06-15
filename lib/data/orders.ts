@@ -12,6 +12,7 @@ import type {
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
 import { getWork, listWorks } from "./works";
+import { writeAudit } from "./audit";
 
 type Row = Record<string, unknown>;
 
@@ -328,13 +329,147 @@ export async function registerWorkOrderPayment(
     .single();
   if (error) throw new Error(error.message);
 
-  await client.from("work_order_payments").insert({
-    order_id: order.id,
-    payment_date: data.paymentDate,
-    description: data.description?.trim() || "Abono del pedido",
+  const { data: payRow } = await client
+    .from("work_order_payments")
+    .insert({
+      order_id: order.id,
+      payment_date: data.paymentDate,
+      description: data.description?.trim() || "Abono del pedido",
+      amount,
+      payment_method_id: data.paymentMethodId,
+      internal_transfer_id: transfer.id,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  await writeAudit({
+    entityType: "order_payment",
+    entityId: (payRow?.id as string) ?? order.id,
+    operation: "create",
     amount,
-    payment_method_id: data.paymentMethodId,
-    internal_transfer_id: transfer.id,
-    created_by: userId,
+    description: `Abono pedido · ${order.material}`,
+  });
+}
+
+async function orderPaymentSnapshot(id: string) {
+  const { data } = await sb()
+    .from("work_order_payments")
+    .select(
+      "id, order_id, payment_date, description, amount, payment_method_id, internal_transfer_id, work_movement_id, status, order:work_orders(material)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+}
+
+export interface OrderPaymentEditData {
+  description: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethodId: string;
+}
+
+/**
+ * Edita un abono de pedido. Sincroniza el traspaso interno enlazado
+ * (work_internal_transfers) para que el saldo de las cuentas se recalcule bien.
+ */
+export async function updateWorkOrderPayment(
+  id: string,
+  patch: OrderPaymentEditData,
+  note: string,
+): Promise<void> {
+  const client = sb();
+  const before = await orderPaymentSnapshot(id);
+  if (!before || (before.status as number) === 0) throw new Error("Abono no encontrado.");
+
+  const amount = round2(patch.amount);
+  const payableMethodId = await accountsPayableMethodId();
+  if (patch.paymentMethodId === payableMethodId) {
+    throw new Error("El abono debe salir de una cuenta real");
+  }
+
+  const update = {
+    description: patch.description.trim() || "Abono del pedido",
+    amount,
+    payment_date: patch.paymentDate,
+    payment_method_id: patch.paymentMethodId,
+  };
+  const { error } = await client.from("work_order_payments").update(update).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  // Mantener el traspaso interno en sincronía (origen del cambio de saldo).
+  if (before.internal_transfer_id) {
+    await client
+      .from("work_internal_transfers")
+      .update({
+        amount,
+        transfer_date: patch.paymentDate,
+        from_payment_method_id: patch.paymentMethodId,
+      })
+      .eq("id", before.internal_transfer_id as string);
+  }
+
+  const material = (before.order as { material?: string } | null)?.material ?? "";
+  await writeAudit({
+    entityType: "order_payment",
+    entityId: id,
+    operation: "update",
+    note,
+    amount,
+    description: `Abono pedido · ${material}`,
+    snapshot: {
+      before: {
+        description: before.description,
+        amount: Number(before.amount),
+        payment_date: before.payment_date,
+        payment_method_id: before.payment_method_id,
+      },
+      after: update,
+    },
+  });
+}
+
+/**
+ * Elimina (soft) un abono de pedido y revierte sus efectos de saldo:
+ * desactiva el traspaso interno y/o el movimiento de obra enlazados.
+ */
+export async function deleteWorkOrderPayment(id: string, note: string): Promise<void> {
+  const client = sb();
+  const before = await orderPaymentSnapshot(id);
+  if (!before || (before.status as number) === 0) throw new Error("Abono no encontrado.");
+
+  const { error } = await client.from("work_order_payments").update({ status: 0 }).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  if (before.internal_transfer_id) {
+    await client
+      .from("work_internal_transfers")
+      .update({ status: 0 })
+      .eq("id", before.internal_transfer_id as string);
+  }
+  if (before.work_movement_id) {
+    await client
+      .from("work_movements")
+      .update({ status: 0 })
+      .eq("id", before.work_movement_id as string);
+  }
+
+  const material = (before.order as { material?: string } | null)?.material ?? "";
+  await writeAudit({
+    entityType: "order_payment",
+    entityId: id,
+    operation: "delete",
+    note,
+    amount: Number(before.amount),
+    description: `Abono pedido · ${material}`,
+    snapshot: {
+      before: {
+        description: before.description,
+        amount: Number(before.amount),
+        payment_date: before.payment_date,
+        payment_method_id: before.payment_method_id,
+      },
+    },
   });
 }

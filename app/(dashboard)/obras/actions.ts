@@ -6,6 +6,8 @@ import {
   createWorkSchema,
   registerInternalTransferSchema,
   registerWorkMovementSchema,
+  editWorkMovementSchema,
+  deleteWorkMovementSchema,
   updateWorkSchema,
 } from "@/lib/validation";
 import {
@@ -13,6 +15,8 @@ import {
   deleteWork,
   registerWorkInternalTransfer,
   registerWorkMovement,
+  updateWorkMovement,
+  deleteWorkMovement,
   updateWork,
 } from "@/lib/data/works";
 
@@ -134,6 +138,59 @@ export async function registerWorkMovementAction(
     };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
+  }
+}
+
+export async function editWorkMovementAction(raw: unknown): Promise<ActionResult> {
+  const parsed = editWorkMovementSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del movimiento.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  try {
+    const d = parsed.data;
+    await updateWorkMovement(
+      d.movementId,
+      {
+        receipt: d.receipt,
+        movementDate: d.movementDate,
+        concept: d.concept,
+        supplier: d.movementType === "income" ? "Cliente" : d.supplier,
+        category: d.category,
+        amount: d.amount,
+        paymentMethodId: d.paymentMethodId,
+        observations: d.observations || undefined,
+      },
+      d.note,
+    );
+    revalidatePath("/obras");
+    revalidatePath(`/obras/${d.workId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo editar el movimiento." };
+  }
+}
+
+export async function deleteWorkMovementAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteWorkMovementSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Escribe el motivo de la eliminación.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  try {
+    const d = parsed.data;
+    await deleteWorkMovement(d.movementId, d.note);
+    revalidatePath("/obras");
+    revalidatePath(`/obras/${d.workId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo eliminar el movimiento." };
   }
 }
 

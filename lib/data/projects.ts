@@ -18,6 +18,7 @@ import {
   parseReceiptSeq,
   type ReceiptData,
 } from "@/lib/receipt";
+import { writeAudit } from "./audit";
 import type {
   Client,
   InternalArea,
@@ -540,7 +541,104 @@ export async function registerMovement(
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  await writeAudit({
+    entityType: "project_movement",
+    entityId: row.id as string,
+    operation: "create",
+    amount: data.amount,
+    description: `${data.movementType === "income" ? "Ingreso" : "Egreso"} · ${data.concept.trim()}`,
+  });
   return { id: row.id as string, receiptCode };
+}
+
+export interface ProjectMovementEditData {
+  concept: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethodId: string;
+  internalArea?: InternalArea | null;
+}
+
+async function projectMovementSnapshot(id: string) {
+  const { data } = await sb()
+    .from("project_payments")
+    .select(
+      "id, project_id, movement_type, concept, amount, payment_date, payment_method_id, internal_area, receipt_code, status, project:projects(name)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+}
+
+/** Edita un movimiento de proyecto. El saldo se recalcula solo (suma de status=1). */
+export async function updateProjectMovement(
+  id: string,
+  patch: ProjectMovementEditData,
+  note: string,
+): Promise<void> {
+  const before = await projectMovementSnapshot(id);
+  if (!before || (before.status as number) === 0) {
+    throw new Error("Movimiento no encontrado.");
+  }
+  const update = {
+    concept: patch.concept.trim(),
+    amount: patch.amount,
+    payment_date: patch.paymentDate,
+    payment_method_id: patch.paymentMethodId,
+    internal_area: patch.internalArea ?? null,
+  };
+  const { error } = await sb().from("project_payments").update(update).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const projectName = (before.project as { name?: string } | null)?.name ?? "";
+  await writeAudit({
+    entityType: "project_movement",
+    entityId: id,
+    operation: "update",
+    note,
+    amount: patch.amount,
+    description: `${before.movement_type === "income" ? "Ingreso" : "Egreso"} · ${projectName}`,
+    snapshot: {
+      before: {
+        concept: before.concept,
+        amount: Number(before.amount),
+        payment_date: before.payment_date,
+        payment_method_id: before.payment_method_id,
+        internal_area: before.internal_area,
+      },
+      after: update,
+    },
+  });
+}
+
+/** Elimina (soft, status=0) un movimiento de proyecto. El saldo se recalcula solo. */
+export async function deleteProjectMovement(id: string, note: string): Promise<void> {
+  const before = await projectMovementSnapshot(id);
+  if (!before || (before.status as number) === 0) {
+    throw new Error("Movimiento no encontrado.");
+  }
+  const { error } = await sb().from("project_payments").update({ status: 0 }).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const projectName = (before.project as { name?: string } | null)?.name ?? "";
+  await writeAudit({
+    entityType: "project_movement",
+    entityId: id,
+    operation: "delete",
+    note,
+    amount: Number(before.amount),
+    description: `${before.movement_type === "income" ? "Ingreso" : "Egreso"} · ${projectName}`,
+    snapshot: {
+      before: {
+        concept: before.concept,
+        amount: Number(before.amount),
+        payment_date: before.payment_date,
+        payment_method_id: before.payment_method_id,
+        internal_area: before.internal_area,
+        movement_type: before.movement_type,
+      },
+    },
+  });
 }
 
 export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData | null> {

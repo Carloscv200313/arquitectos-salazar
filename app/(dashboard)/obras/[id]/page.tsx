@@ -88,7 +88,13 @@ export default async function WorkDetailPage({
         <WorkCategorySummaryTable rows={categorySummary} />
         <WorkAdministrationUtilityTable rows={administrationUtilities} />
       </div>
-      <WorkMovementsTable movements={movements} />
+      <WorkMovementsTable
+        movements={movements}
+        workId={work.id}
+        methods={methods}
+        providers={providers}
+        categories={categories}
+      />
     </div>
   );
 }

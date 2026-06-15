@@ -11,11 +11,13 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type {
+  PaymentMethod,
   WorkCategorySummary,
   WorkAdministrationUtilityRow,
   WorkFinance,
   WorkMovementWithBalance,
 } from "@/lib/types";
+import { WorkMovementActions } from "./work-movement-actions";
 
 function monthLabel(month: string) {
   const date = new Date(`${month}-01T00:00:00`);
@@ -205,8 +207,16 @@ export function WorkAdministrationUtilityTable({
 
 export function WorkMovementsTable({
   movements,
+  workId,
+  methods,
+  providers,
+  categories,
 }: {
   movements: WorkMovementWithBalance[];
+  workId: string;
+  methods: PaymentMethod[];
+  providers: string[];
+  categories: string[];
 }) {
   return (
     <Card id="movimientos" className="gap-0 overflow-hidden p-0">
@@ -229,6 +239,7 @@ export function WorkMovementsTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
             <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
             <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Recibo</TableHead>
+            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -283,11 +294,20 @@ export function WorkMovementsTable({
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
+              <TableCell className="px-5 text-right">
+                <WorkMovementActions
+                  movement={movement}
+                  workId={workId}
+                  methods={methods}
+                  providers={providers}
+                  categories={categories}
+                />
+              </TableCell>
             </TableRow>
           ))}
           {movements.length === 0 && (
             <TableRow>
-              <TableCell colSpan={9} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
                 Sin movimientos registrados.
               </TableCell>
             </TableRow>

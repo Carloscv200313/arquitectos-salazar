@@ -540,3 +540,81 @@ export const generalBalanceAccountMovementSchema = z.object({
 export type GeneralBalanceAccountMovementInput = z.infer<
   typeof generalBalanceAccountMovementSchema
 >;
+
+// ── Auditoría: editar / eliminar movimientos (motivo obligatorio) ────────
+export const auditNote = z
+  .string({ message: "Escribe el motivo" })
+  .trim()
+  .min(5, "Explica el motivo (mín. 5 caracteres)")
+  .max(500, "Máximo 500 caracteres");
+
+export const editProjectMovementSchema = z
+  .object({
+    paymentId: z.string().uuid("Movimiento inválido"),
+    projectId: z.string().uuid("Proyecto inválido"),
+    movementType: z.enum(["income", "expense"]),
+    concept,
+    amount: money,
+    paymentDate: isoDate,
+    paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+    internalArea: internalArea.optional().nullable(),
+    note: auditNote,
+  })
+  .superRefine((data, ctx) => {
+    if (data.movementType === "expense" && !data.internalArea) {
+      ctx.addIssue({ code: "custom", path: ["internalArea"], message: "Selecciona el área interna del egreso" });
+    }
+  });
+
+export const editWorkMovementSchema = z
+  .object({
+    movementId: z.string().uuid("Movimiento inválido"),
+    workId: z.string().uuid("Obra inválida"),
+    movementType: z.enum(["income", "expense"]),
+    receipt: z.string().trim().max(80, "Máximo 80 caracteres").optional().or(z.literal("")),
+    movementDate: isoDate,
+    concept,
+    supplier: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
+    category: workCategory,
+    amount: money,
+    paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+    observations: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+    note: auditNote,
+  })
+  .superRefine((data, ctx) => {
+    if (data.movementType === "expense" && (!data.supplier || data.supplier.trim().length < 2)) {
+      ctx.addIssue({ code: "custom", path: ["supplier"], message: "Selecciona proveedor" });
+    }
+  });
+
+export const editOrderPaymentSchema = z.object({
+  paymentId: z.string().uuid("Abono inválido"),
+  workId: z.string().uuid("Obra inválida"),
+  description: z.string().trim().min(2, "Escribe una descripción").max(200, "Máximo 200 caracteres"),
+  amount: money,
+  paymentDate: isoDate,
+  paymentMethodId: z.string().uuid("Selecciona forma de pago"),
+  note: auditNote,
+});
+
+export const deleteProjectMovementSchema = z.object({
+  paymentId: z.string().uuid("Movimiento inválido"),
+  projectId: z.string().uuid("Proyecto inválido"),
+  note: auditNote,
+});
+
+export const deleteWorkMovementSchema = z.object({
+  movementId: z.string().uuid("Movimiento inválido"),
+  workId: z.string().uuid("Obra inválida"),
+  note: auditNote,
+});
+
+export const deleteOrderPaymentSchema = z.object({
+  paymentId: z.string().uuid("Abono inválido"),
+  workId: z.string().uuid("Obra inválida"),
+  note: auditNote,
+});
+
+export type EditProjectMovementInput = z.infer<typeof editProjectMovementSchema>;
+export type EditWorkMovementInput = z.infer<typeof editWorkMovementSchema>;
+export type EditOrderPaymentInput = z.infer<typeof editOrderPaymentSchema>;

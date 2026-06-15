@@ -25,6 +25,7 @@ import type {
 } from "@/lib/types";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
+import { writeAudit } from "./audit";
 
 export interface WorkFilters {
   search?: string;
@@ -455,7 +456,113 @@ export async function registerWorkMovement(
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  await writeAudit({
+    entityType: "work_movement",
+    entityId: row.id as string,
+    operation: "create",
+    amount: data.amount,
+    description: `${data.movementType === "income" ? "Ingreso" : "Egreso"} · ${data.concept.trim()}`,
+  });
   return { id: row.id as string, receiptCode: data.movementType === "income" ? receipt : null };
+}
+
+export interface WorkMovementEditData {
+  receipt?: string;
+  movementDate: string;
+  concept: string;
+  supplier?: string;
+  category: string;
+  amount: number;
+  paymentMethodId: string;
+  observations?: string;
+}
+
+async function workMovementSnapshot(id: string) {
+  const { data } = await sb()
+    .from("work_movements")
+    .select(
+      "id, work_id, receipt, movement_date, concept, supplier, category, movement_type, amount, payment_method_id, observations, status, work:works(name)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  return data;
+}
+
+/** Edita un movimiento de obra. El saldo se recalcula solo (suma de status=1). */
+export async function updateWorkMovement(
+  id: string,
+  patch: WorkMovementEditData,
+  note: string,
+): Promise<void> {
+  const before = await workMovementSnapshot(id);
+  if (!before || (before.status as number) === 0) {
+    throw new Error("Movimiento no encontrado.");
+  }
+  const update = {
+    receipt: (patch.receipt ?? (before.receipt as string) ?? "").trim(),
+    movement_date: patch.movementDate,
+    concept: patch.concept.trim(),
+    supplier: patch.supplier?.trim() || "Cliente",
+    category: patch.category,
+    amount: patch.amount,
+    payment_method_id: patch.paymentMethodId,
+    observations: patch.observations?.trim() || null,
+  };
+  const { error } = await sb().from("work_movements").update(update).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const workName = (before.work as { name?: string } | null)?.name ?? "";
+  await writeAudit({
+    entityType: "work_movement",
+    entityId: id,
+    operation: "update",
+    note,
+    amount: patch.amount,
+    description: `${before.movement_type === "income" ? "Ingreso" : "Egreso"} · ${workName}`,
+    snapshot: {
+      before: {
+        concept: before.concept,
+        amount: Number(before.amount),
+        movement_date: before.movement_date,
+        supplier: before.supplier,
+        category: before.category,
+        payment_method_id: before.payment_method_id,
+        observations: before.observations,
+      },
+      after: update,
+    },
+  });
+}
+
+/** Elimina (soft, status=0) un movimiento de obra. El saldo se recalcula solo. */
+export async function deleteWorkMovement(id: string, note: string): Promise<void> {
+  const before = await workMovementSnapshot(id);
+  if (!before || (before.status as number) === 0) {
+    throw new Error("Movimiento no encontrado.");
+  }
+  const { error } = await sb().from("work_movements").update({ status: 0 }).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const workName = (before.work as { name?: string } | null)?.name ?? "";
+  await writeAudit({
+    entityType: "work_movement",
+    entityId: id,
+    operation: "delete",
+    note,
+    amount: Number(before.amount),
+    description: `${before.movement_type === "income" ? "Ingreso" : "Egreso"} · ${workName}`,
+    snapshot: {
+      before: {
+        concept: before.concept,
+        amount: Number(before.amount),
+        movement_date: before.movement_date,
+        supplier: before.supplier,
+        category: before.category,
+        payment_method_id: before.payment_method_id,
+        movement_type: before.movement_type,
+      },
+    },
+  });
 }
 
 export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | null> {

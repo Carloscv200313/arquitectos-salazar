@@ -7,11 +7,15 @@ import {
   getWorkOrder,
   quoteWorkOrder,
   registerWorkOrderPayment,
+  updateWorkOrderPayment,
+  deleteWorkOrderPayment,
 } from "@/lib/data/orders";
 import {
   createWorkOrderSchema,
   quoteWorkOrderSchema,
   registerWorkOrderPaymentSchema,
+  editOrderPaymentSchema,
+  deleteOrderPaymentSchema,
 } from "@/lib/validation";
 
 export type ActionResult<T = undefined> =
@@ -135,6 +139,59 @@ export async function registerWorkOrderPaymentAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo registrar el abono.",
+    };
+  }
+}
+
+export async function editWorkOrderPaymentAction(raw: unknown): Promise<ActionResult> {
+  const parsed = editOrderPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  try {
+    const d = parsed.data;
+    await updateWorkOrderPayment(
+      d.paymentId,
+      {
+        description: d.description,
+        amount: d.amount,
+        paymentDate: d.paymentDate,
+        paymentMethodId: d.paymentMethodId,
+      },
+      d.note,
+    );
+    revalidateOrderSurfaces(d.workId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo editar el abono.",
+    };
+  }
+}
+
+export async function deleteWorkOrderPaymentAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteOrderPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Escribe el motivo de la eliminación.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  try {
+    const d = parsed.data;
+    await deleteWorkOrderPayment(d.paymentId, d.note);
+    revalidateOrderSurfaces(d.workId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar el abono.",
     };
   }
 }

@@ -10,6 +10,7 @@ import {
   BadgeDollarSign,
   TrendingUp,
   Banknote,
+  ScrollText,
   Settings,
   LifeBuoy,
 } from "lucide-react";
@@ -59,6 +60,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { label: "Salario", href: "/finance/salario", icon: Banknote, permission: "salary.view" },
         ],
       },
+      { label: "Auditoría", href: "/auditoria", icon: ScrollText, permission: "audit.view" },
     ],
   },
   {

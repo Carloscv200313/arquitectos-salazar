@@ -51,6 +51,7 @@ import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod, WorkOrderWithRelations, WorkWithFinance } from "@/lib/types";
 import { OrderStatusBadge } from "./order-status-badge";
+import { OrderPaymentActions } from "./order-payment-actions";
 
 function pendingTone(pending: number, total: number) {
   if (total <= 0.001 || pending <= 0.001) return "text-muted-foreground";
@@ -516,10 +517,14 @@ function PaymentHistorySheet({
   open,
   onOpenChange,
   order,
+  workId,
+  methods,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: WorkOrderWithRelations;
+  workId: string;
+  methods: PaymentMethod[];
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -549,6 +554,7 @@ function PaymentHistorySheet({
                     <TableHead className="min-w-40">Forma de pago</TableHead>
                     <TableHead className="min-w-56">Descripción</TableHead>
                     <TableHead className="px-5 text-right">Monto</TableHead>
+                    <TableHead className="px-5 text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -566,12 +572,15 @@ function PaymentHistorySheet({
                       <TableCell className="px-5 text-right font-semibold tabular-nums text-brand-foreground">
                         {formatCurrency(payment.amount)}
                       </TableCell>
+                      <TableCell className="px-5 text-right">
+                        <OrderPaymentActions payment={payment} workId={workId} methods={methods} />
+                      </TableCell>
                     </TableRow>
                   ))}
                   {order.payments.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={4}
+                        colSpan={5}
                         className="h-24 text-center text-muted-foreground"
                       >
                         Este pedido todavía no tiene abonos registrados.
@@ -881,6 +890,8 @@ export function WorkOrdersView({
           open={!!historyTarget}
           onOpenChange={(open) => !open && setHistoryTarget(null)}
           order={historyTarget}
+          workId={work.id}
+          methods={methods}
         />
       )}
       {detailTarget && (

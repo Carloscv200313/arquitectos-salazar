@@ -7,6 +7,8 @@ import {
   createProjectSchema,
   registerInternalTransferSchema,
   registerMovementSchema,
+  editProjectMovementSchema,
+  deleteProjectMovementSchema,
   updateProjectSchema,
 } from "@/lib/validation";
 import {
@@ -14,6 +16,8 @@ import {
   updateProject,
   registerMovement,
   registerInternalTransfer,
+  updateProjectMovement,
+  deleteProjectMovement,
   deleteProject,
   getProject,
   listMovements,
@@ -239,6 +243,100 @@ export async function registerMovementAction(
     return { ok: true, data: { paymentId: created.id, receiptCode: created.receiptCode } };
   } catch {
     return { ok: false, error: "No se pudo registrar el movimiento." };
+  }
+}
+
+export async function editProjectMovementAction(
+  raw: unknown,
+): Promise<ActionResult<{ paymentId: string }>> {
+  const parsed = editProjectMovementSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del movimiento.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  const d = parsed.data;
+  try {
+    const [project, movements] = await Promise.all([
+      getProject(d.projectId),
+      listMovements(d.projectId),
+    ]);
+    if (!project) return { ok: false, error: "Proyecto no encontrado." };
+    const current = movements.find((m) => m.id === d.paymentId);
+    if (!current) return { ok: false, error: "Movimiento no encontrado." };
+
+    // Ingreso: no puede superar el pendiente (descontando lo que ya aportaba este mismo movimiento).
+    if (d.movementType === "income") {
+      const wasIncome = current.movement_type === "income" ? current.amount : 0;
+      const allowed = round2(project.finance.pending + wasIncome);
+      if (d.amount > allowed + 0.001) {
+        return {
+          ok: false,
+          error: `El ingreso supera el saldo pendiente (${allowed.toFixed(2)}).`,
+          fieldErrors: { amount: "Supera el saldo pendiente" },
+        };
+      }
+    }
+
+    // Egreso por área: el nuevo monto + lo ya pagado en el área (sin este movimiento) ≤ presupuesto.
+    if (d.movementType === "expense" && d.internalArea) {
+      const areaLabel = PROJECT_SLICE_LABELS[d.internalArea];
+      const budget = areaBudget(project, d.internalArea);
+      const alreadyPaid = round2(
+        movements.reduce((sum, m) => {
+          if (m.id === d.paymentId) return sum;
+          if (m.movement_type !== "expense") return sum;
+          if (m.internal_area !== d.internalArea) return sum;
+          return sum + m.amount;
+        }, 0),
+      );
+      const remaining = round2(Math.max(budget - alreadyPaid, 0));
+      if (d.amount > remaining + 0.001) {
+        return {
+          ok: false,
+          error: `Solo quedan ${remaining.toFixed(2)} disponibles en ${areaLabel}.`,
+          fieldErrors: { amount: "Supera el saldo restante del área" },
+        };
+      }
+    }
+
+    await updateProjectMovement(
+      d.paymentId,
+      {
+        concept: d.concept,
+        amount: d.amount,
+        paymentDate: d.paymentDate,
+        paymentMethodId: d.paymentMethodId,
+        internalArea: d.internalArea ?? null,
+      },
+      d.note,
+    );
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${d.projectId}`);
+    return { ok: true, data: { paymentId: d.paymentId } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo editar el movimiento." };
+  }
+}
+
+export async function deleteProjectMovementAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteProjectMovementSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Escribe el motivo de la eliminación.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+  try {
+    await deleteProjectMovement(parsed.data.paymentId, parsed.data.note);
+    revalidatePath("/projects");
+    revalidatePath(`/projects/${parsed.data.projectId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo eliminar el movimiento." };
   }
 }
 

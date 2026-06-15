@@ -6,9 +6,14 @@ export const PERMISSION_MODULES = [
   { key: "orders", label: "Pedidos" },
   { key: "finance", label: "Finanzas" },
   { key: "salary", label: "Salarios" },
+  { key: "audit", label: "Auditoría" },
   { key: "settings", label: "Configuración" },
   { key: "users", label: "Usuarios" },
 ] as const;
+
+// Roles con acceso total: reciben todos los permisos en vivo (incluye módulos
+// nuevos sin necesidad de re-guardar su lista de permisos).
+export const ALL_ACCESS_ROLES = ["Administrador"] as const;
 
 export const PERMISSION_ACTIONS = [
   { key: "view", label: "Ver" },

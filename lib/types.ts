@@ -520,3 +520,27 @@ export interface SalaryReport {
   };
   recentPayments: SalaryPaymentWithRelations[];
 }
+
+/* ============================================================ AUDIT ======= */
+
+export type AuditOperation = "create" | "update" | "delete";
+export type AuditEntityType =
+  | "project_movement"
+  | "work_movement"
+  | "order_payment"
+  | "salary";
+
+export interface AuditLogRow {
+  id: string;
+  createdAt: string;
+  userName: string;
+  entityType: AuditEntityType;
+  entityLabel: string;
+  entityId: string;
+  operation: AuditOperation;
+  operationLabel: string;
+  description: string | null;
+  note: string | null;
+  amount: number | null;
+  snapshot: { before?: unknown; after?: unknown } | null;
+}
