@@ -75,7 +75,12 @@ export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData;
         @media print {
           .no-print { display: none !important; }
           html, body { background: #fff !important; }
-          .receipt-sheet { padding: 18mm !important; }
+          .receipt-sheet { padding: 8mm !important; }
+          .receipt-card {
+            min-height: calc(297mm - 16mm) !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+          }
         }
       `}</style>
 
@@ -99,65 +104,83 @@ export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData;
           </button>
         </div>
 
+        {/* Hoja A4: proporción carta vertical, contenido distribuido arriba/abajo */}
         <div
           ref={cardRef}
-          className="rounded-[28px] border-2 border-neutral-300 bg-white p-[clamp(1rem,4vw,2rem)] text-neutral-800"
+          className="receipt-card relative flex aspect-210/297 w-full flex-col overflow-hidden rounded-[28px] border border-neutral-200 bg-white p-[clamp(1.25rem,5vw,3rem)] text-neutral-800 shadow-[0_12px_45px_rgba(0,0,0,0.14)]"
         >
-          {/* Encabezado: código + título + monto, en una sola fila */}
-          <div className="flex flex-nowrap items-center gap-[clamp(0.5rem,2vw,1rem)]">
-            <span className="shrink-0 whitespace-nowrap rounded-full border-2 border-neutral-300 px-[clamp(0.6rem,2vw,1rem)] py-1 text-[clamp(0.65rem,2.6vw,1.05rem)] font-bold tracking-wider text-red-600">
-              {data.code ?? "—"}
-            </span>
-            <span className="shrink-0 whitespace-nowrap text-[clamp(0.78rem,3.1vw,1.2rem)] font-semibold tracking-tight">
-              {title}
-            </span>
-            <span className="ml-auto shrink-0 whitespace-nowrap rounded-md bg-neutral-100 px-[clamp(0.6rem,2vw,1.25rem)] py-1 text-[clamp(0.95rem,3.4vw,1.5rem)] font-bold tabular-nums">
-              {formatCurrency(data.amount)}
-            </span>
-          </div>
-
-          <div className="mt-[clamp(1.25rem,4vw,2rem)] space-y-[clamp(1rem,3vw,1.5rem)] text-[clamp(0.8rem,2.7vw,1.125rem)]">
-            <Field label={recipientLabel} value={data.clientName} />
-            <Field
-              label="la cantidad de"
-              value={`${formatCurrency(data.amount)} (${montoEnPalabras(data.amount)})`}
-            />
-            <Field label="por concepto de" value={data.concept} />
-            {isPago && <Field label={subjectLabel} value={data.subjectName} />}
-          </div>
-
-          {/* Fecha */}
-          <div className="mt-[clamp(1.25rem,4vw,2rem)] flex items-end gap-[clamp(0.4rem,1.5vw,0.5rem)] text-[clamp(0.8rem,2.7vw,1.125rem)]">
-            <span>a</span>
-            <span className="min-w-[clamp(2.5rem,8vw,3rem)] border-b border-neutral-400 px-2 text-center font-medium">
-              {day}
-            </span>
-            <span>de</span>
-            <span className="min-w-[clamp(5rem,18vw,8rem)] border-b border-neutral-400 px-2 text-center font-medium capitalize">
-              {month}
-            </span>
-            <span>20</span>
-            <span className="min-w-[clamp(2rem,7vw,2.5rem)] border-b border-neutral-400 px-2 text-center font-medium">
-              {yearShort}
-            </span>
-            <span>.</span>
-          </div>
-
-          {/* Pie: 3 columnas — logo · datos · firma */}
-          <div className="mt-[clamp(1.5rem,5vw,3rem)] grid grid-cols-3 items-end gap-[clamp(0.5rem,2vw,1.5rem)]">
+          {/* Marca de agua centrada */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <img
               src="/logo-negro-trimmed.png"
-              alt="Arquitectos Salazar"
-              className="h-[clamp(2.5rem,9vw,5rem)] w-auto object-contain"
+              alt=""
+              aria-hidden="true"
+              className="w-[68%] max-w-115 object-contain opacity-[0.05]"
             />
-            <div className="whitespace-nowrap text-center text-[clamp(0.5rem,1.9vw,0.875rem)] leading-relaxed text-neutral-600">
-              <p>{RECEIPT_BUSINESS.address}</p>
-              <p>{RECEIPT_BUSINESS.phone}</p>
-              <p>{RECEIPT_BUSINESS.email}</p>
+          </div>
+
+          {/* Contenido (sobre la marca de agua) */}
+          <div className="relative z-10 flex h-full flex-col">
+            {/* Encabezado: código + título + monto, en una sola fila */}
+            <div className="flex flex-nowrap items-center gap-[clamp(0.5rem,2vw,1rem)]">
+              <span className="shrink-0 whitespace-nowrap rounded-full border-2 border-red-300 px-[clamp(0.6rem,2vw,1rem)] py-1 text-[clamp(0.65rem,2.6vw,1.05rem)] font-bold tracking-wider text-red-600">
+                {data.code ?? "—"}
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-[clamp(0.78rem,3.1vw,1.2rem)] font-bold tracking-tight">
+                {title}
+              </span>
+              <span className="ml-auto shrink-0 whitespace-nowrap rounded-md bg-neutral-100 px-[clamp(0.6rem,2vw,1.25rem)] py-1 text-[clamp(0.95rem,3.4vw,1.5rem)] font-bold tabular-nums">
+                {formatCurrency(data.amount)}
+              </span>
             </div>
-            <div className="flex flex-col items-center">
-              <div className="mt-8 w-full border-t border-neutral-500" />
-              <span className="mt-1 text-[clamp(0.5rem,1.9vw,0.75rem)] text-neutral-500">Firma</span>
+
+            <div className="mt-[clamp(1.5rem,5vw,2.75rem)] space-y-[clamp(1.1rem,3.4vw,1.75rem)] text-[clamp(0.8rem,2.7vw,1.125rem)]">
+              <Field label={recipientLabel} value={data.clientName} />
+              <Field
+                label="la cantidad de"
+                value={`${formatCurrency(data.amount)} (${montoEnPalabras(data.amount)})`}
+              />
+              <Field label="por concepto de" value={data.concept} />
+              {isPago && <Field label={subjectLabel} value={data.subjectName} />}
+
+              {/* Fecha */}
+              <div className="flex items-end gap-[clamp(0.4rem,1.5vw,0.5rem)] pt-[clamp(0.25rem,1vw,0.5rem)]">
+                <span>a</span>
+                <span className="min-w-[clamp(2.5rem,8vw,3rem)] border-b border-neutral-400 px-2 text-center font-medium">
+                  {day}
+                </span>
+                <span>de</span>
+                <span className="min-w-[clamp(5rem,18vw,8rem)] border-b border-neutral-400 px-2 text-center font-medium capitalize">
+                  {month}
+                </span>
+                <span>20</span>
+                <span className="min-w-[clamp(2rem,7vw,2.5rem)] border-b border-neutral-400 px-2 text-center font-medium">
+                  {yearShort}
+                </span>
+                <span>.</span>
+              </div>
+            </div>
+
+            {/* Firma centrada en el espacio en blanco entre datos y pie */}
+            <div className="flex flex-1 items-center justify-center">
+              <div className="flex w-[clamp(10rem,45%,16rem)] flex-col items-center">
+                <div className="w-full border-t border-neutral-500" />
+                <span className="mt-1 text-[clamp(0.5rem,1.9vw,0.8rem)] text-neutral-500">Firma</span>
+              </div>
+            </div>
+
+            {/* Pie: logo izquierda · datos derecha */}
+            <div className="flex items-end justify-between gap-[clamp(0.75rem,3vw,2rem)] pt-[clamp(1.5rem,5vw,3rem)]">
+              <img
+                src="/logo-negro-trimmed.png"
+                alt="Arquitectos Salazar"
+                className="h-[clamp(2.25rem,8vw,4.25rem)] w-auto shrink-0 object-contain"
+              />
+              <div className="whitespace-nowrap text-right text-[clamp(0.5rem,1.9vw,0.875rem)] leading-relaxed text-neutral-600">
+                <p>{RECEIPT_BUSINESS.address}</p>
+                <p>{RECEIPT_BUSINESS.phone}</p>
+                <p>{RECEIPT_BUSINESS.email}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -170,7 +193,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-end gap-[clamp(0.5rem,2vw,0.75rem)]">
       <span className="shrink-0 text-neutral-700">{label}</span>
-      <span className="min-w-0 flex-1 break-words border-b border-neutral-400 px-2 pb-1 font-medium">
+      <span className="min-w-0 flex-1 wrap-break-word border-b border-neutral-400 px-2 pb-1 font-medium">
         {value}
       </span>
     </div>
