@@ -17,7 +17,7 @@ export interface FinanceModule {
 export const FINANCE_MODULES: FinanceModule[] = [
   {
     slug: "balance-general",
-    title: "Balance general",
+    title: "Caja y Bancos",
     description: "Vista consolidada de saldos, entradas, salidas y cuentas.",
     icon: Landmark,
   },

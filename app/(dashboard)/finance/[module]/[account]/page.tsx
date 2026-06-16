@@ -12,7 +12,7 @@ export async function generateMetadata({
   const { module, account } = await params;
   if (module !== "balance-general") return { title: "Finanzas" };
   const report = await getGeneralBalanceAccountReport(account);
-  return { title: report?.account.label ?? "Balance general" };
+  return { title: report?.account.label ?? "Caja y Bancos" };
 }
 
 export default async function FinanceAccountPage({
@@ -33,7 +33,7 @@ export default async function FinanceAccountPage({
           href="/finance/balance-general"
           className="mb-2 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ArrowLeft className="size-4" /> Balance general
+          <ArrowLeft className="size-4" /> Caja y Bancos
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">
           {report.account.label}

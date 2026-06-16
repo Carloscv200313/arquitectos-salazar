@@ -53,7 +53,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: Wallet,
         groupOnly: true,
         children: [
-          { label: "Balance general", href: "/finance/balance-general", icon: Landmark, permission: "finance.view" },
+          { label: "Caja y Bancos", href: "/finance/balance-general", icon: Landmark, permission: "finance.view" },
           { label: "Deudas", href: "/finance/deudas", icon: BadgeDollarSign, permission: "finance.view" },
           { label: "Utilidades", href: "/finance/utilidades", icon: TrendingUp, permission: "finance.view" },
           { label: "Movimientos internos", href: "/finance/movimientos-internos", icon: ArrowLeftRight, permission: "finance.view" },

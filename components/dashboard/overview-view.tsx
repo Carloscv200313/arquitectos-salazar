@@ -55,7 +55,7 @@ export function OverviewView({ snapshot }: { snapshot: OverviewSnapshot }) {
       {/* KPI row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Balance general"
+          label="Caja y Bancos"
           value={formatCurrency(kpis.generalBalance)}
           hint="Consolidado de todas las cuentas"
           icon={<Landmark className="size-5" />}

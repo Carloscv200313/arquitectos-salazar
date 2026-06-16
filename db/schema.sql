@@ -252,7 +252,7 @@ create trigger trg_finance_manual_debtors_updated_at
   before update on public.finance_manual_debtors
   for each row execute function public.set_updated_at();
 
--- ── general_balance_entries (registros manuales del Balance General) ─────────
+-- ── general_balance_entries (registros manuales del Caja y Bancos) ─────────
 create table if not exists public.general_balance_entries (
   id               uuid primary key default gen_random_uuid(),
   description      text not null check (char_length(trim(description)) between 2 and 160),
