@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSalaryReceipt } from "@/lib/data/finance";
 import { ReceiptDocument } from "@/components/receipt/receipt-document";
+import { signPagoAction } from "@/app/recibo/signature-actions";
 
 export const metadata: Metadata = {
   title: "Comprobante de pago",
@@ -23,5 +24,12 @@ export default async function SalaryReceiptPage({
   const data = await getSalaryReceipt(weekId, employeeId, refType, refId);
   if (!data) notFound();
 
-  return <ReceiptDocument data={data} autoPrint={preview !== "1"} />;
+  return (
+    <ReceiptDocument
+      data={data}
+      autoPrint={preview !== "1"}
+      signAction={signPagoAction}
+      signPayload={{ kind, weekId, employeeId, refId }}
+    />
+  );
 }

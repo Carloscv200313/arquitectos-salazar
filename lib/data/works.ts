@@ -570,7 +570,7 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
   const { data } = await sb()
     .from("work_movements")
     .select(
-      "amount, concept, movement_date, receipt, movement_type, work:works(name, client:clients(name))",
+      "amount, concept, movement_date, receipt, movement_type, signature, work:works(name, client:clients(name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -585,7 +585,18 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
     date: data.movement_date as string,
     clientName: work?.client?.name ?? "",
     subjectName: work?.name ?? "",
+    signature: (data.signature as string) ?? null,
   };
+}
+
+/** Guarda la firma dibujada del recibo de abono de obra. */
+export async function setWorkMovementSignature(id: string, signature: string): Promise<void> {
+  const { error } = await sb()
+    .from("work_movements")
+    .update({ signature, signed_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("movement_type", "income");
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteWork(id: string): Promise<void> {

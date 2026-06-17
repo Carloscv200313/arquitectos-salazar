@@ -21,6 +21,7 @@ export interface ReceiptData {
   date: string; // ISO yyyy-mm-dd del pago
   clientName: string; // cliente (abono) o empleado (pago)
   subjectName: string; // nombre del proyecto u obra
+  signature: string | null; // firma dibujada (data URL PNG); null = sin firmar
 }
 
 // Serie única de los comprobantes de pago a empleados.

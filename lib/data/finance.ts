@@ -1224,18 +1224,19 @@ async function getOrCreateSalaryReceiptCode(
   employeeId: string,
   refType: SalaryRefType,
   refId: string,
-): Promise<string> {
+): Promise<{ code: string; signature: string | null }> {
   const client = sb();
 
   const { data: existing } = await client
     .from("salary_receipts")
-    .select("code")
+    .select("code, signature")
     .eq("salary_week_id", weekId)
     .eq("employee_id", employeeId)
     .eq("ref_type", refType)
     .eq("ref_id", refId)
     .maybeSingle();
-  if (existing?.code) return existing.code as string;
+  if (existing?.code)
+    return { code: existing.code as string, signature: (existing.signature as string) ?? null };
 
   const { data: top } = await client
     .from("salary_receipts")
@@ -1257,16 +1258,37 @@ async function getOrCreateSalaryReceiptCode(
     // Carrera con otra inserción: relee el código ya existente.
     const { data: again } = await client
       .from("salary_receipts")
-      .select("code")
+      .select("code, signature")
       .eq("salary_week_id", weekId)
       .eq("employee_id", employeeId)
       .eq("ref_type", refType)
       .eq("ref_id", refId)
       .maybeSingle();
-    if (again?.code) return again.code as string;
+    if (again?.code)
+      return { code: again.code as string, signature: (again.signature as string) ?? null };
     throw new Error(error.message);
   }
-  return code;
+  return { code, signature: null };
+}
+
+/** Guarda la firma del comprobante de pago a empleado (crea la fila si no existe). */
+export async function setSalaryReceiptSignature(
+  weekId: string,
+  employeeId: string,
+  refType: SalaryRefType,
+  refId: string,
+  signature: string,
+): Promise<void> {
+  // Garantiza que exista la fila con su código antes de firmar.
+  await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
+  const { error } = await sb()
+    .from("salary_receipts")
+    .update({ signature, signed_at: new Date().toISOString() })
+    .eq("salary_week_id", weekId)
+    .eq("employee_id", employeeId)
+    .eq("ref_type", refType)
+    .eq("ref_id", refId);
+  if (error) throw new Error(error.message);
 }
 
 /** Comprobante de pago a un empleado por todo lo trabajado en un proyecto/obra esa semana. */
@@ -1310,7 +1332,7 @@ export async function getSalaryReceipt(
     .eq("id", refId)
     .maybeSingle();
 
-  const code = await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
+  const { code, signature } = await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
 
   return {
     docType: "pago",
@@ -1323,5 +1345,6 @@ export async function getSalaryReceipt(
     date: week.payment_date as string,
     clientName: (emp.full_name as string) ?? "",
     subjectName: (ref?.name as string) ?? "",
+    signature,
   };
 }

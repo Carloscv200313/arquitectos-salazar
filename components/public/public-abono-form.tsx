@@ -100,9 +100,9 @@ export function PublicAbonoForm({ methods }: { methods: PaymentMethod[] }) {
         toast.success("Abono registrado", {
           description: `${formatCurrency(Number(amount))} · ${selected.name}`,
         });
-        window.open(`/recibo/${res.receiptKind}/${res.receiptId}`, "_blank");
-        setQuery("");
-        back();
+        // Navega en la misma pestaña al recibo para firmar e imprimir
+        // (window.open tras await suele bloquearse como popup).
+        window.location.assign(`/recibo/${res.receiptKind}/${res.receiptId}`);
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);

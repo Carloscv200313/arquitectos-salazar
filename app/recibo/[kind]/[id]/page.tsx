@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getProjectPaymentReceipt } from "@/lib/data/projects";
 import { getWorkMovementReceipt } from "@/lib/data/works";
 import { ReceiptDocument } from "@/components/receipt/receipt-document";
+import { signAbonoAction } from "@/app/recibo/signature-actions";
 
 export const metadata: Metadata = {
   title: "Recibo de dinero",
@@ -23,5 +24,11 @@ export default async function ReceiptPage({
       : await getWorkMovementReceipt(id);
   if (!data) notFound();
 
-  return <ReceiptDocument data={data} />;
+  return (
+    <ReceiptDocument
+      data={data}
+      signAction={signAbonoAction}
+      signPayload={{ kind, id }}
+    />
+  );
 }

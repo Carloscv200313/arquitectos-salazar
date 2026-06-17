@@ -646,7 +646,7 @@ export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData 
   const { data } = await sb()
     .from("project_payments")
     .select(
-      "amount, concept, payment_date, receipt_code, movement_type, project:projects(name, client:clients(name))",
+      "amount, concept, payment_date, receipt_code, movement_type, signature, project:projects(name, client:clients(name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -661,7 +661,18 @@ export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData 
     date: data.payment_date as string,
     clientName: project?.client?.name ?? "",
     subjectName: project?.name ?? "",
+    signature: (data.signature as string) ?? null,
   };
+}
+
+/** Guarda la firma dibujada del recibo de abono de proyecto. */
+export async function setProjectPaymentSignature(id: string, signature: string): Promise<void> {
+  const { error } = await sb()
+    .from("project_payments")
+    .update({ signature, signed_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("movement_type", "income");
+  if (error) throw new Error(error.message);
 }
 
 export interface RegisterInternalTransferData {

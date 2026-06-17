@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, Printer } from "lucide-react";
+import { Download, Loader2, PenLine, Printer } from "lucide-react";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/format";
 import { montoEnPalabras, RECEIPT_BUSINESS, type ReceiptData } from "@/lib/receipt";
+import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
+
+type SignResult = { ok: true } | { ok: false; error: string };
 
 const MESES = [
   "enero",
@@ -29,15 +33,53 @@ function parseDate(iso: string) {
   };
 }
 
-export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData; autoPrint?: boolean }) {
+export function ReceiptDocument({
+  data,
+  autoPrint = true,
+  signAction,
+  signPayload,
+}: {
+  data: ReceiptData;
+  autoPrint?: boolean;
+  // Acción que persiste la firma + identificadores del documento (sin la firma).
+  signAction?: (raw: unknown) => Promise<SignResult>;
+  signPayload?: Record<string, unknown>;
+}) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const padRef = useRef<SignaturePadHandle>(null);
   const [downloading, setDownloading] = useState(false);
+  const [signature, setSignature] = useState<string | null>(data.signature);
+  const [saving, setSaving] = useState(false);
+
+  const signed = !!signature;
 
   useEffect(() => {
-    if (!autoPrint) return;
+    // Solo auto-imprime si ya está firmado.
+    if (!autoPrint || !signed) return;
     const t = setTimeout(() => window.print(), 600);
     return () => clearTimeout(t);
-  }, [autoPrint]);
+  }, [autoPrint, signed]);
+
+  async function saveSignature() {
+    if (!padRef.current || !signAction) return;
+    if (padRef.current.isEmpty()) {
+      toast.error("Dibuja la firma antes de guardar.");
+      return;
+    }
+    const dataUrl = padRef.current.toDataURL();
+    setSaving(true);
+    try {
+      const res = await signAction({ ...(signPayload ?? {}), signature: dataUrl });
+      if (res.ok) {
+        setSignature(dataUrl);
+        toast.success("Firma guardada. Ya puedes imprimir el documento.");
+      } else {
+        toast.error(res.error);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function downloadPdf() {
     if (!cardRef.current) return;
@@ -85,30 +127,55 @@ export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData;
       `}</style>
 
       <div className="receipt-sheet mx-auto w-full max-w-[820px] px-3 py-6 sm:px-4 sm:py-8">
-        <div className="no-print mb-4 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={downloadPdf}
-            disabled={downloading}
-            className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
-          >
-            {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-            Descargar PDF
-          </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
-          >
-            <Printer className="size-4" /> Imprimir
-          </button>
-        </div>
+        {/* Sin firma: SOLO la pizarra. El documento aparece al guardar. */}
+        {!signed ? (
+          <div className="no-print mx-auto max-w-md rounded-xl border border-amber-300 bg-amber-50 p-5">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <PenLine className="size-4" />
+              Firma requerida para {data.clientName || "el titular"}
+            </div>
+            <p className="mb-4 text-xs text-amber-800">
+              {isPago
+                ? "Si el empleado no está presente, deja el comprobante pendiente: se podrá firmar e imprimir después."
+                : "Dibuja la firma para guardarla. El documento se mostrará al terminar."}
+            </p>
+            <SignaturePad ref={padRef} />
+            <button
+              type="button"
+              onClick={saveSignature}
+              disabled={saving || !signAction}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
+              Guardar firma e imprimir
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="no-print mb-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={downloadPdf}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
+              >
+                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                Descargar PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
+              >
+                <Printer className="size-4" /> Imprimir
+              </button>
+            </div>
 
-        {/* Hoja A4: proporción carta vertical, contenido distribuido arriba/abajo */}
-        <div
-          ref={cardRef}
-          className="receipt-card relative flex aspect-210/297 w-full flex-col overflow-hidden rounded-[28px] border border-neutral-200 bg-white p-[clamp(1.25rem,5vw,3rem)] text-neutral-800 shadow-[0_12px_45px_rgba(0,0,0,0.14)]"
-        >
+            {/* Hoja A4: proporción carta vertical, contenido distribuido arriba/abajo */}
+            <div
+              ref={cardRef}
+              className="receipt-card relative flex aspect-210/297 w-full flex-col overflow-hidden rounded-[28px] border border-neutral-200 bg-white p-[clamp(1.25rem,5vw,3rem)] text-neutral-800 shadow-[0_12px_45px_rgba(0,0,0,0.14)]"
+            >
           {/* Marca de agua centrada */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <img
@@ -163,7 +230,14 @@ export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData;
 
             {/* Firma centrada en el espacio en blanco entre datos y pie */}
             <div className="flex flex-1 items-center justify-center">
-              <div className="flex w-[clamp(10rem,45%,16rem)] flex-col items-center">
+              <div className="flex w-[clamp(14rem,60%,22rem)] flex-col items-center">
+                {signature ? (
+                  <img
+                    src={signature}
+                    alt="Firma"
+                    className="mb-[-0.6rem] h-[clamp(5rem,20vw,9rem)] w-auto max-w-full bg-white object-contain"
+                  />
+                ) : null}
                 <div className="w-full border-t border-neutral-500" />
                 <span className="mt-1 text-[clamp(0.5rem,1.9vw,0.8rem)] text-neutral-500">Firma</span>
               </div>
@@ -183,7 +257,9 @@ export function ReceiptDocument({ data, autoPrint = true }: { data: ReceiptData;
               </div>
             </div>
           </div>
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
