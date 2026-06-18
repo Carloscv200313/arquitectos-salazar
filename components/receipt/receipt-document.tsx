@@ -50,8 +50,11 @@ export function ReceiptDocument({
   const [downloading, setDownloading] = useState(false);
   const [signature, setSignature] = useState<string | null>(data.signature);
   const [saving, setSaving] = useState(false);
+  const [skipped, setSkipped] = useState(false);
 
   const signed = !!signature;
+  // Documento visible: ya firmado, o el usuario eligió omitir la firma.
+  const visible = signed || skipped;
 
   useEffect(() => {
     // Solo auto-imprime si ya está firmado.
@@ -127,8 +130,8 @@ export function ReceiptDocument({
       `}</style>
 
       <div className="receipt-sheet mx-auto w-full max-w-[820px] px-3 py-6 sm:px-4 sm:py-8">
-        {/* Sin firma: SOLO la pizarra. El documento aparece al guardar. */}
-        {!signed ? (
+        {/* Sin firma: SOLO la pizarra. El documento aparece al guardar u omitir. */}
+        {!visible ? (
           <div className="no-print mx-auto max-w-md rounded-xl border border-amber-300 bg-amber-50 p-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
               <PenLine className="size-4" />
@@ -148,6 +151,14 @@ export function ReceiptDocument({
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
               Guardar firma e imprimir
+            </button>
+            <button
+              type="button"
+              onClick={() => setSkipped(true)}
+              disabled={saving}
+              className="mt-2 inline-flex w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-amber-900 underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              Omitir e imprimir sin firma
             </button>
           </div>
         ) : (
