@@ -8,17 +8,23 @@ import {
   registerWorkMovementSchema,
   editWorkMovementSchema,
   deleteWorkMovementSchema,
+  saveWorkCategoryBudgetSchema,
   updateWorkSchema,
 } from "@/lib/validation";
 import {
   createWork,
+  deleteWorkFile,
   deleteWork,
+  getWorkFileViewUrl,
   registerWorkInternalTransfer,
   registerWorkMovement,
+  saveWorkCategoryBudget,
+  uploadWorkFile,
   updateWorkMovement,
   deleteWorkMovement,
   updateWork,
 } from "@/lib/data/works";
+import type { WorkFile } from "@/lib/types";
 
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -235,5 +241,89 @@ export async function deleteWorkAction(id: string): Promise<ActionResult> {
     return { ok: true, data: undefined };
   } catch {
     return { ok: false, error: "No se pudo eliminar la obra." };
+  }
+}
+
+export async function uploadWorkFileAction(
+  workId: string,
+  formData: FormData,
+): Promise<ActionResult<{ file: WorkFile }>> {
+  if (typeof workId !== "string" || workId.length < 10) {
+    return { ok: false, error: "Identificador de obra inválido." };
+  }
+
+  const rawFile = formData.get("file");
+  if (!(rawFile instanceof File)) {
+    return { ok: false, error: "Selecciona un archivo válido." };
+  }
+
+  try {
+    const file = await uploadWorkFile(workId, rawFile);
+    revalidatePath("/obras");
+    revalidatePath(`/obras/${workId}`);
+    return { ok: true, data: { file } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo subir el archivo." };
+  }
+}
+
+export async function deleteWorkFileAction(
+  workId: string,
+  fileId: string,
+): Promise<ActionResult> {
+  if (
+    typeof workId !== "string" ||
+    workId.length < 10 ||
+    typeof fileId !== "string" ||
+    fileId.length < 10
+  ) {
+    return { ok: false, error: "Identificador inválido." };
+  }
+
+  try {
+    await deleteWorkFile(fileId);
+    revalidatePath("/obras");
+    revalidatePath(`/obras/${workId}`);
+    return { ok: true, data: undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo eliminar el archivo." };
+  }
+}
+
+export async function getWorkFileViewUrlAction(
+  fileId: string,
+): Promise<ActionResult<{ url: string }>> {
+  if (typeof fileId !== "string" || fileId.length < 10) {
+    return { ok: false, error: "Identificador inválido." };
+  }
+
+  try {
+    const url = await getWorkFileViewUrl(fileId);
+    return { ok: true, data: { url } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo abrir el archivo." };
+  }
+}
+
+export async function saveWorkCategoryBudgetAction(
+  raw: unknown,
+): Promise<ActionResult<{ rows: import("@/lib/types").WorkCategorySummary[] }>> {
+  const parsed = saveWorkCategoryBudgetSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa el presupuesto de la categoría.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const rows = await saveWorkCategoryBudget(d.workId, d.category, d.amount);
+    revalidatePath("/obras");
+    revalidatePath(`/obras/${d.workId}`);
+    return { ok: true, data: { rows } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "No se pudo guardar el presupuesto." };
   }
 }

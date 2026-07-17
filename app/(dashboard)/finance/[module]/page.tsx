@@ -5,7 +5,7 @@ import { GeneralBalanceView } from "@/components/finance/general-balance-view";
 import { InternalTransfersView } from "@/components/finance/internal-transfers-view";
 import { SalaryView } from "@/components/finance/salary-view";
 import { UtilitiesView } from "@/components/finance/utilities-view";
-import { getDebtReport, getFinanceUtilityReport, getGeneralBalanceReport, getSalaryReport } from "@/lib/data/finance";
+import { getDebtReport, getFinanceUtilityReport, getGeneralBalanceReport, getProviderDebtDetails, getSalaryReport } from "@/lib/data/finance";
 import { getProjectsInternalAreaPaid, listPaymentMethods, listProjects } from "@/lib/data/projects";
 import {
   getWorksPaymentMethodReport,
@@ -42,7 +42,9 @@ export default async function FinanceModulePage({
   const Icon = item.icon;
   const [balance, debts, utilities, internalTransferData, salaryData] = await Promise.all([
     item.slug === "balance-general" ? getGeneralBalanceReport() : Promise.resolve(null),
-    item.slug === "deudas" ? getDebtReport() : Promise.resolve(null),
+    item.slug === "deudas"
+      ? Promise.all([getDebtReport(), getProviderDebtDetails(), listPaymentMethods()])
+      : Promise.resolve(null),
     item.slug === "utilidades" ? getFinanceUtilityReport() : Promise.resolve(null),
     item.slug === "movimientos-internos"
       ? Promise.all([
@@ -81,7 +83,7 @@ export default async function FinanceModulePage({
       {balance ? (
         <GeneralBalanceView report={balance} />
       ) : debts ? (
-        <DebtsView rows={debts} />
+        <DebtsView rows={debts[0]} providerDetails={debts[1]} />
       ) : utilities ? (
         <UtilitiesView report={utilities} />
       ) : internalTransferData ? (

@@ -370,6 +370,147 @@ export interface OrderPaymentEditData {
   paymentMethodId: string;
 }
 
+async function activeOrderPayments(orderId: string) {
+  const { data } = await sb()
+    .from("work_order_payments")
+    .select("id, amount, work_movement_id")
+    .eq("order_id", orderId)
+    .eq("status", 1);
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    amount: Number(row.amount),
+    workMovementId: (row.work_movement_id as string) ?? null,
+  }));
+}
+
+export interface WorkOrderEditData {
+  supplier: string;
+  material: string;
+  amount: number | null;
+}
+
+export async function updateWorkOrder(
+  id: string,
+  patch: WorkOrderEditData,
+  note: string,
+): Promise<void> {
+  const client = sb();
+  const userId = await getCurrentUserId();
+  const { data: orderRow } = await client.from("work_orders").select("*").eq("id", id).maybeSingle();
+  if (!orderRow || (orderRow.status as number) === 0) throw new Error("Pedido no encontrado.");
+
+  const order = mapOrder(orderRow);
+  const payments = await activeOrderPayments(order.id);
+  const paid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  const advanceAmount = round2(
+    payments
+      .filter((payment) => payment.workMovementId)
+      .reduce((sum, payment) => sum + payment.amount, 0),
+  );
+
+  const nextAmount = patch.amount === null ? null : round2(patch.amount);
+  if (nextAmount !== null && nextAmount + 0.001 < paid) {
+    throw new Error("El monto no puede ser menor a lo ya abonado.");
+  }
+
+  const nextSupplier = patch.supplier.trim();
+  const nextMaterial = patch.material.trim();
+  const update: Record<string, unknown> = {
+    supplier: nextSupplier,
+    material: nextMaterial,
+    amount: nextAmount,
+  };
+
+  if (nextAmount === null) {
+    update.category = null;
+    update.quoted_at = null;
+  }
+
+  const payableMethodId = await accountsPayableMethodId();
+  const payableAmount = nextAmount === null ? null : round2(Math.max(nextAmount - advanceAmount, 0));
+
+  if (order.payable_movement_id && payableAmount !== null && payableAmount > 0.001) {
+    const { error } = await client
+      .from("work_movements")
+      .update({
+        concept: `Pedido por pagar: ${nextMaterial}`,
+        supplier: nextSupplier,
+        amount: payableAmount,
+      })
+      .eq("id", order.payable_movement_id);
+    if (error) throw new Error(error.message);
+  } else if (order.payable_movement_id && (payableAmount === null || payableAmount <= 0.001)) {
+    const { error } = await client
+      .from("work_movements")
+      .update({ status: 0 })
+      .eq("id", order.payable_movement_id);
+    if (error) throw new Error(error.message);
+    update.payable_movement_id = null;
+  } else if (!order.payable_movement_id && payableAmount !== null && payableAmount > 0.001) {
+    if (!order.category) {
+      throw new Error("El pedido no tiene categoría para recalcular la cuenta por pagar.");
+    }
+    const { data: movement, error } = await client
+      .from("work_movements")
+      .insert({
+        work_id: order.work_id,
+        receipt: `PED-${order.id.slice(0, 8)}-P`,
+        movement_date: order.quoted_at ?? order.order_date,
+        concept: `Pedido por pagar: ${nextMaterial}`,
+        supplier: nextSupplier,
+        category: order.category,
+        movement_type: "expense",
+        amount: payableAmount,
+        payment_method_id: payableMethodId,
+        observations: order.description,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+    update.payable_movement_id = movement.id as string;
+  }
+
+  const advanceMovementIds = payments
+    .map((payment) => payment.workMovementId)
+    .filter((movementId): movementId is string => Boolean(movementId));
+
+  if (advanceMovementIds.length > 0) {
+    const { error } = await client
+      .from("work_movements")
+      .update({
+        concept: `Adelanto pedido: ${nextMaterial}`,
+        supplier: nextSupplier,
+      })
+      .in("id", advanceMovementIds);
+    if (error) throw new Error(error.message);
+  }
+
+  const { error } = await client.from("work_orders").update(update).eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    entityType: "work_order",
+    entityId: id,
+    operation: "update",
+    note,
+    amount: nextAmount,
+    description: `Pedido · ${nextMaterial}`,
+    snapshot: {
+      before: {
+        supplier: order.supplier,
+        material: order.material,
+        amount: order.amount,
+      },
+      after: {
+        supplier: nextSupplier,
+        material: nextMaterial,
+        amount: nextAmount,
+      },
+    },
+  });
+}
+
 /**
  * Edita un abono de pedido. Sincroniza el traspaso interno enlazado
  * (work_internal_transfers) para que el saldo de las cuentas se recalcule bien.

@@ -11,12 +11,14 @@ import {
   Eye,
   History,
   Loader2,
+  Pencil,
   Plus,
   ReceiptText,
   WalletCards,
 } from "lucide-react";
 import {
   createWorkOrderAction,
+  editWorkOrderAction,
   quoteWorkOrderAction,
   registerWorkOrderPaymentAction,
 } from "@/app/(dashboard)/pedidos/actions";
@@ -513,6 +515,163 @@ function PaymentSheet({
   );
 }
 
+function EditOrderSheet({
+  open,
+  onOpenChange,
+  order,
+  providers,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  order: WorkOrderWithRelations;
+  providers: string[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [supplier, setSupplier] = useState(order.supplier);
+  const [material, setMaterial] = useState(order.material);
+  const [amount, setAmount] = useState(order.amount === null ? "" : String(order.amount));
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const providerItems = providers.map((item) => ({ label: item, value: item }));
+
+  function reset() {
+    setSupplier(order.supplier);
+    setMaterial(order.material);
+    setAmount(order.amount === null ? "" : String(order.amount));
+    setNote("");
+    setErrors({});
+  }
+
+  function submit() {
+    setErrors({});
+    startTransition(async () => {
+      const result = await editWorkOrderAction({
+        orderId: order.id,
+        workId: order.work.id,
+        supplier,
+        material,
+        amount: order.amount === null ? null : Number(amount),
+        note,
+      });
+      if (result.ok) {
+        toast.success("Pedido actualizado", {
+          description: `${supplier} · ${shortText(material, 24)}`,
+        });
+        reset();
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Editar pedido</SheetTitle>
+          <SheetDescription>
+            Actualiza proveedor, material y monto con observación obligatoria.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="grid gap-4 px-4 pb-4">
+          <div className="grid gap-2">
+            <Label htmlFor="edit-order-supplier">Proveedor</Label>
+            <Select value={supplier} onValueChange={(value) => setSupplier(value ?? "")} items={providerItems}>
+              <SelectTrigger id="edit-order-supplier" className="w-full" aria-invalid={!!errors.supplier}>
+                <SelectValue placeholder="Selecciona proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.supplier && <p className="text-xs text-destructive">{errors.supplier}</p>}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="edit-order-material">Material</Label>
+            <Textarea
+              id="edit-order-material"
+              value={material}
+              onChange={(e) => setMaterial(e.target.value)}
+              className="min-h-28"
+              maxLength={1000}
+              aria-invalid={!!errors.material}
+            />
+            <div className="flex items-center justify-between gap-3">
+              {errors.material ? (
+                <p className="text-xs text-destructive">{errors.material}</p>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Describe los materiales del pedido.
+                </span>
+              )}
+              <span className="shrink-0 text-xs text-muted-foreground">{material.length}/1000</span>
+            </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="edit-order-amount">Monto</Label>
+            <Input
+              id="edit-order-amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={order.amount === null ? "Asigna el monto desde el botón Monto" : "0.00"}
+              disabled={order.amount === null}
+              aria-invalid={!!errors.amount}
+            />
+            {errors.amount ? (
+              <p className="text-xs text-destructive">{errors.amount}</p>
+            ) : order.amount === null ? (
+              <p className="text-xs text-muted-foreground">
+                Este pedido aún no tiene monto. Usa el botón <span className="font-medium">Monto</span> para asignarlo.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No puede ser menor a lo ya abonado.
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="edit-order-note">Observación del cambio</Label>
+            <Textarea
+              id="edit-order-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Explica por qué se está modificando este pedido"
+              aria-invalid={!!errors.note}
+            />
+            {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+          </div>
+
+          <Button onClick={submit} disabled={isPending}>
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Pencil className="size-4" />}
+            Guardar cambios
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function PaymentHistorySheet({
   open,
   onOpenChange,
@@ -677,6 +836,7 @@ export function WorkOrdersView({
   const [paymentTarget, setPaymentTarget] = useState<WorkOrderWithRelations | null>(null);
   const [historyTarget, setHistoryTarget] = useState<WorkOrderWithRelations | null>(null);
   const [detailTarget, setDetailTarget] = useState<WorkOrderWithRelations | null>(null);
+  const [editTarget, setEditTarget] = useState<WorkOrderWithRelations | null>(null);
   const totalAmount = orders.reduce((sum, order) => sum + (order.amount ?? 0), 0);
   const totalPaid = orders.reduce((sum, order) => sum + order.paid, 0);
   const totalPending = orders.reduce((sum, order) => sum + order.pending, 0);
@@ -834,6 +994,16 @@ export function WorkOrdersView({
                           size="icon"
                           variant="outline"
                           className="size-8"
+                          onClick={() => setEditTarget(order)}
+                          title="Editar pedido"
+                        >
+                          <Pencil className="size-4" />
+                          <span className="sr-only">Editar pedido</span>
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="size-8"
                           onClick={() => setDetailTarget(order)}
                           title="Ver detalle del pedido"
                         >
@@ -899,6 +1069,14 @@ export function WorkOrdersView({
           open={!!detailTarget}
           onOpenChange={(open) => !open && setDetailTarget(null)}
           order={detailTarget}
+        />
+      )}
+      {editTarget && (
+        <EditOrderSheet
+          open={!!editTarget}
+          onOpenChange={(open) => !open && setEditTarget(null)}
+          order={editTarget}
+          providers={providers}
         />
       )}
     </>

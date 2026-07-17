@@ -18,6 +18,7 @@ import type {
   GeneralBalanceRow,
   InternalArea,
   PaymentMethod,
+  ProviderDebtDetail,
   SalaryDayRecordWithRelations,
   SalaryPaymentWithRelations,
   SalaryPaymentType,
@@ -142,6 +143,55 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
     source: "orders",
   }));
   return [...debtors, ...providers];
+}
+
+export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
+  if (!isAdminConfigured()) return [];
+  const groups = new Map<string, ProviderDebtDetail>();
+  const works = await listWorks();
+
+  for (const work of works) {
+    const orders = await listWorkOrders(work.id);
+    for (const order of orders) {
+      if (order.amount === null || order.pending <= 0.001) continue;
+      const current = groups.get(order.supplier) ?? {
+        provider: order.supplier,
+        totalAmount: 0,
+        totalPaid: 0,
+        totalPending: 0,
+        orders: [],
+      };
+      current.totalAmount = round2(current.totalAmount + (order.amount ?? 0));
+      current.totalPaid = round2(current.totalPaid + order.paid);
+      current.totalPending = round2(current.totalPending + order.pending);
+      current.orders.push(order);
+      groups.set(order.supplier, current);
+    }
+  }
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      orders: group.orders.sort((a, b) => {
+        const byPending = b.pending - a.pending;
+        if (Math.abs(byPending) > 0.001) return byPending;
+        return b.order_date.localeCompare(a.order_date);
+      }),
+    }))
+    .sort((a, b) => b.totalPending - a.totalPending);
+}
+
+export async function getProviderDebtDetail(providerName: string): Promise<ProviderDebtDetail | null> {
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(providerName);
+    } catch {
+      return providerName;
+    }
+  })();
+  const normalized = decoded.trim().toLowerCase();
+  const details = await getProviderDebtDetails();
+  return details.find((detail) => detail.provider.trim().toLowerCase() === normalized) ?? null;
 }
 
 export async function getGeneralBalanceReport(): Promise<GeneralBalanceReport> {
@@ -652,16 +702,26 @@ function buildWeek(
   ctx: SalaryContext,
 ): SalaryWeekWithRows {
   const employeeRows = ctx.employees.map((employee) => {
-    const empDays = dayRecords.filter((d) => d.employee_id === employee.id);
+    const empDays = dayRecords
+      .filter((d) => d.employee_id === employee.id)
+      .sort((a, b) => {
+        const byDate = a.work_date.localeCompare(b.work_date);
+        if (byDate !== 0) return byDate;
+        return a.created_at.localeCompare(b.created_at);
+      });
     const empPays = payments.filter((p) => p.employee_id === employee.id);
     const cash = round2(empPays.filter((p) => p.method?.name.toLowerCase() === "caja").reduce((s, p) => s + p.amount, 0));
     const account = round2(empPays.filter((p) => p.method?.name.toLowerCase() === "cuenta de rosa").reduce((s, p) => s + p.amount, 0));
     const projectOrWork = round2(empPays.filter((p) => p.payment_type === "project" || p.payment_type === "work").reduce((s, p) => s + p.amount, 0));
+    const groupedDays = empDays.reduce<Partial<Record<SalaryWeekday, SalaryDayRecordWithRelations[]>>>((acc, record) => {
+      const current = acc[record.day_name] ?? [];
+      current.push(record);
+      acc[record.day_name] = current;
+      return acc;
+    }, {});
     return {
       employee,
-      dayRecords: Object.fromEntries(empDays.map((d) => [d.day_name, d])) as Partial<
-        Record<SalaryWeekday, SalaryDayRecordWithRelations>
-      >,
+      dayRecords: groupedDays,
       payments: empPays,
       totals: { cash, account, projectOrWork, total: round2(empPays.reduce((s, p) => s + p.amount, 0)) },
     };
@@ -892,7 +952,7 @@ export interface SaveSalaryDayRecordData {
   employeeId: string;
   workDate: string;
   dayName: SalaryWeekday;
-  activityType: "project" | "work" | "absent" | "pending";
+  activityType: "project" | "work" | "week" | "hour" | "absent" | "pending";
   projectId: string | null;
   workId: string | null;
   taskTypeId: string | null;
@@ -907,6 +967,20 @@ export async function saveSalaryDayRecord(data: SaveSalaryDayRecordData): Promis
   if (!week) throw new Error("Semana inválida");
   if ((week.week_status as string) === "paid") throw new Error("La semana ya está cerrada y no admite cambios");
 
+  const normalizedNotes = data.notes?.trim() || null;
+  const sameDayRecord = (row: {
+    activity_type: string;
+    project_id: string | null;
+    work_id: string | null;
+    task_type_id: string | null;
+    notes: string | null;
+  }) =>
+    row.activity_type === data.activityType &&
+    row.project_id === data.projectId &&
+    row.work_id === data.workId &&
+    row.task_type_id === data.taskTypeId &&
+    (row.notes ?? null) === normalizedNotes;
+
   const payload = {
     work_date: data.workDate,
     day_name: data.dayName,
@@ -914,20 +988,41 @@ export async function saveSalaryDayRecord(data: SaveSalaryDayRecordData): Promis
     project_id: data.projectId,
     work_id: data.workId,
     task_type_id: data.taskTypeId,
-    notes: data.notes,
+    notes: normalizedNotes,
     record_status: data.status,
   };
 
   let recordId = data.id;
   if (!recordId) {
-    const { data: existing } = await client
+    const { data: existingRows } = await client
       .from("salary_day_records")
-      .select("id")
+      .select("id, activity_type, project_id, work_id, task_type_id, notes")
       .eq("salary_week_id", data.salaryWeekId)
       .eq("employee_id", data.employeeId)
       .eq("day_name", data.dayName)
-      .maybeSingle();
-    recordId = existing?.id as string | undefined;
+      .eq("status", 1);
+    const existing = (existingRows ?? []) as Array<{
+      id: string;
+      activity_type: string;
+      project_id: string | null;
+      work_id: string | null;
+      task_type_id: string | null;
+      notes: string | null;
+    }>;
+    if (existing.some(sameDayRecord)) {
+      throw new Error("Ya existe una actividad igual para este día");
+    }
+    const placeholder = existing.find(
+      (row) =>
+        row.activity_type === "pending" &&
+        !row.project_id &&
+        !row.work_id &&
+        !row.task_type_id &&
+        !(row.notes ?? "").trim(),
+    );
+    if (existing.length === 1 && placeholder) {
+      recordId = placeholder.id;
+    }
   }
 
   if (recordId) {
@@ -943,6 +1038,81 @@ export async function saveSalaryDayRecord(data: SaveSalaryDayRecordData): Promis
     recordId = created.id as string;
   }
   return recordId;
+}
+
+export async function deleteSalaryDayRecord(data: { recordId: string; userId: string | null }): Promise<void> {
+  const client = sb();
+  const { data: record } = await client
+    .from("salary_day_records")
+    .select("id, salary_week_id, employee_id, work_date, day_name")
+    .eq("id", data.recordId)
+    .maybeSingle();
+  if (!record) throw new Error("Actividad no encontrada");
+
+  const { data: week } = await client
+    .from("salary_weeks")
+    .select("week_status")
+    .eq("id", record.salary_week_id)
+    .maybeSingle();
+  if ((week?.week_status as string) === "paid") {
+    throw new Error("La semana ya está pagada y no admite cambios");
+  }
+
+  const { error } = await client.from("salary_day_records").update({ status: 0 }).eq("id", data.recordId);
+  if (error) throw new Error(error.message);
+
+  const { data: remainingRows, error: remainingError } = await client
+    .from("salary_day_records")
+    .select("id, activity_type, project_id, work_id, task_type_id, notes")
+    .eq("salary_week_id", record.salary_week_id)
+    .eq("employee_id", record.employee_id)
+    .eq("day_name", record.day_name)
+    .eq("status", 1);
+  if (remainingError) throw new Error(remainingError.message);
+
+  const remaining = (remainingRows ?? []) as Array<{
+    id: string;
+    activity_type: string;
+    project_id: string | null;
+    work_id: string | null;
+    task_type_id: string | null;
+    notes: string | null;
+  }>;
+  const hasVisibleRecord = remaining.some(
+    (row) =>
+      !(
+        row.activity_type === "pending" &&
+        !row.project_id &&
+        !row.work_id &&
+        !row.task_type_id &&
+        !(row.notes ?? "").trim()
+      ),
+  );
+
+  if (remaining.length === 0 || !hasVisibleRecord) {
+    const hasPlaceholder = remaining.some(
+      (row) =>
+        row.activity_type === "pending" &&
+        !row.project_id &&
+        !row.work_id &&
+        !row.task_type_id &&
+        !(row.notes ?? "").trim(),
+    );
+    if (!hasPlaceholder) {
+      const { error: insertError } = await client.from("salary_day_records").insert({
+        salary_week_id: record.salary_week_id,
+        employee_id: record.employee_id,
+        work_date: record.work_date,
+        day_name: record.day_name,
+        activity_type: "pending",
+        record_status: "draft",
+        created_by: await getCurrentUserId(),
+      });
+      if (insertError) throw new Error(insertError.message);
+    }
+  }
+
+  await audit("day_record_deleted", data.recordId, "Actividad diaria eliminada");
 }
 
 export interface SaveSalaryPaymentData {
@@ -1122,8 +1292,7 @@ async function validateSalaryWeekCanBePaid(weekId: string) {
           p.task_type_id === g.taskTypeId,
       )
       .reduce((s, p) => s + p.amount, 0);
-    const external = g.type === "project" ? await projectAreaExpensePaid(g.projectId, g.taskTypeId) : 0;
-    if (round2(thisWeek + external) <= 0.001) {
+    if (round2(thisWeek) <= 0.001) {
       incomplete.push(`${g.employeeName}: ${g.referenceName} · ${g.taskName}`);
     }
   }
@@ -1291,7 +1460,7 @@ export async function setSalaryReceiptSignature(
   if (error) throw new Error(error.message);
 }
 
-/** Comprobante de pago a un empleado por todo lo trabajado en un proyecto/obra esa semana. */
+/** Comprobante de pago semanal a un empleado por el total pagado en la semana. */
 export async function getSalaryReceipt(
   weekId: string,
   employeeId: string,
@@ -1300,6 +1469,8 @@ export async function getSalaryReceipt(
 ): Promise<ReceiptData | null> {
   if (!isAdminConfigured()) return null;
   const client = sb();
+  void refType;
+  void refId;
 
   const [{ data: week }, { data: emp }, { data: pays }] = await Promise.all([
     client
@@ -1310,33 +1481,30 @@ export async function getSalaryReceipt(
     client.from("employees").select("full_name").eq("id", employeeId).maybeSingle(),
     client
       .from("salary_payments")
-      .select("amount, project_id, work_id")
+      .select("amount")
       .eq("salary_week_id", weekId)
       .eq("employee_id", employeeId)
       .eq("status", 1),
   ]);
   if (!week || !emp) return null;
 
-  const refCol = refType === "project" ? "project_id" : "work_id";
   const amount = round2(
     (pays ?? [])
-      .filter((p) => (p as Row)[refCol] === refId)
       .reduce((s, p) => s + Number((p as Row).amount), 0),
   );
   if (amount <= 0) return null;
-
-  const refTable = refType === "project" ? "projects" : "works";
-  const { data: ref } = await client
-    .from(refTable)
-    .select("name")
-    .eq("id", refId)
-    .maybeSingle();
-
-  const { code, signature } = await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
+  const stableRefType: SalaryRefType = "project";
+  const stableRefId = weekId;
+  const { code, signature } = await getOrCreateSalaryReceiptCode(
+    weekId,
+    employeeId,
+    stableRefType,
+    stableRefId,
+  );
 
   return {
     docType: "pago",
-    kind: refType === "project" ? "proyecto" : "obra",
+    kind: "proyecto",
     code,
     amount,
     concept: `Pago de mano de obra (${shortDate(week.week_start_date as string)} - ${shortDate(
@@ -1344,7 +1512,7 @@ export async function getSalaryReceipt(
     )})`,
     date: week.payment_date as string,
     clientName: (emp.full_name as string) ?? "",
-    subjectName: (ref?.name as string) ?? "",
+    subjectName: null,
     signature,
   };
 }

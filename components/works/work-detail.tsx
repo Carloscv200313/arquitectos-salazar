@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ListChecks, Receipt, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ListChecks, Wallet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -11,13 +11,9 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type {
-  PaymentMethod,
-  WorkCategorySummary,
   WorkAdministrationUtilityRow,
   WorkFinance,
-  WorkMovementWithBalance,
 } from "@/lib/types";
-import { WorkMovementActions } from "./work-movement-actions";
 
 function monthLabel(month: string) {
   const date = new Date(`${month}-01T00:00:00`);
@@ -105,62 +101,6 @@ export function WorkFinanceOverview({ finance }: { finance: WorkFinance }) {
   );
 }
 
-function signedTone(value: number) {
-  if (value < -0.001) return "text-destructive";
-  if (value > 0.001) return "text-brand-foreground";
-  return "text-muted-foreground";
-}
-
-export function WorkCategorySummaryTable({
-  rows,
-}: {
-  rows: WorkCategorySummary[];
-}) {
-  return (
-    <Card className="gap-0 overflow-hidden p-0">
-      <div className="border-b px-5 py-4">
-        <h2 className="font-semibold">Resumen por categoría</h2>
-        <p className="text-sm text-muted-foreground">
-          Totales agrupados según la clasificación de cada movimiento.
-        </p>
-      </div>
-      <Table>
-        <TableHeader className="bg-muted/40">
-          <TableRow>
-            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Categoría</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Ingresos</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Egresos</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Balance</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.category}>
-              <TableCell className="px-5 font-medium">{row.category}</TableCell>
-              <TableCell className="text-right tabular-nums text-brand-foreground">
-                {formatCurrency(row.income)}
-              </TableCell>
-              <TableCell className="text-right tabular-nums text-destructive">
-                {formatCurrency(row.expense)}
-              </TableCell>
-              <TableCell className={cn("px-5 text-right font-semibold tabular-nums", signedTone(row.balance))}>
-                {formatCurrency(row.balance)}
-              </TableCell>
-            </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
-                Sin movimientos registrados.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Card>
-  );
-}
-
 export function WorkAdministrationUtilityTable({
   rows,
 }: {
@@ -196,119 +136,6 @@ export function WorkAdministrationUtilityTable({
             <TableRow>
               <TableCell colSpan={2} className="h-20 text-center text-muted-foreground">
                 Sin honorarios registrados.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Card>
-  );
-}
-
-export function WorkMovementsTable({
-  movements,
-  workId,
-  methods,
-  providers,
-  categories,
-}: {
-  movements: WorkMovementWithBalance[];
-  workId: string;
-  methods: PaymentMethod[];
-  providers: string[];
-  categories: string[];
-}) {
-  return (
-    <Card id="movimientos" className="gap-0 overflow-hidden p-0">
-      <div className="border-b px-5 py-4">
-        <h2 className="font-semibold">Historial de movimientos</h2>
-        <p className="text-sm text-muted-foreground">
-          Entradas y salidas con saldo acumulado calculado automáticamente.
-        </p>
-      </div>
-      <Table>
-        <TableHeader className="bg-muted/40">
-          <TableRow>
-            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Recibo</TableHead>
-            <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
-            <TableHead className="text-xs uppercase text-muted-foreground">Concepto</TableHead>
-            <TableHead className="text-xs uppercase text-muted-foreground">Proveedor</TableHead>
-            <TableHead className="text-xs uppercase text-muted-foreground">Categoría</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Entrada</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Salida</TableHead>
-            <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
-            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Recibo</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {movements.map((movement) => (
-            <TableRow key={movement.id}>
-              <TableCell className="px-5 font-medium">{movement.receipt}</TableCell>
-              <TableCell className="whitespace-nowrap text-muted-foreground">
-                {formatDate(movement.movement_date)}
-              </TableCell>
-              <TableCell className="font-medium">{movement.concept}</TableCell>
-              <TableCell className="text-muted-foreground">{movement.supplier}</TableCell>
-              <TableCell className="text-muted-foreground">{movement.category}</TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-semibold tabular-nums",
-                  movement.movement_type === "income"
-                    ? "text-brand-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                {movement.movement_type === "income" ? formatCurrency(movement.amount) : "—"}
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-semibold tabular-nums",
-                  movement.movement_type === "expense"
-                    ? "text-destructive"
-                    : "text-muted-foreground",
-                )}
-              >
-                {movement.movement_type === "expense" ? formatCurrency(movement.amount) : "—"}
-              </TableCell>
-              <TableCell className={cn("text-right font-semibold tabular-nums", signedTone(movement.balance))}>
-                {formatCurrency(movement.balance)}
-              </TableCell>
-              <TableCell className="px-5 text-muted-foreground">
-                {movement.method?.name ?? "Sin forma"}
-              </TableCell>
-              <TableCell className="px-5 text-right">
-                {movement.movement_type === "income" ? (
-                  <a
-                    href={`/recibo/obra/${movement.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
-                    title="Imprimir recibo"
-                  >
-                    <Receipt className="size-3.5" />
-                    {movement.receipt}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="px-5 text-right">
-                <WorkMovementActions
-                  movement={movement}
-                  workId={workId}
-                  methods={methods}
-                  providers={providers}
-                  categories={categories}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-          {movements.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
-                Sin movimientos registrados.
               </TableCell>
             </TableRow>
           )}

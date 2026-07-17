@@ -113,6 +113,8 @@ export const RESPONSIBLE_OPTIONS = [
 export const SALARY_ASSIGNMENT_LABELS = {
   project: "PROYECTO",
   work: "OBRA",
+  week: "SEMANA",
+  hour: "HORA",
   absent: "NO ASISTIÓ",
   pending: "PENDIENTE",
 } as const;
@@ -135,8 +137,16 @@ export const SALARY_WEEK_STATUS_LABELS = {
 export const SALARY_ACTIVITY_TYPES = [
   "project",
   "work",
+  "week",
+  "hour",
   "absent",
   "pending",
+] as const;
+
+export const SALARY_ACTIVITY_FORM_TYPES = [
+  "project",
+  "week",
+  "hour",
 ] as const;
 
 export const SALARY_PAYMENT_TYPES = [
@@ -271,6 +281,9 @@ export const WORK_PROVIDERS = [
   "Maderería Paisa",
   "Master Block",
 ] as const;
+
+export const WORK_FILES_BUCKET = "work-files" as const;
+export const WORK_FILE_MAX_BYTES = 15 * 1024 * 1024;
 
 export const CURRENCY = "MXN";
 export const LOCALE = "es-MX";

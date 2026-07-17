@@ -181,9 +181,21 @@ export interface WorkFinance {
   lastMovementDate: string | null;
 }
 
+export interface WorkFile {
+  id: string;
+  work_id: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  size_bytes: number;
+  created_at: string;
+  created_by: string | null;
+}
+
 export interface WorkWithFinance extends Work {
   client: Client;
   finance: WorkFinance;
+  files: WorkFile[];
 }
 
 export interface WorkMovementWithBalance extends WorkMovement {
@@ -236,9 +248,13 @@ export interface WorkOrderWithRelations extends WorkOrder {
 
 export interface WorkCategorySummary {
   category: string;
+  budget: number | null;
   income: number;
   expense: number;
   balance: number;
+  incomePercent: number | null;
+  expensePercent: number | null;
+  executedPercent: number | null;
 }
 
 export interface WorkAdministrationUtilityRow {
@@ -263,6 +279,14 @@ export interface DebtReportRow {
   amount: number;
   type: DebtPartyType;
   source: "manual" | "works" | "orders";
+}
+
+export interface ProviderDebtDetail {
+  provider: string;
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  orders: WorkOrderWithRelations[];
 }
 
 export interface GeneralBalanceEntry {
@@ -347,6 +371,8 @@ export type SalaryWeekStatus = "draft" | "paid";
 export type SalaryActivityType =
   | "project"
   | "work"
+  | "week"
+  | "hour"
   | "absent"
   | "pending";
 export type SalaryPaymentType =
@@ -461,7 +487,7 @@ export interface SalaryPaymentWithRelations extends SalaryPayment {
 
 export interface SalaryEmployeeWeekSummary {
   employee: Employee;
-  dayRecords: Partial<Record<SalaryWeekday, SalaryDayRecordWithRelations>>;
+  dayRecords: Partial<Record<SalaryWeekday, SalaryDayRecordWithRelations[]>>;
   payments: SalaryPaymentWithRelations[];
   totals: {
     cash: number;
@@ -527,6 +553,7 @@ export type AuditOperation = "create" | "update" | "delete";
 export type AuditEntityType =
   | "project_movement"
   | "work_movement"
+  | "work_order"
   | "order_payment"
   | "salary";
 

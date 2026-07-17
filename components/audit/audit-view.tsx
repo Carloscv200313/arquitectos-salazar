@@ -28,7 +28,8 @@ const ENTITY_OPTIONS: { value: AuditEntityType | "all"; label: string }[] = [
   { value: "all", label: "Todos los módulos" },
   { value: "project_movement", label: "Proyectos" },
   { value: "work_movement", label: "Obras" },
-  { value: "order_payment", label: "Pedidos" },
+  { value: "work_order", label: "Pedidos" },
+  { value: "order_payment", label: "Abonos de pedidos" },
   { value: "salary", label: "Salarios" },
 ];
 

@@ -174,6 +174,38 @@ create table if not exists public.work_movements (
 create index if not exists idx_work_movements_work on public.work_movements (work_id);
 create index if not exists idx_work_movements_date on public.work_movements (movement_date desc);
 
+create table if not exists public.work_files (
+  id            uuid primary key default gen_random_uuid(),
+  work_id       uuid not null references public.works (id) on delete cascade,
+  file_name     text not null check (char_length(trim(file_name)) between 1 and 255),
+  storage_path  text not null unique,
+  mime_type     text,
+  size_bytes    bigint not null default 0 check (size_bytes >= 0),
+  created_at    timestamptz not null default now(),
+  created_by    uuid
+);
+
+create index if not exists idx_work_files_work on public.work_files (work_id);
+create index if not exists idx_work_files_created on public.work_files (created_at desc);
+
+create table if not exists public.work_category_budgets (
+  id            uuid primary key default gen_random_uuid(),
+  work_id       uuid not null references public.works (id) on delete cascade,
+  category      text not null check (char_length(trim(category)) between 2 and 120),
+  amount        numeric(14,2) not null default 0 check (amount >= 0),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  created_by    uuid,
+  unique (work_id, category)
+);
+
+create index if not exists idx_work_category_budgets_work
+  on public.work_category_budgets (work_id);
+
+create trigger trg_work_category_budgets_updated_at
+  before update on public.work_category_budgets
+  for each row execute function public.set_updated_at();
+
 -- ── work_internal_transfers (traspasos propios de Obras) ────────────────────
 create table if not exists public.work_internal_transfers (
   id                      uuid primary key default gen_random_uuid(),
@@ -351,7 +383,7 @@ create table if not exists public.salary_day_records (
   employee_id    uuid not null references public.employees (id) on delete restrict,
   work_date      date not null,
   day_name       text not null check (day_name in ('monday', 'tuesday', 'wednesday', 'thursday', 'friday')),
-  activity_type  text not null check (activity_type in ('project', 'work', 'absent', 'pending')),
+  activity_type  text not null check (activity_type in ('project', 'work', 'week', 'hour', 'absent', 'pending')),
   project_id     uuid references public.projects (id) on delete set null,
   work_id        uuid references public.works (id) on delete set null,
   task_type_id   uuid references public.task_types (id) on delete set null,
@@ -430,6 +462,8 @@ alter table public.project_addons   enable row level security;
 alter table public.internal_transfers enable row level security;
 alter table public.works            enable row level security;
 alter table public.work_movements   enable row level security;
+alter table public.work_files       enable row level security;
+alter table public.work_category_budgets enable row level security;
 alter table public.work_internal_transfers enable row level security;
 alter table public.work_orders      enable row level security;
 alter table public.work_order_payments enable row level security;
@@ -513,6 +547,24 @@ create policy "work_internal_transfers_select" on public.work_internal_transfers
 create policy "work_internal_transfers_insert" on public.work_internal_transfers
   for insert to authenticated with check (true);
 create policy "work_internal_transfers_delete" on public.work_internal_transfers
+  for delete to authenticated using (true);
+
+-- work_files
+create policy "work_files_select" on public.work_files
+  for select to authenticated using (true);
+create policy "work_files_insert" on public.work_files
+  for insert to authenticated with check (true);
+create policy "work_files_delete" on public.work_files
+  for delete to authenticated using (true);
+
+-- work_category_budgets
+create policy "work_category_budgets_select" on public.work_category_budgets
+  for select to authenticated using (true);
+create policy "work_category_budgets_insert" on public.work_category_budgets
+  for insert to authenticated with check (true);
+create policy "work_category_budgets_update" on public.work_category_budgets
+  for update to authenticated using (true) with check (true);
+create policy "work_category_budgets_delete" on public.work_category_budgets
   for delete to authenticated using (true);
 
 -- work_orders

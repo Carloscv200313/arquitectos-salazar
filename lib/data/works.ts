@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import { WORK_CATEGORIES } from "@/lib/constants";
 import {
   RECEIPT_PREFIX,
@@ -20,9 +21,11 @@ import type {
   WorkStatus,
   WorkWithFinance,
   Work,
+  WorkFile,
   Client,
   PaymentMethod,
 } from "@/lib/types";
+import { WORK_FILE_MAX_BYTES, WORK_FILES_BUCKET } from "@/lib/constants";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
 import { writeAudit } from "./audit";
@@ -90,6 +93,24 @@ function mapMovement(r: Row): WorkMovement {
   };
 }
 
+function mapWorkFile(r: Row): WorkFile {
+  return {
+    id: r.id as string,
+    work_id: r.work_id as string,
+    file_name: r.file_name as string,
+    storage_path: r.storage_path as string,
+    mime_type: (r.mime_type as string) ?? null,
+    size_bytes: Number(r.size_bytes ?? 0),
+    created_at: r.created_at as string,
+    created_by: (r.created_by as string) ?? null,
+  };
+}
+
+function percentOf(value: number, total: number | null): number | null {
+  if (total === null || total <= 0.001) return null;
+  return round2((value / total) * 100);
+}
+
 function computeWorkFinance(movements: WorkMovement[]) {
   const income = round2(
     movements.filter((m) => m.movement_type === "income").reduce((s, m) => s + m.amount, 0),
@@ -118,6 +139,7 @@ function enrichRow(r: Row): WorkWithFinance | null {
     ...mapWork(r),
     client: mapClient(client),
     finance: computeWorkFinance(movements),
+    files: [],
   };
 }
 
@@ -149,6 +171,44 @@ async function findOrCreateClientId(
 
 const WORK_SELECT = "*, client:clients(*), movements:work_movements(*)";
 
+async function listWorkFilesByWorkIds(workIds: string[]): Promise<Map<string, WorkFile[]>> {
+  const filesByWork = new Map<string, WorkFile[]>();
+  if (!workIds.length) return filesByWork;
+
+  const { data, error } = await sb()
+    .from("work_files")
+    .select("*")
+    .in("work_id", workIds)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  for (const file of (data ?? []).map(mapWorkFile)) {
+    const bucket = filesByWork.get(file.work_id) ?? [];
+    bucket.push(file);
+    filesByWork.set(file.work_id, bucket);
+  }
+
+  return filesByWork;
+}
+
+async function listConfiguredWorkCategories(): Promise<string[]> {
+  const { data, error } = await sb()
+    .from("work_categories")
+    .select("name")
+    .eq("status", 1)
+    .order("name", { ascending: true });
+
+  if (error) {
+    return ["Abono de obra", ...WORK_CATEGORIES.filter((item) => item !== "Abono de obra")];
+  }
+
+  const categories = (data ?? [])
+    .map((row) => String(row.name ?? "").trim())
+    .filter(Boolean);
+
+  return ["Abono de obra", ...categories.filter((item) => item !== "Abono de obra")];
+}
+
 /* ----------------------------------------------------------------- reads */
 
 export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFinance[]> {
@@ -158,7 +218,7 @@ export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFina
   const search = filters.search?.trim().toLowerCase();
   const client = filters.client?.trim().toLowerCase();
 
-  return (data ?? [])
+  const works = (data ?? [])
     .map(enrichRow)
     .filter((w): w is WorkWithFinance => w !== null)
     .filter((w) => {
@@ -178,12 +238,21 @@ export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFina
       return true;
     })
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const filesByWork = await listWorkFilesByWorkIds(works.map((work) => work.id));
+  return works.map((work) => ({
+    ...work,
+    files: filesByWork.get(work.id) ?? [],
+  }));
 }
 
 export async function getWork(id: string): Promise<WorkWithFinance | null> {
   if (!isAdminConfigured()) return null;
   const { data } = await sb().from("works").select(WORK_SELECT).eq("id", id).maybeSingle();
-  return data ? enrichRow(data) : null;
+  const work = data ? enrichRow(data) : null;
+  if (!work) return null;
+  const filesByWork = await listWorkFilesByWorkIds([id]);
+  return { ...work, files: filesByWork.get(id) ?? [] };
 }
 
 async function movementsOf(workId: string): Promise<WorkMovement[]> {
@@ -217,21 +286,80 @@ export async function listWorkMovements(workId: string): Promise<WorkMovementWit
 
 export async function getWorkCategorySummary(workId: string): Promise<WorkCategorySummary[]> {
   if (!isAdminConfigured()) return [];
-  const movements = await movementsOf(workId);
-  const rows = new Map<string, WorkCategorySummary>();
-  for (const category of WORK_CATEGORIES) {
-    rows.set(category, { category, income: 0, expense: 0, balance: 0 });
+  const [movements, configuredCategories, budgetRes] = await Promise.all([
+    movementsOf(workId),
+    listConfiguredWorkCategories(),
+    sb()
+      .from("work_category_budgets")
+      .select("category, amount")
+      .eq("work_id", workId),
+  ]);
+
+  if (budgetRes.error) throw new Error(budgetRes.error.message);
+
+  const budgets = new Map<string, number>();
+  for (const row of budgetRes.data ?? []) {
+    budgets.set(String(row.category), Number(row.amount));
   }
+
+  const rows = new Map<string, WorkCategorySummary>();
+  const allCategories = new Set<string>([
+    ...configuredCategories,
+    ...movements.map((movement) => movement.category),
+    ...budgets.keys(),
+  ]);
+
+  for (const category of allCategories) {
+    const budget = budgets.get(category) ?? null;
+    rows.set(category, {
+      category,
+      budget,
+      income: 0,
+      expense: 0,
+      balance: 0,
+      incomePercent: percentOf(0, budget),
+      expensePercent: percentOf(0, budget),
+      executedPercent: percentOf(0, budget),
+    });
+  }
+
   for (const m of movements) {
-    const row = rows.get(m.category) ?? { category: m.category, income: 0, expense: 0, balance: 0 };
+    const current =
+      rows.get(m.category) ??
+      {
+        category: m.category,
+        budget: budgets.get(m.category) ?? null,
+        income: 0,
+        expense: 0,
+        balance: 0,
+        incomePercent: null,
+        expensePercent: null,
+        executedPercent: null,
+      };
+    const row = { ...current };
     if (m.movement_type === "income") row.income = round2(row.income + m.amount);
     else row.expense = round2(row.expense + m.amount);
     rows.set(m.category, row);
   }
   return [...rows.values()]
-    .map((row) => ({ ...row, balance: round2(row.income - row.expense) }))
-    .filter((row) => row.income > 0 || row.expense > 0)
-    .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+    .map((row) => {
+      const balance = round2(row.income - row.expense);
+      return {
+        ...row,
+        balance,
+        incomePercent: percentOf(row.income, row.budget),
+        expensePercent: percentOf(row.expense, row.budget),
+        executedPercent: percentOf(row.expense, row.budget),
+      };
+    })
+    .filter((row) => row.income > 0 || row.expense > 0 || (row.budget ?? 0) > 0)
+    .sort((a, b) => {
+      if (a.category === "Abono de obra") return -1;
+      if (b.category === "Abono de obra") return 1;
+      const budgetDiff = (b.budget ?? 0) - (a.budget ?? 0);
+      if (Math.abs(budgetDiff) > 0.001) return budgetDiff;
+      return a.category.localeCompare(b.category, "es");
+    });
 }
 
 export async function getWorkAdministrationUtilities(
@@ -602,4 +730,135 @@ export async function setWorkMovementSignature(id: string, signature: string): P
 export async function deleteWork(id: string): Promise<void> {
   const { error } = await sb().from("works").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+function sanitizeFileName(fileName: string): string {
+  const trimmed = fileName.trim();
+  const lastDot = trimmed.lastIndexOf(".");
+  const baseName = lastDot > 0 ? trimmed.slice(0, lastDot) : trimmed;
+  const extension = lastDot > 0 ? trimmed.slice(lastDot) : "";
+  const safeBase = baseName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase();
+  const safeExtension = extension.replace(/[^a-zA-Z0-9.]/g, "").toLowerCase();
+  return `${safeBase || "archivo"}${safeExtension}`;
+}
+
+async function ensureWorkFilesBucket(): Promise<void> {
+  const admin = sb();
+  const { data, error } = await admin.storage.getBucket(WORK_FILES_BUCKET);
+  if (!error && data) return;
+
+  const { error: createError } = await admin.storage.createBucket(WORK_FILES_BUCKET, {
+    public: false,
+    fileSizeLimit: `${WORK_FILE_MAX_BYTES}`,
+  });
+  if (createError && !/already exists/i.test(createError.message)) {
+    throw new Error(createError.message);
+  }
+}
+
+export async function uploadWorkFile(workId: string, file: File): Promise<WorkFile> {
+  if (!isAdminConfigured()) throw new Error("Supabase no está configurado.");
+  if (!file.size) throw new Error("Selecciona un archivo válido.");
+  if (file.size > WORK_FILE_MAX_BYTES) {
+    throw new Error("El archivo supera el límite de 15 MB.");
+  }
+
+  await ensureWorkFilesBucket();
+
+  const safeName = sanitizeFileName(file.name);
+  const storagePath = `${workId}/${Date.now()}-${randomUUID()}-${safeName}`;
+  const bucket = sb().storage.from(WORK_FILES_BUCKET);
+  const { error: uploadError } = await bucket.upload(storagePath, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const { data, error } = await sb()
+    .from("work_files")
+    .insert({
+      work_id: workId,
+      file_name: file.name.trim(),
+      storage_path: storagePath,
+      mime_type: file.type || null,
+      size_bytes: file.size,
+      created_by: null,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    await bucket.remove([storagePath]);
+    throw new Error(error.message);
+  }
+
+  return mapWorkFile(data as Row);
+}
+
+export async function deleteWorkFile(fileId: string): Promise<void> {
+  const { data, error } = await sb()
+    .from("work_files")
+    .select("id, storage_path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Archivo no encontrado.");
+
+  const { error: storageError } = await sb()
+    .storage
+    .from(WORK_FILES_BUCKET)
+    .remove([data.storage_path as string]);
+  if (storageError) throw new Error(storageError.message);
+
+  const { error: deleteError } = await sb().from("work_files").delete().eq("id", fileId);
+  if (deleteError) throw new Error(deleteError.message);
+}
+
+export async function getWorkFileViewUrl(fileId: string): Promise<string> {
+  const { data, error } = await sb()
+    .from("work_files")
+    .select("storage_path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Archivo no encontrado.");
+
+  const { data: signed, error: signedError } = await sb()
+    .storage
+    .from(WORK_FILES_BUCKET)
+    .createSignedUrl(data.storage_path as string, 60 * 15);
+  if (signedError || !signed?.signedUrl) {
+    throw new Error(signedError?.message ?? "No se pudo generar el enlace del archivo.");
+  }
+
+  return signed.signedUrl;
+}
+
+export async function saveWorkCategoryBudget(
+  workId: string,
+  category: string,
+  amount: number,
+): Promise<WorkCategorySummary[]> {
+  const trimmedCategory = category.trim();
+  const admin = sb();
+
+  const payload = {
+    work_id: workId,
+    category: trimmedCategory,
+    amount: round2(amount),
+    created_by: null,
+  };
+
+  const { error } = await admin
+    .from("work_category_budgets")
+    .upsert(payload, { onConflict: "work_id,category" });
+  if (error) throw new Error(error.message);
+
+  return getWorkCategorySummary(workId);
 }

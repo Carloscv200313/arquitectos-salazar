@@ -13,6 +13,7 @@ function sb() {
 const ENTITY_LABELS: Record<AuditEntityType, string> = {
   project_movement: "Movimiento de proyecto",
   work_movement: "Movimiento de obra",
+  work_order: "Pedido de obra",
   order_payment: "Pago de pedido",
   salary: "Salario",
 };

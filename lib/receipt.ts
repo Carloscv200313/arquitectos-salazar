@@ -20,7 +20,7 @@ export interface ReceiptData {
   concept: string;
   date: string; // ISO yyyy-mm-dd del pago
   clientName: string; // cliente (abono) o empleado (pago)
-  subjectName: string; // nombre del proyecto u obra
+  subjectName: string | null; // nombre del proyecto u obra; null en comprobante semanal
   signature: string | null; // firma dibujada (data URL PNG); null = sin firmar
 }
 

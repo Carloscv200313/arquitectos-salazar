@@ -7,11 +7,13 @@ import {
   getWorkOrder,
   quoteWorkOrder,
   registerWorkOrderPayment,
+  updateWorkOrder,
   updateWorkOrderPayment,
   deleteWorkOrderPayment,
 } from "@/lib/data/orders";
 import {
   createWorkOrderSchema,
+  editWorkOrderSchema,
   quoteWorkOrderSchema,
   registerWorkOrderPaymentSchema,
   editOrderPaymentSchema,
@@ -106,6 +108,33 @@ export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> 
       ok: false,
       error:
         error instanceof Error ? error.message : "No se pudo asignar el monto.",
+    };
+  }
+}
+
+export async function editWorkOrderAction(raw: unknown): Promise<ActionResult> {
+  const parsed = editWorkOrderSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del pedido.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    await updateWorkOrder(d.orderId, {
+      supplier: d.supplier,
+      material: d.material,
+      amount: d.amount ?? null,
+    }, d.note);
+    revalidateOrderSurfaces(d.workId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo editar el pedido.",
     };
   }
 }

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   BadgeDollarSign,
   ClipboardList,
+  Eye,
   HandCoins,
   Loader2,
   Pencil,
@@ -36,7 +37,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { round2 } from "@/lib/calculations";
-import type { DebtReportRow } from "@/lib/types";
+import type { DebtReportRow, ProviderDebtDetail } from "@/lib/types";
 
 function signedCurrency(value: number) {
   if (Math.abs(value) < 0.001) return formatCurrency(0);
@@ -65,29 +66,14 @@ function Metric({
   tone?: "success" | "danger";
 }) {
   return (
-    <Card
-      className={cn(
-        "p-5",
-        accent && "border-transparent bg-brand text-brand-foreground",
-      )}
-    >
+    <Card className={cn("p-5", accent && "border-transparent bg-brand text-brand-foreground")}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p
-            className={cn(
-              "text-sm font-medium",
-              accent ? "text-brand-foreground/80" : "text-muted-foreground",
-            )}
-          >
+          <p className={cn("text-sm font-medium", accent ? "text-brand-foreground/80" : "text-muted-foreground")}>
             {label}
           </p>
           <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
-          <p
-            className={cn(
-              "mt-1 text-xs",
-              accent ? "text-brand-foreground/70" : "text-muted-foreground",
-            )}
-          >
+          <p className={cn("mt-1 text-xs", accent ? "text-brand-foreground/70" : "text-muted-foreground")}>
             {hint}
           </p>
         </div>
@@ -118,6 +104,7 @@ function DebtTableCard({
   type,
   onCreate,
   onEdit,
+  onInspect,
 }: {
   title: string;
   description: string;
@@ -126,6 +113,7 @@ function DebtTableCard({
   type: DebtReportRow["type"];
   onCreate?: () => void;
   onEdit?: (row: DebtReportRow) => void;
+  onInspect?: (row: DebtReportRow) => void;
 }) {
   const isDebtor = type === "debtor";
   return (
@@ -150,16 +138,10 @@ function DebtTableCard({
             <div
               className={cn(
                 "flex size-10 items-center justify-center rounded-xl",
-                isDebtor
-                  ? "bg-amber-100 text-amber-900"
-                  : "bg-brand-muted text-brand-foreground",
+                isDebtor ? "bg-amber-100 text-amber-900" : "bg-brand-muted text-brand-foreground",
               )}
             >
-              {isDebtor ? (
-                <HandCoins className="size-5" />
-              ) : (
-                <BadgeDollarSign className="size-5" />
-              )}
+              {isDebtor ? <HandCoins className="size-5" /> : <BadgeDollarSign className="size-5" />}
             </div>
           </div>
         </div>
@@ -171,7 +153,7 @@ function DebtTableCard({
             <TableRow className="hover:bg-transparent">
               <TableHead className="min-w-56 px-5">Nombre</TableHead>
               <TableHead className="px-5 text-right">Monto</TableHead>
-              {onEdit && (
+              {(onEdit || onInspect) && (
                 <TableHead className="w-14 px-5 text-right">
                   <span className="sr-only">Acciones</span>
                 </TableHead>
@@ -186,9 +168,7 @@ function DebtTableCard({
                     <span
                       className={cn(
                         "flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                        isDebtor
-                          ? "bg-amber-100 text-amber-900"
-                          : "bg-brand-muted text-brand-foreground",
+                        isDebtor ? "bg-amber-100 text-amber-900" : "bg-brand-muted text-brand-foreground",
                       )}
                     >
                       {row.name.slice(0, 1).toUpperCase()}
@@ -196,9 +176,7 @@ function DebtTableCard({
                     <div>
                       <div className="font-medium">{row.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {row.source === "manual"
-                          ? "Registro manual"
-                          : "Calculado desde Pedidos"}
+                        {row.source === "manual" ? "Registro manual" : "Calculado desde Pedidos"}
                       </div>
                     </div>
                   </div>
@@ -206,28 +184,41 @@ function DebtTableCard({
                 <TableCell className={cn("px-5 text-right font-semibold tabular-nums", amountTone(row.amount))}>
                   {signedCurrency(row.amount)}
                 </TableCell>
-                {onEdit && (
+                {(onEdit || onInspect) && (
                   <TableCell className="px-5 text-right">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-8"
-                      onClick={() => onEdit(row)}
-                      title="Editar deudor"
-                    >
-                      <Pencil className="size-4" />
-                      <span className="sr-only">Editar deudor</span>
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      {onInspect && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => onInspect(row)}
+                          title="Ver detalle"
+                        >
+                          <Eye className="size-4" />
+                          <span className="sr-only">Ver detalle</span>
+                        </Button>
+                      )}
+                      {onEdit && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          onClick={() => onEdit(row)}
+                          title="Editar deudor"
+                        >
+                          <Pencil className="size-4" />
+                          <span className="sr-only">Editar deudor</span>
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 )}
               </TableRow>
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell
-                  colSpan={onEdit ? 3 : 2}
-                  className="h-24 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={onEdit || onInspect ? 3 : 2} className="h-24 text-center text-muted-foreground">
                   Sin registros para la búsqueda.
                 </TableCell>
               </TableRow>
@@ -242,7 +233,7 @@ function DebtTableCard({
               >
                 {isDebtor ? formatCurrency(total) : signedCurrency(total)}
               </TableCell>
-              {onEdit && <TableCell className="px-5" />}
+              {(onEdit || onInspect) && <TableCell className="px-5" />}
             </TableRow>
           </TableBody>
         </Table>
@@ -349,27 +340,29 @@ function ManualDebtorSheet({
   );
 }
 
-export function DebtsView({ rows }: { rows: DebtReportRow[] }) {
+export function DebtsView({
+  rows,
+  providerDetails,
+}: {
+  rows: DebtReportRow[];
+  providerDetails: ProviderDebtDetail[];
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingDebtor, setEditingDebtor] = useState<DebtReportRow | null>(null);
+
   const debtors = rows.filter((row) => row.type === "debtor");
   const providers = rows.filter((row) => row.type === "provider");
   const totalDebtors = round2(debtors.reduce((sum, row) => sum + row.amount, 0));
-  const totalProviders = round2(
-    providers.reduce((sum, row) => sum + row.amount, 0),
-  );
+  const totalProviders = round2(providers.reduce((sum, row) => sum + row.amount, 0));
   const net = round2(totalDebtors + totalProviders);
   const activeRows = rows.filter((row) => Math.abs(row.amount) > 0.001).length;
   const q = search.trim().toLowerCase();
   const filteredDebtors = debtors.filter((row) => !q || row.name.toLowerCase().includes(q));
   const filteredProviders = providers.filter((row) => !q || row.name.toLowerCase().includes(q));
-  const filteredDebtorsTotal = round2(
-    filteredDebtors.reduce((sum, row) => sum + row.amount, 0),
-  );
-  const filteredProvidersTotal = round2(
-    filteredProviders.reduce((sum, row) => sum + row.amount, 0),
-  );
+  const filteredDebtorsTotal = round2(filteredDebtors.reduce((sum, row) => sum + row.amount, 0));
+  const filteredProvidersTotal = round2(filteredProviders.reduce((sum, row) => sum + row.amount, 0));
 
   return (
     <div className="flex flex-col gap-5">
@@ -438,6 +431,11 @@ export function DebtsView({ rows }: { rows: DebtReportRow[] }) {
             rows={filteredProviders}
             total={filteredProvidersTotal}
             type="provider"
+            onInspect={(row) => {
+              const detail = providerDetails.find((item) => item.provider === row.name) ?? null;
+              if (!detail) return;
+              router.push(`/finance/deudas/${encodeURIComponent(detail.provider)}`);
+            }}
           />
         </div>
       </div>

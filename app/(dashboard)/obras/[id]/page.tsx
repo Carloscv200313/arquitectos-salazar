@@ -10,11 +10,11 @@ import {
 import { listPaymentMethods } from "@/lib/data/projects";
 import { listProviderNames, listWorkCategoryNames } from "@/services/config.service";
 import {
-  WorkCategorySummaryTable,
   WorkFinanceOverview,
   WorkAdministrationUtilityTable,
-  WorkMovementsTable,
 } from "@/components/works/work-detail";
+import { WorkCategorySummaryTable } from "@/components/works/work-category-summary-table";
+import { WorkMovementsTable } from "@/components/works/work-movements-table";
 import { WorkDetailActions } from "@/components/works/work-detail-actions";
 import { WorkStatusBadge } from "@/components/works/work-status-badge";
 import { formatDate } from "@/lib/format";
@@ -84,13 +84,15 @@ export default async function WorkDetailPage({
       </div>
 
       <WorkFinanceOverview finance={work.finance} />
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <WorkCategorySummaryTable rows={categorySummary} />
+      <div className="grid gap-5 xl:grid-cols-[1.45fr_0.55fr]">
+        <WorkCategorySummaryTable workId={work.id} rows={categorySummary} />
         <WorkAdministrationUtilityTable rows={administrationUtilities} />
       </div>
       <WorkMovementsTable
         movements={movements}
         workId={work.id}
+        workName={work.name}
+        clientName={work.client.name}
         methods={methods}
         providers={providers}
         categories={categories}

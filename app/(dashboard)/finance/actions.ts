@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
+  deleteSalaryDayRecord,
   deleteSalaryPayment,
   registerGeneralBalanceAccountMovement,
   registerGeneralBalanceEntry,
@@ -39,6 +40,11 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
     if (!out[key]) out[key] = issue.message;
   }
   return out;
+}
+
+function revalidateSalaryPaths(weekId?: string | null) {
+  revalidatePath("/finance/salario");
+  if (weekId) revalidatePath(`/finance/salario/${weekId}`);
 }
 
 export async function saveManualDebtorAction(
@@ -181,7 +187,7 @@ export async function saveSalaryWeekAction(
       status: d.status,
       userId: currentUserId(),
     });
-    revalidatePath("/finance/salario");
+    revalidateSalaryPaths(weekId);
     return { ok: true, data: { weekId } };
   } catch {
     return { ok: false, error: "No se pudo guardar la semana salarial." };
@@ -216,12 +222,38 @@ export async function saveSalaryDayRecordAction(
       status: d.status,
       userId: currentUserId(),
     });
-    revalidatePath("/finance/salario");
+    revalidateSalaryPaths(d.salaryWeekId);
     return { ok: true, data: { recordId } };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo guardar la actividad.",
+    };
+  }
+}
+
+export async function deleteSalaryDayRecordAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = z.object({
+    recordId: z.string().min(1),
+    salaryWeekId: z.string().uuid("Semana inválida"),
+  }).safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Actividad inválida." };
+  }
+
+  try {
+    await deleteSalaryDayRecord({
+      recordId: parsed.data.recordId,
+      userId: currentUserId(),
+    });
+    revalidateSalaryPaths(parsed.data.salaryWeekId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar la actividad.",
     };
   }
 }
@@ -256,7 +288,7 @@ export async function saveSalaryPaymentAction(
       status: d.status,
       userId: currentUserId(),
     });
-    revalidatePath("/finance/salario");
+    revalidateSalaryPaths(d.salaryWeekId);
     return { ok: true, data: { paymentId } };
   } catch (error) {
     return {
@@ -269,7 +301,10 @@ export async function saveSalaryPaymentAction(
 export async function deleteSalaryPaymentAction(
   raw: unknown,
 ): Promise<ActionResult> {
-  const parsed = z.object({ paymentId: z.string().min(1) }).safeParse(raw);
+  const parsed = z.object({
+    paymentId: z.string().min(1),
+    salaryWeekId: z.string().uuid("Semana inválida"),
+  }).safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Pago inválido." };
   }
@@ -279,7 +314,7 @@ export async function deleteSalaryPaymentAction(
       paymentId: parsed.data.paymentId,
       userId: currentUserId(),
     });
-    revalidatePath("/finance/salario");
+    revalidateSalaryPaths(parsed.data.salaryWeekId);
     return { ok: true, data: undefined };
   } catch (error) {
     return {
@@ -308,7 +343,7 @@ export async function updateSalaryWeekStatusAction(
       status: d.status,
       userId: currentUserId(),
     });
-    revalidatePath("/finance/salario");
+    revalidateSalaryPaths(d.salaryWeekId);
     if (d.status === "paid") {
       revalidatePath("/projects");
       revalidatePath("/obras");

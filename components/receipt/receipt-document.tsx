@@ -111,6 +111,7 @@ export function ReceiptDocument({
   const title = isPago ? "COMPROBANTE DE PAGO POR" : "RECIBO DE DINERO POR";
   const recipientLabel = isPago ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
   const subjectLabel = data.kind === "obra" ? "de la obra" : "del proyecto";
+  const showSubject = !isPago || !!data.subjectName?.trim();
 
   return (
     <>
@@ -219,7 +220,7 @@ export function ReceiptDocument({
                 value={`${formatCurrency(data.amount)} (${montoEnPalabras(data.amount)})`}
               />
               <Field label="por concepto de" value={data.concept} />
-              {isPago && <Field label={subjectLabel} value={data.subjectName} />}
+              {showSubject ? <Field label={subjectLabel} value={data.subjectName ?? ""} /> : null}
 
               {/* Fecha */}
               <div className="flex items-end gap-[clamp(0.4rem,1.5vw,0.5rem)] pt-[clamp(0.25rem,1vw,0.5rem)]">

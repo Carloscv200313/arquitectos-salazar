@@ -21,6 +21,7 @@ import {
   Wrench,
 } from "lucide-react";
 import {
+  deleteSalaryDayRecordAction,
   deleteSalaryPaymentAction,
   saveSalaryDayRecordAction,
   saveSalaryPaymentAction,
@@ -60,7 +61,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   EMPLOYEE_DEFAULT_WORK_TYPE_LABELS,
-  SALARY_ACTIVITY_TYPES,
+  SALARY_ACTIVITY_FORM_TYPES,
   SALARY_ASSIGNMENT_LABELS,
   SALARY_PAYMENT_TYPE_LABELS,
   SALARY_PAYMENT_TYPES,
@@ -80,6 +81,8 @@ import type {
   SalaryWeekStatus,
   SalaryWeekWithRows,
   SalaryWeekday,
+  Project,
+  Work,
   TaskType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,6 +119,7 @@ type SalaryReceiptGroup = {
   name: string;
   amount: number;
 };
+type SalaryPaymentGroupType = "project" | "work" | "week" | "hour";
 
 function money(value: string) {
   return Number(value || 0);
@@ -130,6 +134,8 @@ function statusTone(status: SalaryWeekStatus | SalaryPaymentStatus | "draft" | "
 function activityTone(activity: SalaryActivityType) {
   if (activity === "project") return "bg-rose-100 text-rose-700";
   if (activity === "work") return "bg-sky-100 text-sky-700";
+  if (activity === "week") return "bg-emerald-100 text-emerald-700";
+  if (activity === "hour") return "bg-violet-100 text-violet-700";
   if (activity === "pending") return "bg-amber-100 text-amber-800";
   return activity === "absent" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground";
 }
@@ -138,23 +144,20 @@ function currencyOrDash(value: number | null) {
   return value === null ? "—" : formatCurrency(value);
 }
 
-function salaryReceiptGroups(payments: SalaryPaymentWithRelations[]) {
-  const map = new Map<string, SalaryReceiptGroup>();
-  for (const payment of payments) {
-    const isProject = !!payment.project_id;
-    const isWork = !!payment.work_id;
-    if (!isProject && !isWork) continue;
-
-    const kind = isProject ? "proyecto" : "obra";
-    const refId = (isProject ? payment.project_id : payment.work_id) as string;
-    const name = payment.project?.name ?? payment.work?.name ?? "Sin nombre";
-    const key = `${kind}:${refId}`;
-    const current = map.get(key) ?? { kind, refId, name, amount: 0 };
-    current.amount = round2(current.amount + payment.amount);
-    map.set(key, current);
-  }
-
-  return [...map.values()].filter((group) => group.amount > 0);
+function salaryReceiptGroups(
+  payments: SalaryPaymentWithRelations[],
+  weekId: string,
+) {
+  const amount = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  if (amount <= 0) return [];
+  return [
+    {
+      kind: "proyecto" as const,
+      refId: weekId,
+      name: "Pago semanal",
+      amount,
+    },
+  ];
 }
 
 // Resolve the cell label strictly by activity type so a stale project/work id
@@ -163,8 +166,51 @@ function recordLabel(record: SalaryDayRecordWithRelations | null) {
   if (!record) return "Sin detalle";
   if (record.activity_type === "project") return record.project?.name ?? "Proyecto sin asignar";
   if (record.activity_type === "work") return record.work?.name ?? "Obra sin asignar";
+  if (record.activity_type === "week") return "Semana";
+  if (record.activity_type === "hour") return "Hora";
   if (record.activity_type === "absent") return "Ausente";
   return record.taskType?.name ?? "Sin detalle";
+}
+
+function currentDraftLabel({
+  activityType,
+  projectId,
+  workId,
+  projectOptions,
+  workOptions,
+}: {
+  activityType: SalaryActivityType;
+  projectId: string | null;
+  workId: string | null;
+  projectOptions: SalaryProjectOption[];
+  workOptions: SalaryOption[];
+}) {
+  if (activityType === "project") {
+    return projectOptions.find((item) => item.id === projectId)?.name ?? "Selecciona proyecto";
+  }
+  if (activityType === "work") {
+    return workOptions.find((item) => item.id === workId)?.name ?? "Selecciona obra";
+  }
+  if (activityType === "week") return "Semana";
+  if (activityType === "hour") return "Hora";
+  if (activityType === "absent") return "Ausencia";
+  return "Pendiente";
+}
+
+function isPlaceholderRecord(record: SalaryDayRecordWithRelations) {
+  return (
+    record.activity_type === "pending" &&
+    !record.project_id &&
+    !record.work_id &&
+    !record.task_type_id &&
+    !(record.notes ?? "").trim()
+  );
+}
+
+function visibleDayRecords(records: SalaryDayRecordWithRelations[] | undefined) {
+  const list = records ?? [];
+  const real = list.filter((record) => !isPlaceholderRecord(record));
+  return real.length > 0 ? real : list;
 }
 
 function paidCurrencyOrDash(value: number) {
@@ -271,19 +317,36 @@ function MonthToolbar({
     for (const week of report.weeks) {
       for (const employee of week.employees) {
         for (const day of WEEKDAYS) {
-          const record = employee.dayRecords[day];
-          rows.push([
-            `${week.week_start_date} / ${week.week_end_date}`,
-            employee.employee.full_name,
-            record?.work_date ?? "",
-            SALARY_WEEKDAY_LABELS[day],
-            record ? SALARY_ASSIGNMENT_LABELS[record.activity_type] : "",
-            record?.project?.name ?? record?.work?.name ?? "",
-            record?.taskType?.name ?? "",
-            "",
-            "",
-            record?.status ? SALARY_RECORD_STATUS_LABELS[record.status] : "",
-          ]);
+          const records = visibleDayRecords(employee.dayRecords[day]);
+          if (records.length === 0) {
+            rows.push([
+              `${week.week_start_date} / ${week.week_end_date}`,
+              employee.employee.full_name,
+              "",
+              SALARY_WEEKDAY_LABELS[day],
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+            ]);
+          } else {
+            for (const record of records) {
+              rows.push([
+                `${week.week_start_date} / ${week.week_end_date}`,
+                employee.employee.full_name,
+                record.work_date ?? "",
+                SALARY_WEEKDAY_LABELS[day],
+                SALARY_ASSIGNMENT_LABELS[record.activity_type],
+                record.project?.name ?? record.work?.name ?? "",
+                record.taskType?.name ?? "",
+                "",
+                "",
+                record.status ? SALARY_RECORD_STATUS_LABELS[record.status] : "",
+              ]);
+            }
+          }
         }
         for (const payment of employee.payments) {
           rows.push([
@@ -442,7 +505,7 @@ function ActivitySheet({
   week,
   employee,
   day,
-  record,
+  records,
   projectOptions,
   workOptions,
   taskTypes,
@@ -452,18 +515,32 @@ function ActivitySheet({
   week: SalaryWeekWithRows | null;
   employee: Employee | null;
   day: SalaryWeekday | null;
-  record: SalaryDayRecordWithRelations | null;
+  records: SalaryDayRecordWithRelations[];
   projectOptions: SalaryProjectOption[];
   workOptions: SalaryOption[];
   taskTypes: TaskType[];
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [activityType, setActivityType] = useState<SalaryActivityType>(record?.activity_type ?? "pending");
-  const [projectId, setProjectId] = useState<string | null>(record?.project_id ?? null);
-  const [workId, setWorkId] = useState<string | null>(record?.work_id ?? null);
-  const [taskTypeId, setTaskTypeId] = useState<string | null>(record?.task_type_id ?? null);
-  const [notes, setNotes] = useState(record?.notes ?? "");
+  const [isDeletePending, startDeleteTransition] = useTransition();
+  const [localRecords, setLocalRecords] = useState(records);
+  const editableRecords = useMemo(() => visibleDayRecords(localRecords), [localRecords]);
+  const [activityType, setActivityType] = useState<SalaryActivityType>("project");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [workId, setWorkId] = useState<string | null>(null);
+  const [taskTypeId, setTaskTypeId] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const hasDraftContent = activityType !== "project" || !!projectId || !!workId || !!taskTypeId || !!notes.trim();
+
+  function resetDraft() {
+    setActivityType("project");
+    setProjectId(null);
+    setWorkId(null);
+    setTaskTypeId(null);
+    setNotes("");
+    setErrors({});
+  }
 
   const filteredProjectOptions = useMemo(() => {
     if (!employee) return projectOptions;
@@ -494,6 +571,13 @@ function ActivitySheet({
   }, [activityType, employee?.full_name, filteredProjectOptions, projectId, taskTypes]);
 
   const workDate = week && day ? weekdayDate(week.week_start_date, day) : "";
+  const draftLabel = currentDraftLabel({
+    activityType,
+    projectId,
+    workId,
+    projectOptions: filteredProjectOptions,
+    workOptions,
+  });
 
   function handleProjectChange(value: string | null) {
     const nextProjectId = value === EMPTY ? null : value;
@@ -525,7 +609,7 @@ function ActivitySheet({
     setErrors({});
     startTransition(async () => {
       const result = await saveSalaryDayRecordAction({
-        id: record?.id ?? "",
+        id: "",
         salaryWeekId: week.id,
         employeeId: employee.id,
         workDate,
@@ -539,7 +623,79 @@ function ActivitySheet({
       });
       if (result.ok) {
         toast.success("Actividad registrada");
-        onOpenChange(false);
+        const now = new Date().toISOString();
+        const selectedProject = filteredProjectOptions.find((item) => item.id === projectId) ?? null;
+        const selectedWork = workOptions.find((item) => item.id === workId) ?? null;
+        const selectedTask = taskTypes.find((item) => item.id === taskTypeId) ?? null;
+        const nextRecord = {
+          id: result.data.recordId,
+          salary_week_id: week.id,
+          employee_id: employee.id,
+          work_date: workDate,
+          day_name: day,
+          activity_type: activityType,
+          project_id: activityType === "project" ? projectId : null,
+          work_id: activityType === "work" ? workId : null,
+          task_type_id: activityType === "project" ? taskTypeId : null,
+          notes: notes.trim() || null,
+          status: "recorded" as const,
+          created_at: now,
+          updated_at: now,
+          created_by: null,
+          employee,
+          project:
+            activityType === "project" && selectedProject
+              ? ({
+                  id: selectedProject.id,
+                  client_id: "",
+                  name: selectedProject.name,
+                  address: null,
+                  template: "diamante",
+                  project_amount: 0,
+                  office_amount: 0,
+                  utility_amount: 0,
+                  addons_total: 0,
+                  total_amount: 0,
+                  proposal_amount: 0,
+                  modeling_3d_amount: 0,
+                  plans_amount: 0,
+                  render_amount: 0,
+                  proposal_responsible: "Sin asignar",
+                  modeling_3d_responsible: "Sin asignar",
+                  plans_responsible: "Sin asignar",
+                  render_responsible: "Sin asignar",
+                  created_at: now,
+                  updated_at: now,
+                  created_by: null,
+                } as Project)
+              : null,
+          work:
+            activityType === "work" && selectedWork
+              ? ({
+                  id: selectedWork.id,
+                  client_id: "",
+                  name: selectedWork.name,
+                  address: null,
+                  status: "active",
+                  description: null,
+                  created_at: now,
+                  updated_at: now,
+                  created_by: null,
+                } as Work)
+              : null,
+          taskType: activityType === "project" ? selectedTask : null,
+        } satisfies SalaryDayRecordWithRelations;
+        setLocalRecords((current) => {
+          const index = current.findIndex((item) => item.id === nextRecord.id);
+          if (index >= 0) {
+            const copy = [...current];
+            copy[index] = nextRecord;
+            return copy;
+          }
+          return [...current, nextRecord];
+        });
+        resetDraft();
+        router.refresh();
       } else {
         setErrors(result.fieldErrors ?? {});
         toast.error(result.error);
@@ -547,9 +703,36 @@ function ActivitySheet({
     });
   }
 
+  function handleNewActivity() {
+    if (hasDraftContent) {
+      submit();
+      return;
+    }
+    resetDraft();
+  }
+
+  function deleteRecord(record: SalaryDayRecordWithRelations) {
+    const label = recordLabel(record);
+    if (!window.confirm(`Se eliminará la actividad "${label}".`)) return;
+
+    startDeleteTransition(async () => {
+      const result = await deleteSalaryDayRecordAction({
+        recordId: record.id,
+        salaryWeekId: week?.id,
+      });
+      if (result.ok) {
+        toast.success("Actividad eliminada");
+        setLocalRecords((current) => current.filter((item) => item.id !== record.id));
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+      <SheetContent className="w-full overflow-y-auto sm:!w-[min(82vw,1080px)] sm:!max-w-none">
         <SheetHeader>
           <SheetTitle>Actividad diaria</SheetTitle>
           <SheetDescription>
@@ -557,18 +740,105 @@ function ActivitySheet({
           </SheetDescription>
         </SheetHeader>
         <div className="grid gap-4 px-4 pb-4">
+          <Card className="gap-0 overflow-hidden p-0">
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+              <Label>Actividades del día</Label>
+              <Button variant="outline" size="sm" onClick={handleNewActivity} disabled={isPending}>
+                <Plus className="size-4" />
+                Nueva actividad
+              </Button>
+            </div>
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow>
+                  <TableHead className="px-4">Tipo</TableHead>
+                  <TableHead>Referencia</TableHead>
+                  <TableHead>Tarea</TableHead>
+                  <TableHead className="px-4 text-right">Estado</TableHead>
+                  <TableHead className="w-[92px] px-4 text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {editableRecords.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="px-4">
+                      <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", activityTone(item.activity_type))}>
+                        {SALARY_ASSIGNMENT_LABELS[item.activity_type]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{recordLabel(item)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {item.activity_type === "project" ? item.taskType?.name ?? "Sin tarea" : "—"}
+                    </TableCell>
+                    <TableCell className="px-4 text-right">
+                      <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", statusTone(item.status))}>
+                        {SALARY_RECORD_STATUS_LABELS[item.status]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        disabled={isDeletePending}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteRecord(item);
+                        }}
+                        title="Eliminar actividad"
+                      >
+                        {isDeletePending ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-brand/5">
+                  <TableCell className="px-4">
+                    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", activityTone(activityType))}>
+                      {SALARY_ASSIGNMENT_LABELS[activityType]}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{draftLabel}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {activityType === "project" ? filteredTasks.find((item) => item.id === taskTypeId)?.name ?? "Sin tarea" : "—"}
+                  </TableCell>
+                  <TableCell className="px-4 text-right">
+                    <span className="inline-flex rounded-full bg-brand-muted px-2 py-0.5 text-[11px] font-semibold text-brand-foreground">
+                      Borrador
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-4" />
+                </TableRow>
+                {editableRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-16 text-center text-sm text-muted-foreground">
+                      Aún no hay actividades registradas este día.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </Card>
           <div className="grid gap-2">
-            <Label>Tipo de actividad</Label>
+            <div className="flex items-center justify-between gap-3">
+              <Label>Tipo de actividad</Label>
+              <span className="text-xs text-muted-foreground">Solo alta nueva o eliminación</span>
+            </div>
             <Select
               value={activityType}
-              onValueChange={(value) => setActivityType((value ?? "pending") as SalaryActivityType)}
-              items={SALARY_ACTIVITY_TYPES.map((value) => ({ label: SALARY_ASSIGNMENT_LABELS[value], value }))}
+              onValueChange={(value) => setActivityType((value ?? "project") as SalaryActivityType)}
+              items={SALARY_ACTIVITY_FORM_TYPES.map((value) => ({ label: SALARY_ASSIGNMENT_LABELS[value], value }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SALARY_ACTIVITY_TYPES.map((item) => (
+                {SALARY_ACTIVITY_FORM_TYPES.map((item) => (
                   <SelectItem key={item} value={item}>
                     {SALARY_ASSIGNMENT_LABELS[item]}
                   </SelectItem>
@@ -597,24 +867,6 @@ function ActivitySheet({
                   Esta persona no tiene proyectos asignados como responsable.
                 </p>
               ) : null}
-            </div>
-          ) : null}
-          {activityType === "work" ? (
-            <div className="grid gap-2">
-              <Label>Obra</Label>
-              <Select value={workId ?? EMPTY} onValueChange={(value) => setWorkId(value === EMPTY ? null : value)} items={workOptions.map((item) => ({ label: item.name, value: item.id }))}>
-                <SelectTrigger className="w-full" aria-invalid={!!errors.workId}>
-                  <SelectValue placeholder="Selecciona obra" />
-                </SelectTrigger>
-                <SelectContent>
-                  {workOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.workId ? <p className="text-xs text-destructive">{errors.workId}</p> : null}
             </div>
           ) : null}
           {activityType === "project" ? (
@@ -867,17 +1119,18 @@ function EmployeeDetailSheet({
   const [activePaymentKey, setActivePaymentKey] = useState<string | null>(null);
   const [inlineAmount, setInlineAmount] = useState("");
   const [inlineMethodId, setInlineMethodId] = useState<string | null>(null);
-  const [paidKeys, setPaidKeys] = useState<Set<string>>(() => new Set());
   const [optimisticPayments, setOptimisticPayments] = useState<SalaryPaymentWithRelations[]>([]);
   const [isInlinePending, startInlineTransition] = useTransition();
   const [isDeletePending, startDeleteTransition] = useTransition();
 
   function deletePayment(payment: SalaryPaymentWithRelations) {
     startDeleteTransition(async () => {
-      const result = await deleteSalaryPaymentAction({ paymentId: payment.id });
+      const result = await deleteSalaryPaymentAction({
+        paymentId: payment.id,
+        salaryWeekId: week?.id,
+      });
       if (result.ok) {
         setOptimisticPayments((current) => current.filter((item) => item.id !== payment.id));
-        setPaidKeys(new Set());
         setActivePaymentKey(null);
         toast.success("Pago eliminado");
         router.refresh();
@@ -904,7 +1157,7 @@ function EmployeeDetailSheet({
       string,
       {
         key: string;
-        type: "project" | "work";
+        type: SalaryPaymentGroupType;
         referenceId: string;
         referenceName: string;
         clientName: string | null;
@@ -917,32 +1170,49 @@ function EmployeeDetailSheet({
       }
     >();
 
-    for (const record of Object.values(employeeSummary.dayRecords)) {
-      if (!record) continue;
-      if (record.activity_type !== "project" && record.activity_type !== "work") continue;
-      const reference = record.activity_type === "project" ? record.project : record.work;
-      if (!reference) continue;
-      const referenceName = reference.name;
-      const clientName = record.activity_type === "project"
-        ? projectOptions.find((item) => item.id === reference.id)?.clientName ?? null
-        : null;
-      const taskName = record.taskType?.name ?? "Obra";
-      const taskTypeId = record.taskType?.id ?? null;
-      const key = `${record.activity_type}:${reference.id}:${taskTypeId ?? "general"}`;
-      const projectOption = record.activity_type === "project" ? projectOptions.find((item) => item.id === reference.id) : null;
+    for (const record of Object.values(employeeSummary.dayRecords).flat()) {
+      if (!record || isPlaceholderRecord(record)) continue;
+      if (
+        record.activity_type !== "project" &&
+        record.activity_type !== "work" &&
+        record.activity_type !== "week" &&
+        record.activity_type !== "hour"
+      ) continue;
+
+      const isProject = record.activity_type === "project";
+      const isWork = record.activity_type === "work";
+      const isFreeType = record.activity_type === "week" || record.activity_type === "hour";
+      const reference = isProject ? record.project : isWork ? record.work : null;
+      if ((isProject || isWork) && !reference) continue;
+
+      const referenceName = isFreeType
+        ? SALARY_ASSIGNMENT_LABELS[record.activity_type]
+        : reference?.name ?? "Sin referencia";
+      const clientName = isProject
+        ? projectOptions.find((item) => item.id === reference?.id)?.clientName ?? null
+        : isFreeType
+          ? "Pago libre"
+          : null;
+      const taskName = isProject
+        ? record.taskType?.name ?? "Sin tarea"
+        : (record.notes?.trim() || (record.activity_type === "hour" ? "Registro por hora" : "Registro semanal"));
+      const taskTypeId = isProject ? record.taskType?.id ?? null : null;
+      const referenceId = isFreeType ? `${record.activity_type}:${taskName}` : (reference?.id ?? "");
+      const key = `${record.activity_type}:${referenceId}:${taskTypeId ?? "general"}`;
+      const projectOption = isProject ? projectOptions.find((item) => item.id === reference?.id) : null;
       const projectBudget =
-        record.activity_type === "project"
+        isProject
           ? projectOption?.taskBudgets[taskName] ?? null
           : null;
       const fallbackBudget =
-        (taskTypeId ? employeeTaskRates.get(taskTypeId) : undefined) ??
-        (taskTypeId ? globalTaskRates.get(taskTypeId) : undefined) ??
+        (isProject && taskTypeId ? employeeTaskRates.get(taskTypeId) : undefined) ??
+        (isProject && taskTypeId ? globalTaskRates.get(taskTypeId) : undefined) ??
         null;
       const budget = projectBudget ?? fallbackBudget;
       const current = groups.get(key) ?? {
         key,
         type: record.activity_type,
-        referenceId: reference.id,
+        referenceId,
         referenceName,
         clientName,
         taskName,
@@ -1010,8 +1280,8 @@ function EmployeeDetailSheet({
   // Comprobantes de pago: un recibo por proyecto/obra trabajado en la semana
   // (suma todas las tareas/días dentro del mismo proyecto u obra).
   const receiptGroups = useMemo(() => {
-    return salaryReceiptGroups(paymentHistory);
-  }, [paymentHistory]);
+    return week ? salaryReceiptGroups(paymentHistory, week.id) : [];
+  }, [paymentHistory, week]);
 
   function openInlinePayment(item: (typeof groupedWork)[number]) {
     setActivePaymentKey((current) => (current === item.key ? null : item.key));
@@ -1021,14 +1291,6 @@ function EmployeeDetailSheet({
     setInlineMethodId(null);
   }
 
-  // Amount already settled for this project area via the project's own expense
-  // movements (e.g. paid directly in the project, or synced from a prior week).
-  function externalPaid(item: (typeof groupedWork)[number]) {
-    if (item.type !== "project") return 0;
-    const option = projectOptions.find((project) => project.id === item.referenceId);
-    return option?.taskPaid[item.taskName] ?? 0;
-  }
-
   function matchingPaymentTotal(item: (typeof groupedWork)[number]) {
     if (!employeeSummary) return 0;
     const thisWeek = paymentHistory
@@ -1036,17 +1298,21 @@ function EmployeeDetailSheet({
         const sameReference =
           item.type === "project"
             ? payment.project_id === item.referenceId
-            : payment.work_id === item.referenceId;
+            : item.type === "work"
+              ? payment.work_id === item.referenceId
+              : payment.concept === item.taskName && payment.notes === item.type;
+        const samePaymentType =
+          item.type === "project" || item.type === "work"
+            ? payment.payment_type === item.type
+            : payment.payment_type === "week";
         return (
-          payment.payment_type === item.type &&
+          samePaymentType &&
           sameReference &&
           payment.task_type_id === item.taskTypeId
         );
       })
       .reduce((sum, payment) => sum + payment.amount, 0);
-    // This week's salary payments aren't synced to project expenses until the
-    // week is closed, so adding both never double-counts a draft week.
-    return round2(thisWeek + externalPaid(item));
+    return round2(thisWeek);
   }
 
   function registerInlinePayment(item: (typeof groupedWork)[number]) {
@@ -1063,7 +1329,7 @@ function EmployeeDetailSheet({
         id: "",
         salaryWeekId: week.id,
         employeeId: employeeSummary.employee.id,
-        paymentType: item.type,
+        paymentType: item.type === "project" || item.type === "work" ? item.type : "week",
         concept: item.taskName,
         amount,
         paymentMethodId: inlineMethodId,
@@ -1071,7 +1337,7 @@ function EmployeeDetailSheet({
         projectId: item.type === "project" ? item.referenceId : null,
         workId: item.type === "work" ? item.referenceId : null,
         taskTypeId: item.taskTypeId,
-        notes: "",
+        notes: item.type === "week" || item.type === "hour" ? item.type : "",
         status: "paid",
       });
       if (result.ok) {
@@ -1082,7 +1348,7 @@ function EmployeeDetailSheet({
             id: result.data.paymentId,
             salary_week_id: week.id,
             employee_id: employeeSummary.employee.id,
-            payment_type: item.type,
+            payment_type: item.type === "project" || item.type === "work" ? item.type : "week",
             concept: item.taskName,
             amount,
             payment_method_id: inlineMethodId ?? "",
@@ -1090,7 +1356,7 @@ function EmployeeDetailSheet({
             project_id: item.type === "project" ? item.referenceId : null,
             work_id: item.type === "work" ? item.referenceId : null,
             task_type_id: item.taskTypeId,
-            notes: null,
+            notes: item.type === "week" || item.type === "hour" ? item.type : null,
             status: "paid",
             created_at: new Date().toISOString(),
             created_by: null,
@@ -1109,7 +1375,6 @@ function EmployeeDetailSheet({
               : null,
           },
         ]);
-        setPaidKeys((current) => new Set(current).add(item.key));
         setActivePaymentKey(null);
         toast.success("Pago registrado");
         router.refresh();
@@ -1178,10 +1443,11 @@ function EmployeeDetailSheet({
                   {groupedWork.map((item) => {
                     const paidTotal = matchingPaymentTotal(item);
                     const remaining = item.budget !== null ? Math.max(round2(item.budget - paidTotal), 0) : null;
-                    const isPaid = remaining !== null ? remaining <= 0.001 : paidTotal > 0 || paidKeys.has(item.key);
+                    const hasEstimatedBudget = item.budget !== null && item.budget > 0.001;
+                    const isPaid = hasEstimatedBudget ? remaining !== null && remaining <= 0.001 : paidTotal > 0.001;
                     const hasPartialPayment = paidTotal > 0 && !isPaid;
                     const isOpen = activePaymentKey === item.key;
-                    const displayedPayment = paidTotal > 0 ? paidTotal : paidKeys.has(item.key) ? money(inlineAmount) : null;
+                    const displayedPayment = paidTotal > 0 ? paidTotal : null;
                     const inlineAmountValue = money(inlineAmount);
                     const inlineExceedsRemaining =
                       isOpen && remaining !== null && inlineAmountValue > remaining + 0.001;
@@ -1197,7 +1463,13 @@ function EmployeeDetailSheet({
                           <TableCell className="px-4">
                             <div className="font-medium">{item.referenceName}</div>
                             <div className="text-xs text-muted-foreground">
-                              {item.clientName ? item.clientName : item.type === "work" ? "Obra" : "Proyecto"}
+                              {item.clientName
+                                ? item.clientName
+                                : item.type === "work"
+                                  ? "Obra"
+                                  : item.type === "project"
+                                    ? "Proyecto"
+                                    : "Pago libre"}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1326,7 +1598,7 @@ function EmployeeDetailSheet({
                   {groupedWork.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
-                        No hay proyectos u obras registrados para este empleado en la semana.
+                        No hay actividades registradas para este empleado en la semana.
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -1430,7 +1702,7 @@ function EmployeeDetailSheet({
                 <div className="border-b px-4 py-3">
                   <h3 className="font-semibold">Comprobantes de pago</h3>
                   <p className="text-sm text-muted-foreground">
-                    Un comprobante por cada proyecto u obra trabajado esta semana.
+                    Un solo comprobante semanal con el total pagado al empleado.
                   </p>
                 </div>
                 <div className="divide-y">
@@ -1441,9 +1713,7 @@ function EmployeeDetailSheet({
                     >
                       <div className="min-w-0">
                         <p className="truncate font-medium">{g.name}</p>
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          {g.kind === "obra" ? "Obra" : "Proyecto"}
-                        </p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Semana salarial</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-3">
                         <span className="font-semibold tabular-nums">{formatCurrency(g.amount)}</span>
@@ -1483,8 +1753,8 @@ function employeeWorkGroups(
       taskTypeId: string | null;
     }
   >();
-  for (const record of Object.values(employeeSummary.dayRecords)) {
-    if (!record) continue;
+  for (const record of Object.values(employeeSummary.dayRecords).flat()) {
+    if (!record || isPlaceholderRecord(record)) continue;
     if (record.activity_type !== "project" && record.activity_type !== "work") continue;
     const reference = record.activity_type === "project" ? record.project : record.work;
     if (!reference) continue;
@@ -1501,8 +1771,7 @@ function employeeWorkGroups(
   return [...map.values()];
 }
 
-// Amount recognized for a group: this week's salary payments + amounts already
-// settled in the project itself (for project areas).
+// Amount recognized for a group: only salary payments registered this week.
 function groupPaidTotal(
   group: {
     type: "project" | "work";
@@ -1511,7 +1780,6 @@ function groupPaidTotal(
     taskTypeId: string | null;
   },
   payments: SalaryPaymentWithRelations[],
-  projectOptions: SalaryProjectOption[],
 ) {
   const thisWeek = payments
     .filter((payment) => {
@@ -1526,42 +1794,35 @@ function groupPaidTotal(
       );
     })
     .reduce((sum, payment) => sum + payment.amount, 0);
-  const external =
-    group.type === "project"
-      ? projectOptions.find((option) => option.id === group.referenceId)?.taskPaid[group.taskName] ?? 0
-      : 0;
-  return round2(thisWeek + external);
+  return round2(thisWeek);
 }
 
 // A worked project/work must have at least one recognized payment before the
 // week can be closed. Returns how many of an employee's buckets are still empty.
 function employeeReadiness(
   employeeSummary: SalaryWeekWithRows["employees"][number],
-  projectOptions: SalaryProjectOption[],
 ) {
   const groups = employeeWorkGroups(employeeSummary);
   const pending = groups.filter(
-    (group) => groupPaidTotal(group, employeeSummary.payments, projectOptions) <= 0.001,
+    (group) => groupPaidTotal(group, employeeSummary.payments) <= 0.001,
   );
   return { total: groups.length, pending: pending.length, ready: pending.length === 0 };
 }
 
 function WeekCard({
   week,
-  projectOptions,
   onEditWeek,
   onOpenActivity,
   onOpenEmployee,
   onStatusChange,
 }: {
   week: SalaryWeekWithRows;
-  projectOptions: SalaryProjectOption[];
   onEditWeek: (week: SalaryWeekWithRows) => void;
   onOpenActivity: (
     week: SalaryWeekWithRows,
     employee: Employee,
     day: SalaryWeekday,
-    record: SalaryDayRecordWithRelations | null,
+    records: SalaryDayRecordWithRelations[],
   ) => void;
   onOpenEmployee: (
     week: SalaryWeekWithRows,
@@ -1571,7 +1832,7 @@ function WeekCard({
 }) {
   const readinessByEmployee = week.employees.map((row) => ({
     row,
-    readiness: employeeReadiness(row, projectOptions),
+    readiness: employeeReadiness(row),
   }));
   const pendingTotal = readinessByEmployee.reduce((sum, item) => sum + item.readiness.pending, 0);
   const recognizedTotal = readinessByEmployee.reduce(
@@ -1668,30 +1929,35 @@ function WeekCard({
                 <TableRow key={day}>
                   <TableCell className="px-4 font-medium">{SALARY_WEEKDAY_LABELS[day]}</TableCell>
                   {week.employees.map((employeeRow) => {
-                    const record = employeeRow.dayRecords[day] ?? null;
+                    const records = visibleDayRecords(employeeRow.dayRecords[day]);
+                    const primaryRecord = records[0] ?? null;
                     return (
                       <TableCell key={employeeRow.employee.id} className="px-4 align-top">
                         <button
                           type="button"
                           className={cn(
                             "w-full rounded-xl border p-3 text-left transition-colors hover:bg-muted/40",
-                            record ? "border-border" : "border-dashed border-border",
+                            records.length > 0 ? "border-border" : "border-dashed border-border",
                           )}
-                          onClick={() => onOpenActivity(week, employeeRow.employee, day, record)}
+                          onClick={() => onOpenActivity(week, employeeRow.employee, day, records)}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
                               className={cn(
                                 "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                activityTone(record?.activity_type ?? "pending"),
+                                activityTone(primaryRecord?.activity_type ?? "pending"),
                               )}
                             >
-                              {SALARY_ASSIGNMENT_LABELS[record?.activity_type ?? "pending"]}
+                              {records.length > 1
+                                ? `${records.length} actividades`
+                                : SALARY_ASSIGNMENT_LABELS[primaryRecord?.activity_type ?? "pending"]}
                             </span>
                             <ChevronRight className="size-4 text-muted-foreground" />
                           </div>
                           <div className="mt-2 text-xs text-muted-foreground">
-                            {recordLabel(record)}
+                            {records.length > 1
+                              ? records.map((item) => recordLabel(item)).join(" · ")
+                              : recordLabel(primaryRecord)}
                           </div>
                         </button>
                       </TableCell>
@@ -1791,8 +2057,8 @@ export function SalaryWeekDetailView({
     week: SalaryWeekWithRows | null;
     employee: Employee | null;
     day: SalaryWeekday | null;
-    record: SalaryDayRecordWithRelations | null;
-  }>({ week: null, employee: null, day: null, record: null });
+    records: SalaryDayRecordWithRelations[];
+  }>({ week: null, employee: null, day: null, records: [] });
   const [paymentSheetOpen, setPaymentSheetOpen] = useState(false);
   const [paymentContext, setPaymentContext] = useState<{
     week: SalaryWeekWithRows | null;
@@ -1816,9 +2082,9 @@ export function SalaryWeekDetailView({
     nextWeek: SalaryWeekWithRows,
     employee: Employee,
     day: SalaryWeekday,
-    record: SalaryDayRecordWithRelations | null,
+    records: SalaryDayRecordWithRelations[],
   ) {
-    setActivityContext({ week: nextWeek, employee, day, record });
+    setActivityContext({ week: nextWeek, employee, day, records });
     setActivitySheetOpen(true);
   }
 
@@ -1858,7 +2124,6 @@ export function SalaryWeekDetailView({
     <>
       <WeekCard
         week={week}
-        projectOptions={projectOptions}
         onEditWeek={openEditWeek}
         onOpenActivity={openActivity}
         onOpenEmployee={openEmployeeDetail}
@@ -1866,12 +2131,18 @@ export function SalaryWeekDetailView({
       />
       <WeekSheet open={weekSheetOpen} onOpenChange={setWeekSheetOpen} week={editingWeek} />
       <ActivitySheet
+        key={[
+          activityContext.week?.id ?? "no-week",
+          activityContext.employee?.id ?? "no-employee",
+          activityContext.day ?? "no-day",
+          activityContext.records.map((item) => item.id).join(","),
+        ].join(":")}
         open={activitySheetOpen}
         onOpenChange={setActivitySheetOpen}
         week={activityContext.week}
         employee={activityContext.employee}
         day={activityContext.day}
-        record={activityContext.record}
+        records={activityContext.records}
         projectOptions={projectOptions}
         workOptions={workOptions}
         taskTypes={taskTypes}
@@ -1897,6 +2168,10 @@ export function SalaryWeekDetailView({
         taskTypes={taskTypes}
       />
       <EmployeeDetailSheet
+        key={[
+          employeeContext.week?.id ?? "no-week",
+          employeeContext.row?.employee.id ?? "no-employee",
+        ].join(":")}
         open={employeeSheetOpen}
         onOpenChange={setEmployeeSheetOpen}
         week={employeeContext.week}
@@ -1928,7 +2203,7 @@ function SalaryReceiptsSheet({
     () =>
       week?.employees.map((row) => ({
         row,
-        receipts: salaryReceiptGroups(row.payments),
+        receipts: salaryReceiptGroups(row.payments, week.id),
       })) ?? [],
     [week],
   );
@@ -1963,7 +2238,7 @@ function SalaryReceiptsSheet({
             <div className="border-b bg-muted/30 px-4 py-3">
               <h3 className="font-semibold">Empleados</h3>
               <p className="text-sm text-muted-foreground">
-                Abre un empleado y selecciona un comprobante.
+                Abre un empleado y selecciona su comprobante semanal.
               </p>
             </div>
             <div className="max-h-[calc(100vh-180px)] overflow-y-auto divide-y">
@@ -2018,9 +2293,7 @@ function SalaryReceiptsSheet({
                                   <span className="flex items-center justify-between gap-3">
                                     <span className="min-w-0">
                                       <span className="block truncate text-sm font-medium">{receipt.name}</span>
-                                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                                        {receipt.kind === "obra" ? "Obra" : "Proyecto"}
-                                      </span>
+                                      <span className="text-xs uppercase tracking-wide text-muted-foreground">Semana salarial</span>
                                     </span>
                                     <span className="shrink-0 font-semibold tabular-nums">
                                       {formatCurrency(receipt.amount)}

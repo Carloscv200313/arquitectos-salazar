@@ -221,6 +221,19 @@ export type RegisterInternalTransferInput = z.infer<
   typeof registerInternalTransferSchema
 >;
 
+export const saveWorkCategoryBudgetSchema = z.object({
+  workId: z.string().uuid("Obra inválida"),
+  category: z.string().trim().min(2, "Categoría inválida").max(120, "Categoría inválida"),
+  amount: z
+    .number({ error: "Ingresa un monto válido" })
+    .finite("Monto inválido")
+    .min(0, "El monto no puede ser negativo")
+    .max(1_000_000_000, "Monto demasiado alto")
+    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+});
+
+export type SaveWorkCategoryBudgetInput = z.infer<typeof saveWorkCategoryBudgetSchema>;
+
 const employeeDefaultWorkType = z.enum(EMPLOYEE_DEFAULT_WORK_TYPES);
 const salaryWeekStatus = z.enum(SALARY_WEEK_STATUSES);
 const salaryWeekday = z.enum(
@@ -597,6 +610,15 @@ export const editOrderPaymentSchema = z.object({
   note: auditNote,
 });
 
+export const editWorkOrderSchema = z.object({
+  orderId: z.string().uuid("Pedido inválido"),
+  workId: z.string().uuid("Obra inválida"),
+  supplier: z.string().trim().min(2, "Selecciona proveedor").max(160, "Máximo 160 caracteres"),
+  material: z.string().trim().min(2, "Ingresa el material").max(1000, "Máximo 1000 caracteres"),
+  amount: money.optional().nullable(),
+  note: auditNote,
+});
+
 export const deleteProjectMovementSchema = z.object({
   paymentId: z.string().uuid("Movimiento inválido"),
   projectId: z.string().uuid("Proyecto inválido"),
@@ -617,4 +639,5 @@ export const deleteOrderPaymentSchema = z.object({
 
 export type EditProjectMovementInput = z.infer<typeof editProjectMovementSchema>;
 export type EditWorkMovementInput = z.infer<typeof editWorkMovementSchema>;
+export type EditWorkOrderInput = z.infer<typeof editWorkOrderSchema>;
 export type EditOrderPaymentInput = z.infer<typeof editOrderPaymentSchema>;

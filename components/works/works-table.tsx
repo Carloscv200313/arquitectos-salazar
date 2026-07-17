@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, History, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
+import { Eye, FolderOpen, History, Pencil, Plus, Settings2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +25,7 @@ import type { PaymentMethod, WorkWithFinance } from "@/lib/types";
 import { WorkStatusBadge } from "./work-status-badge";
 import { RegisterWorkMovementSheet } from "./register-work-movement-sheet";
 import { DeleteWorkDialog } from "./delete-work-dialog";
+import { WorkFilesSheet } from "./work-files-sheet";
 
 function amountTone(value: number, positive = true) {
   if (Math.abs(value) < 0.001) return "text-muted-foreground";
@@ -45,6 +46,7 @@ export function WorksTable({
   const router = useRouter();
   const [movementTarget, setMovementTarget] = useState<WorkWithFinance | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkWithFinance | null>(null);
+  const [filesTarget, setFilesTarget] = useState<WorkWithFinance | null>(null);
 
   return (
     <>
@@ -125,6 +127,9 @@ export function WorksTable({
                         <DropdownMenuItem onClick={() => router.push(`/obras/${work.id}#movimientos`)}>
                           <History className="size-4" /> Historial
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setFilesTarget(work)}>
+                          <FolderOpen className="size-4" /> Archivos
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={() => setDeleteTarget(work)}>
                           <Trash2 className="size-4" /> Eliminar
@@ -156,6 +161,16 @@ export function WorksTable({
           onOpenChange={(open) => !open && setDeleteTarget(null)}
           workId={deleteTarget.id}
           workName={deleteTarget.name}
+        />
+      )}
+      {filesTarget && (
+        <WorkFilesSheet
+          open={!!filesTarget}
+          onOpenChange={(open) => !open && setFilesTarget(null)}
+          workId={filesTarget.id}
+          workName={filesTarget.name}
+          clientName={filesTarget.client.name}
+          initialFiles={filesTarget.files}
         />
       )}
     </>

@@ -306,6 +306,34 @@ create table if not exists public.work_movements (
 );
 create index if not exists work_movements_work_idx on public.work_movements(work_id);
 
+create table if not exists public.work_files (
+  id           uuid primary key default gen_random_uuid(),
+  work_id      uuid not null references public.works(id) on delete cascade,
+  file_name    text not null,
+  storage_path text not null unique,
+  mime_type    text,
+  size_bytes   bigint not null default 0,
+  status       smallint not null default 1,
+  created_at   timestamptz not null default now(),
+  created_by   uuid
+);
+create index if not exists work_files_work_idx on public.work_files(work_id);
+
+create table if not exists public.work_category_budgets (
+  id         uuid primary key default gen_random_uuid(),
+  work_id    uuid not null references public.works(id) on delete cascade,
+  category   text not null,
+  amount     numeric(14,2) not null default 0,
+  status     smallint not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid
+);
+create unique index if not exists work_category_budgets_work_category_uidx
+  on public.work_category_budgets(work_id, category);
+create index if not exists work_category_budgets_work_idx
+  on public.work_category_budgets(work_id);
+
 create table if not exists public.work_internal_transfers (
   id                     uuid primary key default gen_random_uuid(),
   description            text not null,
@@ -376,7 +404,7 @@ create table if not exists public.salary_day_records (
   employee_id    uuid not null references public.employees(id),
   work_date      date not null,
   day_name       text not null check (day_name in ('monday','tuesday','wednesday','thursday','friday')),
-  activity_type  text not null default 'pending' check (activity_type in ('project','work','absent','pending','week')),
+  activity_type  text not null default 'pending' check (activity_type in ('project','work','week','hour','absent','pending')),
   project_id     uuid references public.projects(id),
   work_id        uuid references public.works(id),
   task_type_id   uuid references public.task_types(id),
@@ -454,7 +482,7 @@ declare t text;
 begin
   foreach t in array array[
     'roles','profiles','app_users','employees','payment_accounts','task_types',
-    'system_settings','help_items','clients','projects','works','work_orders',
+    'system_settings','help_items','clients','projects','works','work_files','work_category_budgets','work_orders',
     'salary_weeks','salary_day_records','manual_debtors'
   ] loop
     execute format('drop trigger if exists set_updated_at on public.%I;', t);
@@ -479,7 +507,8 @@ begin
   foreach t in array array[
     'roles','profiles','app_users','employees','payment_accounts','task_types',
     'system_settings','help_items','audit_logs','clients','projects','project_addons',
-    'project_payments','internal_transfers','works','work_movements',
+    'project_payments','internal_transfers','works','work_movements','work_files',
+    'work_category_budgets',
     'work_internal_transfers','work_orders','work_order_payments','salary_weeks',
     'salary_day_records','salary_payments','manual_debtors','general_balance_entries',
     'general_balance_account_movements'
