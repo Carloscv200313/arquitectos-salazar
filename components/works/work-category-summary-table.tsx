@@ -15,15 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { WorkCategorySummary } from "@/lib/types";
-
-function signedTone(value: number) {
-  if (value < -0.001) return "text-destructive";
-  if (value > 0.001) return "text-brand-foreground";
-  return "text-muted-foreground";
-}
 
 function percentLabel(value: number | null) {
   if (value === null) return "—";
@@ -121,7 +114,6 @@ export function WorkCategorySummaryTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Egresos</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">% egresos</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Ejecutado</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">% ejecutado</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -190,23 +182,23 @@ export function WorkCategorySummaryTable({
                     className="w-28 text-right tabular-nums"
                     placeholder="0.00"
                   />
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    onClick={() => saveBudget(row.category)}
+                    disabled={isPending}
+                    title="Guardar ejecutado"
+                  >
+                    {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                    <span className="sr-only">Guardar ejecutado</span>
+                  </Button>
                 </div>
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "px-5 text-right font-semibold tabular-nums",
-                  row.executedPercent !== null && row.executedPercent >= 100
-                    ? "text-destructive"
-                    : signedTone(row.balance),
-                )}
-              >
-                {percentLabel(row.executedPercent)}
               </TableCell>
             </TableRow>
           ))}
           {orderedRows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
                 Sin categorías registradas.
               </TableCell>
             </TableRow>
