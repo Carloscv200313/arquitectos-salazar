@@ -43,8 +43,16 @@ export function WorkCategorySummaryTable({
   rows: WorkCategorySummary[];
 }) {
   const [rows, setRows] = useState(initialRows);
-  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(initialRows.map((row) => [row.category, budgetInputValue(row.budget)])),
+  const [drafts, setDrafts] = useState<Record<string, { budget: string; executed: string }>>(() =>
+    Object.fromEntries(
+      initialRows.map((row) => [
+        row.category,
+        {
+          budget: budgetInputValue(row.budget),
+          executed: budgetInputValue(row.executedAmount),
+        },
+      ]),
+    ),
   );
   const [isPending, startTransition] = useTransition();
 
@@ -54,10 +62,16 @@ export function WorkCategorySummaryTable({
   );
 
   function saveBudget(category: string) {
-    const raw = (drafts[category] ?? "").trim();
-    const amount = raw === "" ? 0 : Number(raw);
-    if (!Number.isFinite(amount) || amount < 0) {
+    const draft = drafts[category] ?? { budget: "", executed: "" };
+    const budget = draft.budget.trim() === "" ? 0 : Number(draft.budget);
+    const executedAmount = draft.executed.trim() === "" ? 0 : Number(draft.executed);
+
+    if (!Number.isFinite(budget) || budget < 0) {
       toast.error("Ingresa un presupuesto válido.");
+      return;
+    }
+    if (!Number.isFinite(executedAmount) || executedAmount < 0) {
+      toast.error("Ingresa un ejecutado válido.");
       return;
     }
 
@@ -65,7 +79,8 @@ export function WorkCategorySummaryTable({
       const result = await saveWorkCategoryBudgetAction({
         workId,
         category,
-        amount,
+        budget,
+        executedAmount,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -75,10 +90,16 @@ export function WorkCategorySummaryTable({
       setRows(result.data.rows);
       setDrafts(
         Object.fromEntries(
-          result.data.rows.map((row) => [row.category, budgetInputValue(row.budget)]),
+          result.data.rows.map((row) => [
+            row.category,
+            {
+              budget: budgetInputValue(row.budget),
+              executed: budgetInputValue(row.executedAmount),
+            },
+          ]),
         ),
       );
-      toast.success("Presupuesto actualizado", { description: category });
+      toast.success("Categoría actualizada", { description: category });
     });
   }
 
@@ -99,6 +120,7 @@ export function WorkCategorySummaryTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">% ingresos</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Egresos</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">% egresos</TableHead>
+            <TableHead className="text-right text-xs uppercase text-muted-foreground">Ejecutado</TableHead>
             <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">% ejecutado</TableHead>
           </TableRow>
         </TableHeader>
@@ -112,11 +134,14 @@ export function WorkCategorySummaryTable({
                     type="number"
                     min="0"
                     step="0.01"
-                    value={drafts[row.category] ?? ""}
+                    value={drafts[row.category]?.budget ?? ""}
                     onChange={(event) =>
                       setDrafts((current) => ({
                         ...current,
-                        [row.category]: event.target.value,
+                        [row.category]: {
+                          budget: event.target.value,
+                          executed: current[row.category]?.executed ?? "",
+                        },
                       }))
                     }
                     className="w-28 text-right tabular-nums"
@@ -146,6 +171,27 @@ export function WorkCategorySummaryTable({
               <TableCell className="text-right tabular-nums text-muted-foreground">
                 {percentLabel(row.expensePercent)}
               </TableCell>
+              <TableCell className="min-w-44">
+                <div className="flex items-center justify-end gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={drafts[row.category]?.executed ?? ""}
+                    onChange={(event) =>
+                      setDrafts((current) => ({
+                        ...current,
+                        [row.category]: {
+                          budget: current[row.category]?.budget ?? "",
+                          executed: event.target.value,
+                        },
+                      }))
+                    }
+                    className="w-28 text-right tabular-nums"
+                    placeholder="0.00"
+                  />
+                </div>
+              </TableCell>
               <TableCell
                 className={cn(
                   "px-5 text-right font-semibold tabular-nums",
@@ -160,7 +206,7 @@ export function WorkCategorySummaryTable({
           ))}
           {orderedRows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
                 Sin categorías registradas.
               </TableCell>
             </TableRow>

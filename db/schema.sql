@@ -193,6 +193,7 @@ create table if not exists public.work_category_budgets (
   work_id       uuid not null references public.works (id) on delete cascade,
   category      text not null check (char_length(trim(category)) between 2 and 120),
   amount        numeric(14,2) not null default 0 check (amount >= 0),
+  executed_amount numeric(14,2) not null default 0 check (executed_amount >= 0),
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   created_by    uuid,

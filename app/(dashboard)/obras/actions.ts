@@ -319,7 +319,12 @@ export async function saveWorkCategoryBudgetAction(
 
   try {
     const d = parsed.data;
-    const rows = await saveWorkCategoryBudget(d.workId, d.category, d.amount);
+    const rows = await saveWorkCategoryBudget(
+      d.workId,
+      d.category,
+      d.budget,
+      d.executedAmount,
+    );
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
     return { ok: true, data: { rows } };

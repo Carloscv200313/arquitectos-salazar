@@ -291,15 +291,17 @@ export async function getWorkCategorySummary(workId: string): Promise<WorkCatego
     listConfiguredWorkCategories(),
     sb()
       .from("work_category_budgets")
-      .select("category, amount")
+      .select("category, amount, executed_amount")
       .eq("work_id", workId),
   ]);
 
   if (budgetRes.error) throw new Error(budgetRes.error.message);
 
   const budgets = new Map<string, number>();
+  const executedAmounts = new Map<string, number>();
   for (const row of budgetRes.data ?? []) {
     budgets.set(String(row.category), Number(row.amount));
+    executedAmounts.set(String(row.category), Number(row.executed_amount ?? 0));
   }
 
   const rows = new Map<string, WorkCategorySummary>();
@@ -317,9 +319,10 @@ export async function getWorkCategorySummary(workId: string): Promise<WorkCatego
       income: 0,
       expense: 0,
       balance: 0,
+      executedAmount: executedAmounts.get(category) ?? null,
       incomePercent: percentOf(0, budget),
       expensePercent: percentOf(0, budget),
-      executedPercent: percentOf(0, budget),
+      executedPercent: percentOf(executedAmounts.get(category) ?? 0, budget),
     });
   }
 
@@ -332,6 +335,7 @@ export async function getWorkCategorySummary(workId: string): Promise<WorkCatego
         income: 0,
         expense: 0,
         balance: 0,
+        executedAmount: executedAmounts.get(m.category) ?? null,
         incomePercent: null,
         expensePercent: null,
         executedPercent: null,
@@ -347,9 +351,10 @@ export async function getWorkCategorySummary(workId: string): Promise<WorkCatego
       return {
         ...row,
         balance,
+        executedAmount: row.executedAmount,
         incomePercent: percentOf(row.income, row.budget),
         expensePercent: percentOf(row.expense, row.budget),
-        executedPercent: percentOf(row.expense, row.budget),
+        executedPercent: percentOf(row.executedAmount ?? 0, row.budget),
       };
     })
     .filter((row) => row.income > 0 || row.expense > 0 || (row.budget ?? 0) > 0)
@@ -843,7 +848,8 @@ export async function getWorkFileViewUrl(fileId: string): Promise<string> {
 export async function saveWorkCategoryBudget(
   workId: string,
   category: string,
-  amount: number,
+  budget: number,
+  executedAmount: number,
 ): Promise<WorkCategorySummary[]> {
   const trimmedCategory = category.trim();
   const admin = sb();
@@ -851,7 +857,8 @@ export async function saveWorkCategoryBudget(
   const payload = {
     work_id: workId,
     category: trimmedCategory,
-    amount: round2(amount),
+    amount: round2(budget),
+    executed_amount: round2(executedAmount),
     created_by: null,
   };
 

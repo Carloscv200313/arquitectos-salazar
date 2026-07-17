@@ -252,6 +252,7 @@ export interface WorkCategorySummary {
   income: number;
   expense: number;
   balance: number;
+  executedAmount: number | null;
   incomePercent: number | null;
   expensePercent: number | null;
   executedPercent: number | null;

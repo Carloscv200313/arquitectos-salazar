@@ -224,8 +224,14 @@ export type RegisterInternalTransferInput = z.infer<
 export const saveWorkCategoryBudgetSchema = z.object({
   workId: z.string().uuid("Obra inválida"),
   category: z.string().trim().min(2, "Categoría inválida").max(120, "Categoría inválida"),
-  amount: z
+  budget: z
     .number({ error: "Ingresa un monto válido" })
+    .finite("Monto inválido")
+    .min(0, "El monto no puede ser negativo")
+    .max(1_000_000_000, "Monto demasiado alto")
+    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+  executedAmount: z
+    .number({ error: "Ingresa un monto ejecutado válido" })
     .finite("Monto inválido")
     .min(0, "El monto no puede ser negativo")
     .max(1_000_000_000, "Monto demasiado alto")

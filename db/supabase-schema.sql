@@ -324,6 +324,7 @@ create table if not exists public.work_category_budgets (
   work_id    uuid not null references public.works(id) on delete cascade,
   category   text not null,
   amount     numeric(14,2) not null default 0,
+  executed_amount numeric(14,2) not null default 0,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
