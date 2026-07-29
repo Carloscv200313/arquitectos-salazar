@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -255,14 +256,10 @@ export function EditProjectForm({
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                   $
                 </span>
-                <Input
+                <MoneyInput
                   id="base"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
                   value={projectAmount}
-                  onChange={(e) => setProjectAmount(e.target.value)}
+                  onValueChange={setProjectAmount}
                   className="pl-7 text-base font-medium"
                   aria-invalid={!!errors.projectAmount}
                 />
@@ -408,13 +405,9 @@ export function EditProjectForm({
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                         $
                       </span>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
+                      <MoneyInput
                         value={a.amount}
-                        onChange={(e) => updateAddon(a.id, { amount: e.target.value })}
+                        onValueChange={(value) => updateAddon(a.id, { amount: value })}
                         placeholder="0.00"
                         className="pl-6"
                       />

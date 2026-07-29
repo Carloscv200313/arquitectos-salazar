@@ -446,6 +446,7 @@ function seed(): DB {
     workOrders.push({
       id: orderId,
       work_id: data.work.id,
+      source: "internal",
       order_date: data.orderDate,
       supplier: data.supplier,
       material: data.material,

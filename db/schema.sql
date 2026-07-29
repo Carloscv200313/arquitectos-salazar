@@ -232,6 +232,7 @@ create index if not exists idx_work_internal_transfers_to_method
 create table if not exists public.work_orders (
   id                   uuid primary key default gen_random_uuid(),
   work_id              uuid not null references public.works (id) on delete cascade,
+  source               text not null default 'internal' check (source in ('internal', 'public')),
   order_date           date not null,
   supplier             text not null check (char_length(trim(supplier)) between 2 and 160),
   material             text not null check (char_length(trim(material)) between 2 and 1000),

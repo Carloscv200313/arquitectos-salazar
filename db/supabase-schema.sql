@@ -353,6 +353,7 @@ create table if not exists public.work_internal_transfers (
 create table if not exists public.work_orders (
   id                  uuid primary key default gen_random_uuid(),
   work_id             uuid not null references public.works(id) on delete cascade,
+  source              text not null default 'internal' check (source in ('internal','public')),
   order_date          date not null,
   supplier            text not null,
   material            text not null,

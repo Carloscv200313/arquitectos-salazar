@@ -28,7 +28,7 @@ export interface ReceiptData {
 export const SALARY_RECEIPT_PREFIX = "CMP";
 
 export const RECEIPT_PREFIX: Record<ReceiptKind, string> = {
-  proyecto: "PRY",
+  proyecto: "PRO",
   obra: "OBR",
 };
 
@@ -37,7 +37,7 @@ export const RECEIPT_KIND_LABEL: Record<ReceiptKind, string> = {
   obra: "Abono de obra",
 };
 
-/** Build a receipt code from a kind + sequential number: PRY-000123 / OBR-000123. */
+/** Build a receipt code from a kind + sequential number: PRO-000123 / OBR-000123. */
 export function formatReceiptCode(kind: ReceiptKind, seq: number): string {
   return `${RECEIPT_PREFIX[kind]}-${String(seq).padStart(6, "0")}`;
 }

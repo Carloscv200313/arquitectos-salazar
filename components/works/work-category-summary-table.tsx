@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { saveWorkCategoryBudgetAction } from "@/app/(dashboard)/obras/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Table,
   TableBody,
@@ -122,16 +122,13 @@ export function WorkCategorySummaryTable({
               <TableCell className="px-5 font-medium">{row.category}</TableCell>
               <TableCell className="min-w-44">
                 <div className="flex items-center justify-end gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                  <MoneyInput
                     value={drafts[row.category]?.budget ?? ""}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setDrafts((current) => ({
                         ...current,
                         [row.category]: {
-                          budget: event.target.value,
+                          budget: value,
                           executed: current[row.category]?.executed ?? "",
                         },
                       }))
@@ -165,17 +162,14 @@ export function WorkCategorySummaryTable({
               </TableCell>
               <TableCell className="min-w-44">
                 <div className="flex items-center justify-end gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                  <MoneyInput
                     value={drafts[row.category]?.executed ?? ""}
-                    onChange={(event) =>
+                    onValueChange={(value) =>
                       setDrafts((current) => ({
                         ...current,
                         [row.category]: {
                           budget: current[row.category]?.budget ?? "",
-                          executed: event.target.value,
+                          executed: value,
                         },
                       }))
                     }

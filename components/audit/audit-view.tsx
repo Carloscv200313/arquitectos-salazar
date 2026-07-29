@@ -39,6 +39,8 @@ const OPERATION_OPTIONS: { value: AuditOperation | "all"; label: string }[] = [
   { value: "delete", label: "Eliminó" },
 ];
 
+const HIDDEN_AUDIT_USERS = new Set(["administrador", "sistema"]);
+
 function operationClass(op: AuditOperation) {
   switch (op) {
     case "create":
@@ -208,6 +210,7 @@ export function AuditView({
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return logs.filter((l) => {
+      if (HIDDEN_AUDIT_USERS.has(l.userName.trim().toLowerCase())) return false;
       if (entity !== "all" && l.entityType !== entity) return false;
       if (operation !== "all" && l.operation !== operation) return false;
       if (term) {

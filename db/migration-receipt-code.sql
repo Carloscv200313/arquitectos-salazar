@@ -1,5 +1,5 @@
--- Código de boleta para abonos (ingresos).
--- Proyectos: nueva columna receipt_code (ej. PRY-000123).
+-- Código automático de recibo para movimientos.
+-- Proyectos: nueva columna receipt_code (ej. PRO-000123).
 -- Obras: se reutiliza la columna existente work_movements.receipt (ej. OBR-000123).
 
 alter table project_payments

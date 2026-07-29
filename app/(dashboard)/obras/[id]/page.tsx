@@ -83,7 +83,10 @@ export default async function WorkDetailPage({
         <WorkDetailActions workId={work.id} workName={work.name} methods={methods} providers={providers} categories={categories} />
       </div>
 
-      <WorkFinanceOverview finance={work.finance} />
+      <WorkFinanceOverview
+        finance={work.finance}
+        administrationUtilities={administrationUtilities}
+      />
       <div className="grid gap-5 xl:grid-cols-[1.45fr_0.55fr]">
         <WorkCategorySummaryTable workId={work.id} rows={categorySummary} />
         <WorkAdministrationUtilityTable rows={administrationUtilities} />

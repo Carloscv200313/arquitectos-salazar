@@ -33,6 +33,7 @@ function mapOrder(r: Row): WorkOrder {
   return {
     id: r.id as string,
     work_id: r.work_id as string,
+    source: ((r.source as string) === "public" ? "public" : "internal"),
     order_date: r.order_date as string,
     supplier: r.supplier as string,
     material: r.material as string,
@@ -141,7 +142,12 @@ export async function listOrderWorks(): Promise<
     return {
       ...work,
       ordersCount: workOrders.length,
-      pendingOrdersCount: workOrders.filter((o) => o.amount === null).length,
+      pendingOrdersCount: workOrders.filter((o) => {
+        if (o.amount === null) return true;
+        const amount = Number(o.amount);
+        const paid = paidByOrder.get(o.id as string) ?? 0;
+        return amount - paid > 0.001;
+      }).length,
       ordersAmount,
       ordersPaid,
       ordersPending: round2(Math.max(ordersAmount - ordersPaid, 0)),
@@ -169,6 +175,7 @@ export async function getWorkOrder(id: string): Promise<WorkOrderWithRelations |
 
 export interface CreateWorkOrderData {
   workId: string;
+  source?: "internal" | "public";
   orderDate: string;
   supplier: string;
   material: string;
@@ -188,7 +195,8 @@ export async function createWorkOrder(data: CreateWorkOrderData): Promise<string
       supplier: data.supplier.trim(),
       material: data.material.trim(),
       description: data.description?.trim() || null,
-      created_by: await getCurrentUserId(),
+      source: data.source ?? "internal",
+      created_by: data.userId === null ? null : data.userId ?? (await getCurrentUserId()),
     })
     .select("id")
     .single();

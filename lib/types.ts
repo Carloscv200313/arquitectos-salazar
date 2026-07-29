@@ -208,6 +208,7 @@ export type WorkOrderStatus = "pending_quote" | "quoted" | "partial" | "paid";
 export interface WorkOrder {
   id: string;
   work_id: string;
+  source: "internal" | "public";
   order_date: string;
   supplier: string;
   material: string;

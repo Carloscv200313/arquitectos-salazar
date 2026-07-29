@@ -11,6 +11,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { AppBrand } from "./app-brand";
+import { OrderNotifications } from "./order-notifications";
 import { SidebarNav } from "./sidebar-nav";
 import { UserChip } from "./user-chip";
 
@@ -49,6 +50,7 @@ export function Header({
       <AppBrand className="lg:hidden" />
 
       <div className="ml-auto flex items-center gap-3">
+        <OrderNotifications />
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium leading-tight">Arquitectos Salazar</p>
           <p className="text-xs text-muted-foreground">Gestión de proyectos</p>

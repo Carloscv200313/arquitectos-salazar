@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -59,7 +60,6 @@ export function WorkMovementActions({
 
   const isExpense = movement.movement_type === "expense";
 
-  const [receipt, setReceipt] = useState(movement.receipt ?? "");
   const [concept, setConcept] = useState(movement.concept);
   const [supplier, setSupplier] = useState(movement.supplier ?? "");
   const [category, setCategory] = useState(movement.category ?? "");
@@ -71,7 +71,6 @@ export function WorkMovementActions({
   const [deleteNote, setDeleteNote] = useState("");
 
   function resetEdit() {
-    setReceipt(movement.receipt ?? "");
     setConcept(movement.concept);
     setSupplier(movement.supplier ?? "");
     setCategory(movement.category ?? "");
@@ -90,7 +89,7 @@ export function WorkMovementActions({
         movementId: movement.id,
         workId,
         movementType: movement.movement_type,
-        receipt: isExpense ? receipt.trim() : "",
+        receipt: movement.receipt,
         movementDate: date,
         concept: concept.trim(),
         supplier: isExpense ? supplier.trim() : "Cliente",
@@ -166,19 +165,6 @@ export function WorkMovementActions({
           </SheetHeader>
 
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
-            {isExpense && (
-              <div className="grid gap-2">
-                <Label htmlFor="wm-receipt">Recibo</Label>
-                <Input
-                  id="wm-receipt"
-                  value={receipt}
-                  onChange={(e) => setReceipt(e.target.value)}
-                  aria-invalid={!!errors.receipt}
-                />
-                {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
-              </div>
-            )}
-
             <div className="grid gap-2">
               <Label htmlFor="wm-concept">Concepto</Label>
               <Input
@@ -238,14 +224,10 @@ export function WorkMovementActions({
 
             <div className="grid gap-2">
               <Label htmlFor="wm-amount">Monto</Label>
-              <Input
+              <MoneyInput
                 id="wm-amount"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onValueChange={setAmount}
                 aria-invalid={!!errors.amount}
               />
               {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}

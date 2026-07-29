@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -343,7 +344,7 @@ function QuoteOrderSheet({
             </div>
             <div className="grid gap-2">
               <Label htmlFor="quote-amount">Monto del pedido</Label>
-              <Input id="quote-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" aria-invalid={!!errors.amount} />
+              <MoneyInput id="quote-amount" value={amount} onValueChange={setAmount} placeholder="0.00" aria-invalid={!!errors.amount} />
               {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
             </div>
           </div>
@@ -377,7 +378,7 @@ function QuoteOrderSheet({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="advance-amount">Adelanto</Label>
-                <Input id="advance-amount" type="number" min="0" step="0.01" value={advanceAmount} onChange={(e) => setAdvanceAmount(e.target.value)} placeholder="0.00" aria-invalid={!!errors.advanceAmount} />
+                <MoneyInput id="advance-amount" value={advanceAmount} onValueChange={setAdvanceAmount} placeholder="0.00" aria-invalid={!!errors.advanceAmount} />
                 {errors.advanceAmount && <p className="text-xs text-destructive">{errors.advanceAmount}</p>}
               </div>
               <div className="grid gap-2">
@@ -482,7 +483,7 @@ function PaymentSheet({
           </div>
           <div className="grid gap-2">
             <Label htmlFor="payment-amount">Monto</Label>
-            <Input id="payment-amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" aria-invalid={!!errors.amount} />
+            <MoneyInput id="payment-amount" value={amount} onValueChange={setAmount} placeholder="0.00" aria-invalid={!!errors.amount} />
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
           </div>
           <div className="grid gap-2">
@@ -626,13 +627,10 @@ function EditOrderSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="edit-order-amount">Monto</Label>
-            <Input
+            <MoneyInput
               id="edit-order-amount"
-              type="number"
-              min="0"
-              step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onValueChange={setAmount}
               placeholder={order.amount === null ? "Asigna el monto desde el botón Monto" : "0.00"}
               disabled={order.amount === null}
               aria-invalid={!!errors.amount}

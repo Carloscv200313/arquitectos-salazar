@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -217,14 +218,10 @@ export function PublicAbonoForm({ methods }: { methods: PaymentMethod[] }) {
 
         <div className="grid gap-2">
           <Label htmlFor="amount">Monto</Label>
-          <Input
+          <MoneyInput
             id="amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onValueChange={setAmount}
             placeholder="0.00"
             aria-invalid={!!errors.amount || overBalance}
           />

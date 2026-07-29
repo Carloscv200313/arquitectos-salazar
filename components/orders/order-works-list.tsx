@@ -120,7 +120,7 @@ export function OrderWorksList({ works }: { works: Row[] }) {
                 {formatCurrency(totalPending)}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {pendingOrders} pedidos sin monto
+                {pendingOrders} pedidos pendientes
               </p>
             </div>
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
@@ -148,6 +148,7 @@ export function OrderWorksList({ works }: { works: Row[] }) {
                 <TableHead className="text-right">Pendiente</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Creación</TableHead>
+                <TableHead className="text-right">Pedidos pendientes</TableHead>
                 <TableHead className="text-right">Pedidos</TableHead>
                 <TableHead className="w-28 text-right">
                   <span className="sr-only">Acción</span>
@@ -200,6 +201,14 @@ export function OrderWorksList({ works }: { works: Row[] }) {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatDate(work.created_at)}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-right font-semibold tabular-nums",
+                      work.pendingOrdersCount > 0 ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
+                    {work.pendingOrdersCount}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     {work.ordersCount}

@@ -431,14 +431,7 @@ export const registerWorkMovementSchema = z
         message: "Las entradas solo pueden usar Abono de obra",
       });
     }
-    // El recibo de las entradas se genera automático; en salidas es obligatorio.
-    if (data.movementType === "expense" && (!data.receipt || data.receipt.trim().length < 1)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["receipt"],
-        message: "Ingresa el recibo",
-      });
-    }
+    // El recibo se genera automáticamente al guardar el movimiento.
     if (data.movementType === "expense" && (!data.supplier || data.supplier.trim().length < 2)) {
       ctx.addIssue({
         code: "custom",

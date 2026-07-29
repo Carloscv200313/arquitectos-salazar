@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, ListChecks, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
 import type {
   WorkAdministrationUtilityRow,
   WorkFinance,
@@ -67,7 +67,15 @@ function Stat({
   );
 }
 
-export function WorkFinanceOverview({ finance }: { finance: WorkFinance }) {
+export function WorkFinanceOverview({
+  finance,
+  administrationUtilities,
+}: {
+  finance: WorkFinance;
+  administrationUtilities: WorkAdministrationUtilityRow[];
+}) {
+  const totalAdministration = administrationUtilities.reduce((sum, row) => sum + row.amount, 0);
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Stat
@@ -92,10 +100,11 @@ export function WorkFinanceOverview({ finance }: { finance: WorkFinance }) {
         tone="danger"
       />
       <Stat
-        label="Movimientos"
-        value={String(finance.movementsCount)}
-        hint={finance.lastMovementDate ? `Último ${formatDate(finance.lastMovementDate)}` : "Sin movimientos"}
-        icon={<ListChecks className="size-5" />}
+        label="Utilidades"
+        value={formatCurrency(totalAdministration)}
+        hint={`${administrationUtilities.length} mes${administrationUtilities.length === 1 ? "" : "es"} con honorarios`}
+        icon={<TrendingUp className="size-5" />}
+        tone="success"
       />
     </div>
   );

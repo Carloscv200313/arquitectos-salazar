@@ -19,14 +19,11 @@ import {
   editOrderPaymentSchema,
   deleteOrderPaymentSchema,
 } from "@/lib/validation";
+import { getCurrentUserId } from "@/features/auth/get-user";
 
 export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
-
-function currentUserId(): string | null {
-  return null;
-}
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
@@ -70,7 +67,7 @@ export async function createWorkOrderAction(
       supplier: d.supplier,
       material: d.material,
       description: d.description || undefined,
-      userId: currentUserId(),
+      userId: await getCurrentUserId(),
     });
     revalidateOrderSurfaces(d.workId);
     return { ok: true, data: { orderId } };
@@ -98,7 +95,7 @@ export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> 
       amount: d.amount,
       advanceAmount: d.registerAdvance ? d.advanceAmount : undefined,
       advancePaymentMethodId: d.registerAdvance ? d.advancePaymentMethodId : undefined,
-      userId: currentUserId(),
+      userId: await getCurrentUserId(),
     });
     const order = await getWorkOrder(d.orderId);
     revalidateOrderSurfaces(order?.work_id);
@@ -159,7 +156,7 @@ export async function registerWorkOrderPaymentAction(
       description: d.description || undefined,
       amount: d.amount,
       paymentMethodId: d.paymentMethodId,
-      userId: currentUserId(),
+      userId: await getCurrentUserId(),
     });
     const order = await getWorkOrder(d.orderId);
     revalidateOrderSurfaces(order?.work_id);

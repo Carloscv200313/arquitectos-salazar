@@ -6,6 +6,7 @@ import { ArrowDownLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -45,7 +46,6 @@ export function RegisterWorkMovementSheet({
 }) {
   const [isPending, startTransition] = useTransition();
   const [movementType, setMovementType] = useState<"income" | "expense">("expense");
-  const [receipt, setReceipt] = useState("");
   const [movementDate, setMovementDate] = useState(todayISODate());
   const [concept, setConcept] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -61,7 +61,6 @@ export function RegisterWorkMovementSheet({
 
   function reset() {
     setMovementType("expense");
-    setReceipt("");
     setMovementDate(todayISODate());
     setConcept("");
     setSupplier("");
@@ -77,7 +76,7 @@ export function RegisterWorkMovementSheet({
     startTransition(async () => {
       const result = await registerWorkMovementAction({
         workId,
-        receipt,
+        receipt: "",
         movementDate,
         concept,
         supplier: movementType === "expense" ? supplier : "",
@@ -147,14 +146,7 @@ export function RegisterWorkMovementSheet({
             </Select>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {movementType === "expense" && (
-              <div className="grid gap-2">
-                <Label htmlFor="receipt">Recibo</Label>
-                <Input id="receipt" value={receipt} onChange={(e) => setReceipt(e.target.value)} aria-invalid={!!errors.receipt} />
-                {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
-              </div>
-            )}
+          <div className="grid gap-2">
             <div className="grid gap-2">
               <Label htmlFor="movement-date">Fecha</Label>
               <Input id="movement-date" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} aria-invalid={!!errors.movementDate} />
@@ -253,7 +245,7 @@ export function RegisterWorkMovementSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="amount">Monto</Label>
-            <Input id="amount" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" aria-invalid={!!errors.amount} />
+            <MoneyInput id="amount" value={amount} onValueChange={setAmount} placeholder="0.00" aria-invalid={!!errors.amount} />
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
           </div>
 

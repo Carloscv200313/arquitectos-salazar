@@ -568,9 +568,7 @@ async function nextWorkReceiptCode(): Promise<string> {
 export async function registerWorkMovement(
   data: RegisterWorkMovementData,
 ): Promise<{ id: string; receiptCode: string | null }> {
-  // Income ("abono"): auto receipt code (OBR-...). Expense: keep the typed receipt.
-  const receipt =
-    data.movementType === "income" ? await nextWorkReceiptCode() : (data.receipt ?? "").trim();
+  const receipt = await nextWorkReceiptCode();
   const { data: row, error } = await sb()
     .from("work_movements")
     .insert({
@@ -596,7 +594,7 @@ export async function registerWorkMovement(
     amount: data.amount,
     description: `${data.movementType === "income" ? "Ingreso" : "Egreso"} · ${data.concept.trim()}`,
   });
-  return { id: row.id as string, receiptCode: data.movementType === "income" ? receipt : null };
+  return { id: row.id as string, receiptCode: receipt };
 }
 
 export interface WorkMovementEditData {

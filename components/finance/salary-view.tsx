@@ -36,6 +36,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import {
   Select,
   SelectContent,
@@ -1003,7 +1004,7 @@ function PaymentSheet({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label>Monto</Label>
-              <Input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={!!errors.amount} />
+              <MoneyInput value={amount} onValueChange={setAmount} placeholder="0.00" aria-invalid={!!errors.amount} />
               {errors.amount ? <p className="text-xs text-destructive">{errors.amount}</p> : null}
             </div>
             <div className="grid gap-2">
@@ -1536,14 +1537,10 @@ function EmployeeDetailSheet({
                               <div className="grid gap-3 rounded-xl border border-brand/20 bg-background p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_10rem]">
                                 <div className="grid gap-2">
                                   <Label>Monto a pagar</Label>
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    max={remaining ?? undefined}
-                                    step="0.01"
+                                  <MoneyInput
                                     value={inlineAmount}
                                     aria-invalid={inlineExceedsRemaining}
-                                    onChange={(event) => setInlineAmount(event.target.value)}
+                                    onValueChange={setInlineAmount}
                                   />
                                   {inlineExceedsRemaining ? (
                                     <p className="text-xs text-destructive">

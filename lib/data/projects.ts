@@ -523,8 +523,7 @@ async function nextProjectReceiptCode(): Promise<string> {
 export async function registerMovement(
   data: RegisterPaymentData,
 ): Promise<{ id: string; receiptCode: string | null }> {
-  // Income payments ("abonos") get an auto receipt code for the printable receipt.
-  const receiptCode = data.movementType === "income" ? await nextProjectReceiptCode() : null;
+  const receiptCode = await nextProjectReceiptCode();
   const { data: row, error } = await sb()
     .from("project_payments")
     .insert({

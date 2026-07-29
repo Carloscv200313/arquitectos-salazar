@@ -66,6 +66,7 @@ export async function registerPublicOrder(raw: unknown): Promise<PublicOrderResu
 
     await createWorkOrder({
       workId: d.workId,
+      source: "public",
       orderDate: d.orderDate,
       supplier: d.supplier,
       material: d.material,
