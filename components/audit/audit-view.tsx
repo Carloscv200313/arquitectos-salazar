@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
@@ -265,18 +264,18 @@ export function AuditView({
           <p className="text-sm text-muted-foreground">No hay registros que coincidan.</p>
         </div>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <Table>
+        <div className="mt-4 max-h-[calc(100vh-18rem)] overflow-auto rounded-2xl border bg-card">
+          <table className="w-full min-w-[1280px] caption-bottom text-sm">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>Fecha</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Acción</TableHead>
-                <TableHead>Módulo</TableHead>
-                <TableHead>Detalle</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead>Motivo</TableHead>
-                <TableHead />
+                <TableHead className="sticky top-0 z-10 bg-card">Fecha</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card">Usuario</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card">Acción</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card">Módulo</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card">Detalle</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card text-right">Monto</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card">Motivo</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-card text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -327,7 +326,7 @@ export function AuditView({
                     </TableRow>
                     {expandable && open ? (
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={8} className="py-3">
+                        <TableCell colSpan={8} className="whitespace-normal py-3">
                           <SnapshotDiff log={l} methodNames={methodNames} />
                         </TableCell>
                       </TableRow>
@@ -336,7 +335,7 @@ export function AuditView({
                 );
               })}
             </TableBody>
-          </Table>
+          </table>
         </div>
       )}
     </Card>
