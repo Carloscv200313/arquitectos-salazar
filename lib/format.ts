@@ -26,7 +26,10 @@ export function formatPercent(value: number): string {
 
 /** ISO date (yyyy-mm-dd or full ISO) -> localized short date. */
 export function formatDate(iso: string): string {
-  const d = new Date(iso);
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString(LOCALE, {
     day: "2-digit",
@@ -49,5 +52,9 @@ export function formatDateTime(iso: string): string {
 
 /** Today as yyyy-mm-dd, suitable for <input type="date"> defaults. */
 export function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
