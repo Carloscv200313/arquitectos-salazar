@@ -28,7 +28,7 @@ export function OrderReports({ works }: { works: OrderWorkRow[] }) {
   const totalPaid = round2(works.reduce((s, w) => s + w.ordersPaid, 0));
   const totalPending = round2(works.reduce((s, w) => s + w.ordersPending, 0));
   const totalOrders = works.reduce((s, w) => s + w.ordersCount, 0);
-  const totalUnquoted = works.reduce((s, w) => s + w.pendingOrdersCount, 0);
+  const totalRequestPending = works.reduce((s, w) => s + w.pendingOrdersCount, 0);
   const paidPct = totalAmount > 0 ? round2((totalPaid / totalAmount) * 100) : 0;
 
   const byWork = [...works]
@@ -64,9 +64,9 @@ export function OrderReports({ works }: { works: OrderWorkRow[] }) {
           icon={<Clock className="size-5" />}
         />
         <KpiCard
-          label="Sin cotizar"
-          value={String(totalUnquoted)}
-          hint="Pedidos a la espera de monto"
+          label="Por solicitar"
+          value={String(totalRequestPending)}
+          hint="Pedidos pendientes de solicitud"
           icon={<PackageSearch className="size-5" />}
         />
       </div>

@@ -358,6 +358,7 @@ function seed(): DB {
     description?: string;
     category?: string;
     amount?: number;
+    isRequested?: boolean;
     advanceAmount?: number;
     advanceMethodId?: string;
     laterPayments?: Array<{
@@ -455,6 +456,7 @@ function seed(): DB {
       amount: data.amount ?? null,
       quoted_at: data.amount ? data.orderDate : null,
       payable_movement_id: payableMovementId,
+      is_requested: data.isRequested ?? false,
       created_at: ts,
       updated_at: ts,
       created_by: SYSTEM_USER,

@@ -217,6 +217,7 @@ export interface WorkOrder {
   amount: number | null;
   quoted_at: string | null;
   payable_movement_id: string | null;
+  is_requested: boolean;
   created_at: string;
   updated_at: string;
   created_by: string | null;

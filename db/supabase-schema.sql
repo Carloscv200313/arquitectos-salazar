@@ -362,6 +362,7 @@ create table if not exists public.work_orders (
   amount              numeric(14,2),
   quoted_at           timestamptz,
   payable_movement_id uuid references public.work_movements(id),
+  is_requested         boolean not null default false,
   status              smallint not null default 1,
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now(),

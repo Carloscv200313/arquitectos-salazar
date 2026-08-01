@@ -21,6 +21,7 @@ import {
   editWorkOrderAction,
   quoteWorkOrderAction,
   registerWorkOrderPaymentAction,
+  toggleWorkOrderRequestedAction,
 } from "@/app/(dashboard)/pedidos/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -829,15 +830,32 @@ export function WorkOrdersView({
   providers: string[];
   categories: string[];
 }) {
+  const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
   const [quoteTarget, setQuoteTarget] = useState<WorkOrderWithRelations | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<WorkOrderWithRelations | null>(null);
   const [historyTarget, setHistoryTarget] = useState<WorkOrderWithRelations | null>(null);
   const [detailTarget, setDetailTarget] = useState<WorkOrderWithRelations | null>(null);
   const [editTarget, setEditTarget] = useState<WorkOrderWithRelations | null>(null);
+  const [isUpdatingRequested, startRequestedTransition] = useTransition();
   const totalAmount = orders.reduce((sum, order) => sum + (order.amount ?? 0), 0);
   const totalPaid = orders.reduce((sum, order) => sum + order.paid, 0);
   const totalPending = orders.reduce((sum, order) => sum + order.pending, 0);
+
+  function toggleRequested(order: WorkOrderWithRelations, isRequested: boolean) {
+    startRequestedTransition(async () => {
+      const result = await toggleWorkOrderRequestedAction({
+        orderId: order.id,
+        isRequested,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(isRequested ? "Pedido marcado como solicitado" : "Pedido marcado como pendiente");
+      router.refresh();
+    });
+  }
 
   return (
     <>
@@ -922,6 +940,7 @@ export function WorkOrdersView({
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
+                  <TableHead className="px-5 text-center">Solicitado</TableHead>
                   <TableHead className="px-5">Fecha</TableHead>
                   <TableHead>Proveedor</TableHead>
                   <TableHead>Para</TableHead>
@@ -939,6 +958,20 @@ export function WorkOrdersView({
               <TableBody>
                 {orders.map((order) => (
                   <TableRow key={order.id}>
+                    <TableCell className="px-5 text-center">
+                      <input
+                        type="checkbox"
+                        checked={order.is_requested}
+                        disabled={isUpdatingRequested}
+                        onChange={(event) => toggleRequested(order, event.target.checked)}
+                        aria-label={
+                          order.is_requested
+                            ? "Marcar pedido como pendiente"
+                            : "Marcar pedido como solicitado"
+                        }
+                        className="size-4 rounded border-input accent-lime-400"
+                      />
+                    </TableCell>
                     <TableCell className="px-5 whitespace-nowrap text-muted-foreground">
                       {formatDate(order.order_date)}
                     </TableCell>
@@ -1024,7 +1057,7 @@ export function WorkOrdersView({
                 ))}
                 {orders.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                       Aún no hay pedidos registrados para esta obra.
                     </TableCell>
                   </TableRow>

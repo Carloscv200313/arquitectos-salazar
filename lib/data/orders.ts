@@ -42,6 +42,7 @@ function mapOrder(r: Row): WorkOrder {
     amount: r.amount === null || r.amount === undefined ? null : Number(r.amount),
     quoted_at: (r.quoted_at as string) ?? null,
     payable_movement_id: (r.payable_movement_id as string) ?? null,
+    is_requested: r.is_requested === true,
     created_at: r.created_at as string,
     updated_at: (r.updated_at as string) ?? (r.created_at as string),
     created_by: (r.created_by as string) ?? null,
@@ -122,7 +123,7 @@ export async function listOrderWorks(): Promise<
   const client = sb();
   const [works, ordersRes, paymentsRes] = await Promise.all([
     listWorks(),
-    client.from("work_orders").select("id, work_id, amount").eq("status", 1),
+    client.from("work_orders").select("*").eq("status", 1),
     client.from("work_order_payments").select("order_id, amount").eq("status", 1),
   ]);
 
@@ -142,17 +143,44 @@ export async function listOrderWorks(): Promise<
     return {
       ...work,
       ordersCount: workOrders.length,
-      pendingOrdersCount: workOrders.filter((o) => {
-        if (o.amount === null) return true;
-        const amount = Number(o.amount);
-        const paid = paidByOrder.get(o.id as string) ?? 0;
-        return amount - paid > 0.001;
-      }).length,
+      pendingOrdersCount: workOrders.filter((o) => o.is_requested !== true).length,
       ordersAmount,
       ordersPaid,
       ordersPending: round2(Math.max(ordersAmount - ordersPaid, 0)),
     };
   });
+}
+
+export async function updateWorkOrderRequested(
+  id: string,
+  isRequested: boolean,
+): Promise<{ workId: string }> {
+  const client = sb();
+  const { data: before } = await client
+    .from("work_orders")
+    .select("id, work_id, material, is_requested, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!before || (before.status as number) === 0) throw new Error("Pedido no encontrado.");
+
+  const { error } = await client
+    .from("work_orders")
+    .update({ is_requested: isRequested })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await writeAudit({
+    entityType: "work_order",
+    entityId: id,
+    operation: "update",
+    description: `${isRequested ? "Pedido solicitado" : "Pedido pendiente"} · ${before.material as string}`,
+    snapshot: {
+      before: { is_requested: before.is_requested === true },
+      after: { is_requested: isRequested },
+    },
+  });
+
+  return { workId: before.work_id as string };
 }
 
 export async function listWorkOrders(workId: string): Promise<WorkOrderWithRelations[]> {

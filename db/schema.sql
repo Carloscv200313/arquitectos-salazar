@@ -241,6 +241,7 @@ create table if not exists public.work_orders (
   amount               numeric(14,2) check (amount > 0),
   quoted_at            date,
   payable_movement_id  uuid references public.work_movements (id) on delete set null,
+  is_requested          boolean not null default false,
   created_at           timestamptz not null default now(),
   updated_at           timestamptz not null default now(),
   created_by           uuid references auth.users (id) on delete set null

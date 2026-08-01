@@ -8,6 +8,7 @@ import {
   quoteWorkOrder,
   registerWorkOrderPayment,
   updateWorkOrder,
+  updateWorkOrderRequested,
   updateWorkOrderPayment,
   deleteWorkOrderPayment,
 } from "@/lib/data/orders";
@@ -35,7 +36,9 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
 }
 
 function revalidateOrderSurfaces(workId?: string) {
+  revalidatePath("/dashboard");
   revalidatePath("/pedidos");
+  revalidatePath("/pedidos/reports");
   if (workId) {
     revalidatePath(`/pedidos/${workId}`);
     revalidatePath(`/obras/${workId}`);
@@ -132,6 +135,39 @@ export async function editWorkOrderAction(raw: unknown): Promise<ActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo editar el pedido.",
+    };
+  }
+}
+
+export async function toggleWorkOrderRequestedAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      orderId: z.string().uuid("Pedido inválido"),
+      isRequested: z.boolean(),
+    })
+    .safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa el estado del pedido.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const { orderId, isRequested } = parsed.data;
+    const result = await updateWorkOrderRequested(orderId, isRequested);
+    revalidateOrderSurfaces(result.workId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar el estado del pedido.",
     };
   }
 }
