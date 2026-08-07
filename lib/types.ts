@@ -281,7 +281,24 @@ export interface DebtReportRow {
   name: string;
   amount: number;
   type: DebtPartyType;
-  source: "manual" | "works" | "orders";
+  source: "manual" | "works" | "orders" | "mixed";
+}
+
+export type ProviderDebtSourceType = "work_order" | "work_movement";
+
+export interface WorkMovementProviderDebt {
+  id: string;
+  workId: string;
+  workName: string;
+  clientName: string;
+  movementDate: string;
+  concept: string;
+  provider: string;
+  category: string;
+  amount: number;
+  settled: number;
+  pending: number;
+  sourceType: "work_movement";
 }
 
 export interface ProviderDebtDetail {
@@ -290,6 +307,7 @@ export interface ProviderDebtDetail {
   totalPaid: number;
   totalPending: number;
   orders: WorkOrderWithRelations[];
+  workMovements: WorkMovementProviderDebt[];
 }
 
 export interface GeneralBalanceEntry {

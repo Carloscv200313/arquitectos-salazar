@@ -453,6 +453,25 @@ create table if not exists public.manual_debtors (
   created_by uuid references auth.users(id)
 );
 
+create table if not exists public.provider_debt_settlements (
+  id              uuid primary key default gen_random_uuid(),
+  provider        text not null,
+  source_type     text not null check (source_type in ('work_order','work_movement')),
+  source_id       uuid not null,
+  amount          numeric(14,2) not null default 0,
+  settlement_date date not null default current_date,
+  note            text,
+  status          smallint not null default 1,
+  created_at      timestamptz not null default now(),
+  created_by      uuid references auth.users(id)
+);
+create index if not exists provider_debt_settlements_source_idx
+  on public.provider_debt_settlements(source_type, source_id)
+  where status = 1;
+create index if not exists provider_debt_settlements_provider_idx
+  on public.provider_debt_settlements(lower(provider))
+  where status = 1;
+
 create table if not exists public.general_balance_entries (
   id              uuid primary key default gen_random_uuid(),
   description     text not null,
@@ -486,7 +505,7 @@ begin
   foreach t in array array[
     'roles','profiles','app_users','employees','payment_accounts','task_types',
     'system_settings','help_items','clients','projects','works','work_files','work_category_budgets','work_orders',
-    'salary_weeks','salary_day_records','manual_debtors'
+    'salary_weeks','salary_day_records','manual_debtors','provider_debt_settlements'
   ] loop
     execute format('drop trigger if exists set_updated_at on public.%I;', t);
     execute format(
@@ -513,7 +532,7 @@ begin
     'project_payments','internal_transfers','works','work_movements','work_files',
     'work_category_budgets',
     'work_internal_transfers','work_orders','work_order_payments','salary_weeks',
-    'salary_day_records','salary_payments','manual_debtors','general_balance_entries',
+    'salary_day_records','salary_payments','manual_debtors','provider_debt_settlements','general_balance_entries',
     'general_balance_account_movements'
   ] loop
     execute format('alter table public.%I enable row level security;', t);

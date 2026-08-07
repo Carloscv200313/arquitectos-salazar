@@ -1,6 +1,14 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { DashboardMovement } from "@/lib/dashboard";
 
@@ -22,20 +30,20 @@ export function DashboardRecentMovementsCard({
       </div>
 
       <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th className="border-b py-3 pr-4 font-medium">Movimiento</th>
-              <th className="border-b py-3 pr-4 font-medium">Proyecto</th>
-              <th className="border-b py-3 pr-4 font-medium">Cliente</th>
-              <th className="border-b py-3 pr-4 font-medium">Fecha</th>
-              <th className="border-b py-3 text-right font-medium">Monto</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table className="min-w-[640px] border-separate border-spacing-0">
+          <TableHeader>
+            <TableRow className="text-left text-muted-foreground hover:bg-transparent">
+              <TableHead className="border-b py-3 pr-4 font-medium">Movimiento</TableHead>
+              <TableHead className="border-b py-3 pr-4 font-medium">Proyecto</TableHead>
+              <TableHead className="border-b py-3 pr-4 font-medium">Cliente</TableHead>
+              <TableHead className="border-b py-3 pr-4 font-medium">Fecha</TableHead>
+              <TableHead className="border-b py-3 text-right font-medium">Monto</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {movements.map((movement) => (
-              <tr key={movement.id}>
-                <td className="border-b py-3 pr-4">
+              <TableRow key={movement.id}>
+                <TableCell className="border-b py-3 pr-4">
                   <div className="flex items-center gap-3">
                     <div
                       className={
@@ -58,11 +66,11 @@ export function DashboardRecentMovementsCard({
                       </p>
                     </div>
                   </div>
-                </td>
-                <td className="border-b py-3 pr-4 font-medium">{movement.projectName}</td>
-                <td className="border-b py-3 pr-4 text-muted-foreground">{movement.clientName}</td>
-                <td className="border-b py-3 pr-4 text-muted-foreground">{formatDate(movement.payment_date)}</td>
-                <td
+                </TableCell>
+                <TableCell className="border-b py-3 pr-4 font-medium">{movement.projectName}</TableCell>
+                <TableCell className="border-b py-3 pr-4 text-muted-foreground">{movement.clientName}</TableCell>
+                <TableCell className="border-b py-3 pr-4 text-muted-foreground">{formatDate(movement.payment_date)}</TableCell>
+                <TableCell
                   className={
                     "border-b py-3 text-right font-semibold tabular-nums " +
                     (movement.movement_type === "income"
@@ -71,11 +79,11 @@ export function DashboardRecentMovementsCard({
                   }
                 >
                   {formatCurrency(movement.amount)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </Card>
   );

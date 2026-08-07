@@ -3,22 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { BadgeDollarSign, Boxes, HandCoins, History, Hammer, Loader2 } from "lucide-react";
-import { registerWorkOrderPaymentAction } from "@/app/(dashboard)/pedidos/actions";
-import { OrderPaymentActions } from "@/components/orders/order-payment-actions";
+import { BadgeDollarSign, Boxes, CheckCircle2, HandCoins, Loader2 } from "lucide-react";
+import { settleProviderDebtAction } from "@/app/(dashboard)/finance/actions";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Table,
@@ -30,15 +22,15 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
-import type { PaymentMethod, ProviderDebtDetail, WorkOrderWithRelations } from "@/lib/types";
+import type { ProviderDebtDetail } from "@/lib/types";
+
+type SettleTarget =
+  | { sourceType: "work_order"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
+  | { sourceType: "work_movement"; sourceId: string; provider: string; title: string; subtitle: string; pending: number };
 
 function pendingTone(pending: number, total: number) {
   if (total <= 0.001 || pending <= 0.001) return "text-muted-foreground";
   return Math.abs(pending - total) < 0.001 ? "text-destructive" : "text-brand-foreground";
-}
-
-function realPaymentMethods(methods: PaymentMethod[]) {
-  return methods.filter((method) => method.name.toLowerCase() !== "cuentas por pagar");
 }
 
 function Stat({
@@ -91,50 +83,43 @@ function Stat({
   );
 }
 
-function ProviderPaymentSheet({
+function SettleProviderDebtSheet({
   open,
   onOpenChange,
-  order,
-  methods,
+  target,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  order: WorkOrderWithRelations;
-  methods: PaymentMethod[];
+  target: SettleTarget;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [paymentDate, setPaymentDate] = useState(todayISODate());
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [settlementDate, setSettlementDate] = useState(todayISODate());
+  const [amount, setAmount] = useState(String(target.pending));
+  const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const methodItems = realPaymentMethods(methods).map((method) => ({
-    label: method.name,
-    value: method.id,
-  }));
 
   function reset() {
-    setPaymentDate(todayISODate());
-    setDescription("");
-    setAmount("");
-    setPaymentMethodId("");
+    setSettlementDate(todayISODate());
+    setAmount(String(target.pending));
+    setNote("");
     setErrors({});
   }
 
   function submit() {
     setErrors({});
     startTransition(async () => {
-      const result = await registerWorkOrderPaymentAction({
-        orderId: order.id,
-        paymentDate,
-        description,
+      const result = await settleProviderDebtAction({
+        provider: target.provider,
+        sourceType: target.sourceType,
+        sourceId: target.sourceId,
         amount: Number(amount),
-        paymentMethodId,
+        settlementDate,
+        note,
       });
       if (result.ok) {
-        toast.success("Abono registrado", {
-          description: `${formatCurrency(Number(amount))} · ${order.supplier}`,
+        toast.success("Deuda saldada", {
+          description: `${formatCurrency(Number(amount))} · ${target.provider}`,
         });
         reset();
         onOpenChange(false);
@@ -156,27 +141,31 @@ function ProviderPaymentSheet({
     >
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Registrar abono</SheetTitle>
+          <SheetTitle>Saldar deuda</SheetTitle>
           <SheetDescription>
-            Pendiente: {formatCurrency(order.pending)} · {order.material}
+            {target.title} · pendiente {formatCurrency(target.pending)}
           </SheetDescription>
         </SheetHeader>
         <div className="grid gap-4 px-4 pb-4">
+          <Card className="bg-brand-muted/50 p-4">
+            <p className="font-medium">{target.subtitle}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Este registro dejará de aparecer como deuda pendiente.</p>
+          </Card>
           <div className="grid gap-2">
-            <Label htmlFor="provider-payment-date">Fecha</Label>
+            <Label htmlFor="settle-provider-date">Fecha</Label>
             <Input
-              id="provider-payment-date"
+              id="settle-provider-date"
               type="date"
-              value={paymentDate}
-              onChange={(e) => setPaymentDate(e.target.value)}
-              aria-invalid={!!errors.paymentDate}
+              value={settlementDate}
+              onChange={(e) => setSettlementDate(e.target.value)}
+              aria-invalid={!!errors.settlementDate}
             />
-            {errors.paymentDate && <p className="text-xs text-destructive">{errors.paymentDate}</p>}
+            {errors.settlementDate && <p className="text-xs text-destructive">{errors.settlementDate}</p>}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="provider-payment-amount">Monto</Label>
+            <Label htmlFor="settle-provider-amount">Monto a saldar</Label>
             <MoneyInput
-              id="provider-payment-amount"
+              id="settle-provider-amount"
               value={amount}
               onValueChange={setAmount}
               placeholder="0.00"
@@ -185,149 +174,20 @@ function ProviderPaymentSheet({
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="provider-payment-method">Forma de pago</Label>
-            <Select value={paymentMethodId} onValueChange={(value) => setPaymentMethodId(value ?? "")} items={methodItems}>
-              <SelectTrigger id="provider-payment-method" className="w-full" aria-invalid={!!errors.paymentMethodId}>
-                <SelectValue placeholder="Selecciona cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                {realPaymentMethods(methods).map((method) => (
-                  <SelectItem key={method.id} value={method.id}>
-                    {method.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.paymentMethodId && <p className="text-xs text-destructive">{errors.paymentMethodId}</p>}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="provider-payment-description">Descripción</Label>
+            <Label htmlFor="settle-provider-note">Nota</Label>
             <Input
-              id="provider-payment-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ej. Abono a proveedor"
-              aria-invalid={!!errors.description}
+              id="settle-provider-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ej. Liquidado por administración"
+              aria-invalid={!!errors.note}
             />
-            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
+            {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
           </div>
-          <Button onClick={submit} disabled={isPending}>
-            {isPending ? <Loader2 className="size-4 animate-spin" /> : <BadgeDollarSign className="size-4" />}
-            Guardar abono
+          <Button onClick={submit} disabled={isPending} className="bg-brand text-brand-foreground hover:bg-brand/90">
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
+            Saldar deuda
           </Button>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
-function OrderPaymentHistorySheet({
-  open,
-  onOpenChange,
-  order,
-  methods,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  order: WorkOrderWithRelations;
-  methods: PaymentMethod[];
-}) {
-  const payments = [...order.payments].sort((a, b) => {
-    const byDate = b.payment_date.localeCompare(a.payment_date);
-    if (byDate !== 0) return byDate;
-    return b.created_at.localeCompare(a.created_at);
-  });
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:!w-[min(92vw,1180px)] sm:!max-w-none">
-        <SheetHeader>
-          <SheetTitle>Historial de abonos</SheetTitle>
-          <SheetDescription>
-            {order.work.name} · {order.material}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="grid gap-5 px-4 pb-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Stat
-              label="Monto"
-              value={order.amount === null ? "-" : formatCurrency(order.amount)}
-              hint="Total del pedido"
-              icon={<BadgeDollarSign className="size-5" />}
-              accent
-            />
-            <Stat
-              label="Obra"
-              value={order.work.name}
-              hint=""
-              icon={<Hammer className="size-5" />}
-              compactValue
-            />
-            <Stat
-              label="Abonado"
-              value={formatCurrency(order.paid)}
-              hint="Pagos registrados"
-              icon={<HandCoins className="size-5" />}
-              tone="success"
-            />
-            <Stat
-              label="Pendiente"
-              value={order.amount === null ? "-" : formatCurrency(order.pending)}
-              hint="Saldo restante"
-              icon={<Boxes className="size-5" />}
-              tone="danger"
-            />
-          </div>
-
-          <Card className="gap-0 overflow-hidden p-0">
-            <div className="border-b px-5 py-4">
-              <div className="flex items-center gap-2">
-                <History className="size-4 text-muted-foreground" />
-                <h2 className="font-semibold">Abonos de esta deuda</h2>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Historial de pagos registrados para este pedido.
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/40">
-                  <TableRow>
-                    <TableHead className="px-5">Fecha</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Forma</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="px-5 text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="px-5 text-muted-foreground">
-                        {formatDate(payment.payment_date)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{payment.description}</TableCell>
-                      <TableCell className="text-muted-foreground">{payment.method?.name ?? "Sin cuenta"}</TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums text-brand-foreground">
-                        {formatCurrency(payment.amount)}
-                      </TableCell>
-                      <TableCell className="px-5 text-right">
-                        <OrderPaymentActions payment={payment} workId={order.work.id} methods={methods} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {payments.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        Aún no hay abonos registrados para esta deuda.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </Card>
         </div>
       </SheetContent>
     </Sheet>
@@ -336,13 +196,22 @@ function OrderPaymentHistorySheet({
 
 export function ProviderDebtDetail({
   detail,
-  methods,
 }: {
   detail: ProviderDebtDetail;
-  methods: PaymentMethod[];
 }) {
-  const [paymentTarget, setPaymentTarget] = useState<WorkOrderWithRelations | null>(null);
-  const [historyTarget, setHistoryTarget] = useState<WorkOrderWithRelations | null>(null);
+  const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
+  const pendingRowsCount = detail.orders.length + detail.workMovements.length;
+  const debtRows = [
+    ...detail.orders.map((order) => ({ kind: "order" as const, order })),
+    ...detail.workMovements.map((movement) => ({ kind: "movement" as const, movement })),
+  ].sort((a, b) => {
+    const aPending = a.kind === "order" ? a.order.pending : a.movement.pending;
+    const bPending = b.kind === "order" ? b.order.pending : b.movement.pending;
+    if (Math.abs(bPending - aPending) > 0.001) return bPending - aPending;
+    const aDate = a.kind === "order" ? a.order.order_date : a.movement.movementDate;
+    const bDate = b.kind === "order" ? b.order.order_date : b.movement.movementDate;
+    return bDate.localeCompare(aDate);
+  });
 
   return (
     <>
@@ -363,8 +232,8 @@ export function ProviderDebtDetail({
             tone="success"
           />
           <Stat
-            label="Pedidos con saldo"
-            value={String(detail.orders.length)}
+            label="Registros con saldo"
+            value={String(pendingRowsCount)}
             hint="Registros pendientes"
             icon={<BadgeDollarSign className="size-5" />}
           />
@@ -374,67 +243,142 @@ export function ProviderDebtDetail({
           <div className="border-b px-5 py-4">
             <h2 className="font-semibold">Deudas del proveedor</h2>
             <p className="text-sm text-muted-foreground">
-              Cada fila representa un pedido pendiente por abonar.
+              Pedidos y egresos de obra pendientes por saldar.
             </p>
           </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
+                  <TableHead className="px-5">Origen</TableHead>
                   <TableHead className="px-5">Obra</TableHead>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Material</TableHead>
+                  <TableHead>Detalle</TableHead>
+                  <TableHead>Categoría</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="text-right">Abonado</TableHead>
+                  <TableHead className="text-right">Abonado / saldado</TableHead>
                   <TableHead className="text-right">Pendiente</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="px-5 text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail.orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="px-5">
-                      <div className="font-medium">{order.work.name}</div>
-                      <div className="text-xs text-muted-foreground">{order.work.client.name}</div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{formatDate(order.order_date)}</TableCell>
-                    <TableCell className="max-w-sm">
-                      <div className="line-clamp-2">{order.material}</div>
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {order.amount === null ? "-" : formatCurrency(order.amount)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
-                      {formatCurrency(order.paid)}
-                    </TableCell>
-                    <TableCell className={cn("text-right font-semibold tabular-nums", pendingTone(order.pending, order.amount ?? 0))}>
-                      {order.amount === null ? "-" : formatCurrency(order.pending)}
-                    </TableCell>
-                    <TableCell>
-                      <OrderStatusBadge status={order.status} />
-                    </TableCell>
-                    <TableCell className="px-5 text-right">
+                {debtRows.map((row) => {
+                  if (row.kind === "order") {
+                    const { order } = row;
+                    return (
+                      <TableRow key={`order-${order.id}`}>
+                        <TableCell className="px-5">
+                          <span className="inline-flex rounded-full bg-brand-muted px-2.5 py-1 text-xs font-semibold text-brand-foreground">
+                            Pedido
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-5">
+                          <div className="font-medium">{order.work.name}</div>
+                          <div className="text-xs text-muted-foreground">{order.work.client.name}</div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(order.order_date)}</TableCell>
+                        <TableCell className="max-w-sm">
+                          <div className="line-clamp-2">{order.material}</div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{order.category || "-"}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {order.amount === null ? "-" : formatCurrency(order.amount)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
+                          {formatCurrency(order.paid)}
+                        </TableCell>
+                        <TableCell className={cn("text-right font-semibold tabular-nums", pendingTone(order.pending, order.amount ?? 0))}>
+                          {order.amount === null ? "-" : formatCurrency(order.pending)}
+                        </TableCell>
+                        <TableCell>
+                          <OrderStatusBadge status={order.status} />
+                        </TableCell>
+                        <TableCell className="px-5 text-right">
+                          <Button
+                            size="sm"
+                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={order.pending <= 0.001}
+                            onClick={() =>
+                              setSettleTarget({
+                                sourceType: "work_order",
+                                sourceId: order.id,
+                                provider: detail.provider,
+                                title: order.material,
+                                subtitle: `${order.work.name} · ${order.work.client.name}`,
+                                pending: order.pending,
+                              })
+                            }
+                          >
+                            <CheckCircle2 className="size-4" />
+                            Saldar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  const { movement } = row;
+                  return (
+                    <TableRow key={`movement-${movement.id}`}>
+                      <TableCell className="px-5">
+                        <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                          Obra
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-5">
+                        <div className="font-medium">{movement.workName}</div>
+                        <div className="text-xs text-muted-foreground">{movement.clientName}</div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(movement.movementDate)}</TableCell>
+                      <TableCell className="max-w-sm">
+                        <div className="line-clamp-2">{movement.concept}</div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{movement.category || "-"}</TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {formatCurrency(movement.amount)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
+                        {formatCurrency(movement.settled)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-destructive">
+                        {formatCurrency(movement.pending)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-destructive">
+                          Por pagar
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-5 text-right">
                         <Button
                           size="sm"
-                          variant="outline"
-                          disabled={order.pending <= 0.001}
-                          onClick={() => setPaymentTarget(order)}
+                          className="bg-brand text-brand-foreground hover:bg-brand/90"
+                          disabled={movement.pending <= 0.001}
+                          onClick={() =>
+                            setSettleTarget({
+                              sourceType: "work_movement",
+                              sourceId: movement.id,
+                              provider: detail.provider,
+                              title: movement.concept,
+                              subtitle: `${movement.workName} · ${movement.category || "Egreso de obra"}`,
+                              pending: movement.pending,
+                            })
+                          }
                         >
-                          <BadgeDollarSign className="size-4" />
-                          Abonar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setHistoryTarget(order)}
-                        >
-                          <History className="size-4" />
-                          Historial
+                          <CheckCircle2 className="size-4" />
+                          Saldar
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  );
+                })}
+                {debtRows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
+                      Sin deudas pendientes para este proveedor.
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
@@ -442,20 +386,11 @@ export function ProviderDebtDetail({
 
       </div>
 
-      {paymentTarget && (
-        <ProviderPaymentSheet
-          open={!!paymentTarget}
-          onOpenChange={(next) => !next && setPaymentTarget(null)}
-          order={paymentTarget}
-          methods={methods}
-        />
-      )}
-      {historyTarget && (
-        <OrderPaymentHistorySheet
-          open={!!historyTarget}
-          onOpenChange={(next) => !next && setHistoryTarget(null)}
-          order={historyTarget}
-          methods={methods}
+      {settleTarget && (
+        <SettleProviderDebtSheet
+          open={!!settleTarget}
+          onOpenChange={(next) => !next && setSettleTarget(null)}
+          target={settleTarget}
         />
       )}
     </>

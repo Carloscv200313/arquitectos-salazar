@@ -553,6 +553,17 @@ export type GeneralBalanceAccountMovementInput = z.infer<
   typeof generalBalanceAccountMovementSchema
 >;
 
+export const settleProviderDebtSchema = z.object({
+  provider: name,
+  sourceType: z.enum(["work_order", "work_movement"]),
+  sourceId: z.string().uuid("Registro inválido"),
+  amount: money,
+  settlementDate: isoDate,
+  note: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
+});
+
+export type SettleProviderDebtInput = z.infer<typeof settleProviderDebtSchema>;
+
 // ── Auditoría: editar / eliminar movimientos (motivo obligatorio) ────────
 export const auditNote = z
   .string({ message: "Escribe el motivo" })

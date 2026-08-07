@@ -287,6 +287,24 @@ create trigger trg_finance_manual_debtors_updated_at
   before update on public.finance_manual_debtors
   for each row execute function public.set_updated_at();
 
+-- ── provider_debt_settlements (deudas de proveedores saldadas) ─────────────
+create table if not exists public.provider_debt_settlements (
+  id               uuid primary key default gen_random_uuid(),
+  provider         text not null check (char_length(trim(provider)) between 2 and 120),
+  source_type      text not null check (source_type in ('work_order','work_movement')),
+  source_id        uuid not null,
+  amount           numeric(14,2) not null check (amount > 0),
+  settlement_date  date not null default current_date,
+  note             text,
+  status           smallint not null default 1,
+  created_at       timestamptz not null default now(),
+  created_by       uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_provider_debt_settlements_source
+  on public.provider_debt_settlements (source_type, source_id)
+  where status = 1;
+
 -- ── general_balance_entries (registros manuales del Caja y Bancos) ─────────
 create table if not exists public.general_balance_entries (
   id               uuid primary key default gen_random_uuid(),
@@ -471,6 +489,7 @@ alter table public.work_internal_transfers enable row level security;
 alter table public.work_orders      enable row level security;
 alter table public.work_order_payments enable row level security;
 alter table public.finance_manual_debtors enable row level security;
+alter table public.provider_debt_settlements enable row level security;
 alter table public.general_balance_entries enable row level security;
 alter table public.general_balance_account_movements enable row level security;
 alter table public.employees enable row level security;
@@ -597,6 +616,14 @@ create policy "finance_manual_debtors_update" on public.finance_manual_debtors
   for update to authenticated using (true) with check (true);
 create policy "finance_manual_debtors_delete" on public.finance_manual_debtors
   for delete to authenticated using (true);
+
+-- provider_debt_settlements
+create policy "provider_debt_settlements_select" on public.provider_debt_settlements
+  for select to authenticated using (true);
+create policy "provider_debt_settlements_insert" on public.provider_debt_settlements
+  for insert to authenticated with check (true);
+create policy "provider_debt_settlements_update" on public.provider_debt_settlements
+  for update to authenticated using (true) with check (true);
 
 -- general_balance_entries
 create policy "general_balance_entries_select" on public.general_balance_entries

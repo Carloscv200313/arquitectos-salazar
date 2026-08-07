@@ -4,6 +4,36 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+const TABLE_TEXT_LIMIT = 15
+
+function truncateText(value: string | number) {
+  const text = String(value)
+  if (text.length <= TABLE_TEXT_LIMIT) return value
+  return (
+    <span title={text} className="inline-block max-w-full align-bottom">
+      {text.slice(0, TABLE_TEXT_LIMIT)}...
+    </span>
+  )
+}
+
+function truncateTableContent(children: React.ReactNode): React.ReactNode {
+  return React.Children.map(children, (child) => {
+    if (typeof child === "string" || typeof child === "number") {
+      return truncateText(child)
+    }
+    if (!React.isValidElement(child)) return child
+
+    const element = child as React.ReactElement<{
+      children?: React.ReactNode
+      "data-no-table-truncate"?: boolean
+    }>
+    if (element.props["data-no-table-truncate"]) return element
+    if (element.props.children === undefined) return element
+
+    return React.cloneElement(element, undefined, truncateTableContent(element.props.children))
+  })
+}
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
@@ -78,7 +108,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
-function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+function TableCell({ className, children, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
@@ -87,7 +117,9 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
         className
       )}
       {...props}
-    />
+    >
+      {truncateTableContent(children)}
+    </td>
   )
 }
 

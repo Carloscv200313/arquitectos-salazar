@@ -11,6 +11,7 @@ import {
   saveSalaryPayment,
   saveSalaryWeek,
   saveManualDebtor,
+  settleProviderDebt,
   updateSalaryWeekStatus,
 } from "@/lib/data/finance";
 import { registerWorkInternalTransfer } from "@/lib/data/works";
@@ -22,6 +23,7 @@ import {
   saveSalaryDayRecordSchema,
   saveSalaryPaymentSchema,
   saveSalaryWeekSchema,
+  settleProviderDebtSchema,
   updateSalaryWeekStatusSchema,
 } from "@/lib/validation";
 
@@ -71,6 +73,39 @@ export async function saveManualDebtorAction(
     return { ok: true, data: { debtorId } };
   } catch {
     return { ok: false, error: "No se pudo guardar el deudor." };
+  }
+}
+
+export async function settleProviderDebtAction(raw: unknown): Promise<ActionResult> {
+  const parsed = settleProviderDebtSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos para saldar la deuda.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    await settleProviderDebt({
+      provider: d.provider,
+      sourceType: d.sourceType,
+      sourceId: d.sourceId,
+      amount: d.amount,
+      settlementDate: d.settlementDate,
+      note: d.note || undefined,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/${encodeURIComponent(d.provider)}`);
+    revalidatePath("/finance/balance-general");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo saldar la deuda.",
+    };
   }
 }
 

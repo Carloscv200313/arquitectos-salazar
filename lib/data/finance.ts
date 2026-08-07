@@ -27,6 +27,7 @@ import type {
   SalaryWeekday,
   SalaryWeekStatus,
   TaskType,
+  WorkMovementProviderDebt,
 } from "@/lib/types";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
@@ -109,19 +110,88 @@ async function loadMethods(): Promise<PaymentMethod[]> {
   }));
 }
 
+async function accountsPayableMethodId(): Promise<string | null> {
+  const { data } = await sb()
+    .from("payment_accounts")
+    .select("id")
+    .eq("status", 1)
+    .ilike("name", "cuentas por pagar")
+    .maybeSingle();
+  return data ? (data.id as string) : null;
+}
+
+function providerDebtKey(sourceType: "work_order" | "work_movement", sourceId: string) {
+  return `${sourceType}:${sourceId}`;
+}
+
+async function getProviderDebtSettlements(): Promise<Map<string, number>> {
+  const { data } = await sb()
+    .from("provider_debt_settlements")
+    .select("source_type, source_id, amount")
+    .eq("status", 1);
+  const settled = new Map<string, number>();
+  for (const row of data ?? []) {
+    const key = providerDebtKey(row.source_type as "work_order" | "work_movement", row.source_id as string);
+    settled.set(key, round2((settled.get(key) ?? 0) + num(row.amount)));
+  }
+  return settled;
+}
+
+async function getAccountsPayableWorkMovementDebts(
+  settledBySource: Map<string, number>,
+): Promise<WorkMovementProviderDebt[]> {
+  const payableMethodId = await accountsPayableMethodId();
+  if (!payableMethodId) return [];
+
+  const client = sb();
+  const [works, movementsRes, orderLinksRes] = await Promise.all([
+    listWorks(),
+    client
+      .from("work_movements")
+      .select("*")
+      .eq("status", 1)
+      .eq("movement_type", "expense")
+      .eq("payment_method_id", payableMethodId),
+    client
+      .from("work_orders")
+      .select("payable_movement_id")
+      .eq("status", 1)
+      .not("payable_movement_id", "is", null),
+  ]);
+
+  const workById = new Map(works.map((work) => [work.id, work]));
+  const orderPayableMovementIds = new Set(
+    (orderLinksRes.data ?? []).map((row) => row.payable_movement_id as string).filter(Boolean),
+  );
+
+  return (movementsRes.data ?? [])
+    .filter((movement) => !orderPayableMovementIds.has(movement.id as string))
+    .map((movement) => {
+      const amount = num(movement.amount);
+      const settled = Math.min(amount, settledBySource.get(providerDebtKey("work_movement", movement.id as string)) ?? 0);
+      const pending = round2(Math.max(amount - settled, 0));
+      const work = workById.get(movement.work_id as string);
+      return {
+        id: movement.id as string,
+        workId: movement.work_id as string,
+        workName: work?.name ?? "Obra",
+        clientName: work?.client.name ?? "Sin cliente",
+        movementDate: movement.movement_date as string,
+        concept: movement.concept as string,
+        provider: (movement.supplier as string) ?? "",
+        category: (movement.category as string) ?? "",
+        amount,
+        settled,
+        pending,
+        sourceType: "work_movement" as const,
+      };
+    })
+    .filter((movement) => movement.pending > 0.001);
+}
+
 export async function getDebtReport(): Promise<DebtReportRow[]> {
   if (!isAdminConfigured()) return [];
-  const providerBalances = new Map<string, number>();
-  const works = await listWorks();
-  for (const work of works) {
-    for (const order of await listWorkOrders(work.id)) {
-      if (order.amount === null || order.pending <= 0.001) continue;
-      providerBalances.set(
-        order.supplier,
-        round2((providerBalances.get(order.supplier) ?? 0) + order.pending),
-      );
-    }
-  }
+  const providerDetails = await getProviderDebtDetails();
 
   const { data: debtorRows } = await sb()
     .from("manual_debtors")
@@ -135,12 +205,16 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
     type: "debtor",
     source: "manual",
   }));
-  const providers: DebtReportRow[] = [...providerBalances.entries()].map(([provider, amount]) => ({
-    id: `provider-${provider}`,
-    name: provider,
-    amount,
+  const providers: DebtReportRow[] = providerDetails.map((detail) => ({
+    id: `provider-${detail.provider}`,
+    name: detail.provider,
+    amount: detail.totalPending,
     type: "provider",
-    source: "orders",
+    source: detail.orders.length > 0 && detail.workMovements.length > 0
+      ? "mixed"
+      : detail.workMovements.length > 0
+        ? "works"
+        : "orders",
   }));
   return [...debtors, ...providers];
 }
@@ -148,25 +222,47 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
 export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const groups = new Map<string, ProviderDebtDetail>();
-  const works = await listWorks();
+  const [works, settledBySource] = await Promise.all([listWorks(), getProviderDebtSettlements()]);
 
   for (const work of works) {
     const orders = await listWorkOrders(work.id);
     for (const order of orders) {
-      if (order.amount === null || order.pending <= 0.001) continue;
+      if (order.amount === null) continue;
+      const settled = settledBySource.get(providerDebtKey("work_order", order.id)) ?? 0;
+      const pending = round2(Math.max(order.pending - settled, 0));
+      if (pending <= 0.001) continue;
       const current = groups.get(order.supplier) ?? {
         provider: order.supplier,
         totalAmount: 0,
         totalPaid: 0,
         totalPending: 0,
         orders: [],
+        workMovements: [],
       };
       current.totalAmount = round2(current.totalAmount + (order.amount ?? 0));
-      current.totalPaid = round2(current.totalPaid + order.paid);
-      current.totalPending = round2(current.totalPending + order.pending);
-      current.orders.push(order);
+      current.totalPaid = round2(current.totalPaid + order.paid + settled);
+      current.totalPending = round2(current.totalPending + pending);
+      current.orders.push({ ...order, paid: round2(order.paid + settled), pending });
       groups.set(order.supplier, current);
     }
+  }
+
+  for (const movement of await getAccountsPayableWorkMovementDebts(settledBySource)) {
+    const provider = movement.provider.trim();
+    const supplier = provider.length > 0 ? provider : movement.concept.trim() || "Proveedor";
+    const current = groups.get(supplier) ?? {
+      provider: supplier,
+      totalAmount: 0,
+      totalPaid: 0,
+      totalPending: 0,
+      orders: [],
+      workMovements: [],
+    };
+    current.totalAmount = round2(current.totalAmount + movement.amount);
+    current.totalPaid = round2(current.totalPaid + movement.settled);
+    current.totalPending = round2(current.totalPending + movement.pending);
+    current.workMovements.push(movement);
+    groups.set(supplier, current);
   }
 
   return [...groups.values()]
@@ -176,6 +272,11 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         const byPending = b.pending - a.pending;
         if (Math.abs(byPending) > 0.001) return byPending;
         return b.order_date.localeCompare(a.order_date);
+      }),
+      workMovements: group.workMovements.sort((a, b) => {
+        const byPending = b.pending - a.pending;
+        if (Math.abs(byPending) > 0.001) return byPending;
+        return b.movementDate.localeCompare(a.movementDate);
       }),
     }))
     .sort((a, b) => b.totalPending - a.totalPending);
@@ -294,17 +395,27 @@ export async function getGeneralBalanceAccountReport(
 
   if (method) {
     if (account.id === "accounts-payable") {
-      for (const work of await listWorks()) {
-        for (const order of await listWorkOrders(work.id)) {
-          if (order.amount === null || order.pending <= 0.001) continue;
+      for (const detail of await getProviderDebtDetails()) {
+        for (const order of detail.orders) {
           history.push({
             id: `order-payable-${order.id}`,
             date: order.quoted_at ?? order.order_date,
-            description: `${order.material} · ${work.name}`,
+            description: `${order.material} · ${order.work.name}`,
             expenseAccount: account.label,
             incomeAccount: order.supplier,
             amount: order.pending,
             source: "orders",
+          });
+        }
+        for (const movement of detail.workMovements) {
+          history.push({
+            id: `work-payable-${movement.id}`,
+            date: movement.movementDate,
+            description: `${movement.concept} · ${movement.workName}`,
+            expenseAccount: account.label,
+            incomeAccount: detail.provider,
+            amount: movement.pending,
+            source: "works",
           });
         }
       }
@@ -552,6 +663,51 @@ export async function saveManualDebtor(data: SaveManualDebtorData): Promise<stri
     .single();
   if (error) throw new Error(error.message);
   return created.id as string;
+}
+
+export interface SettleProviderDebtData {
+  provider: string;
+  sourceType: "work_order" | "work_movement";
+  sourceId: string;
+  amount: number;
+  settlementDate: string;
+  note?: string;
+  userId: string | null;
+}
+
+export async function settleProviderDebt(data: SettleProviderDebtData): Promise<void> {
+  const details = await getProviderDebtDetail(data.provider);
+  if (!details) throw new Error("No se encontró deuda pendiente para este proveedor.");
+
+  const pending =
+    data.sourceType === "work_order"
+      ? details.orders.find((order) => order.id === data.sourceId)?.pending
+      : details.workMovements.find((movement) => movement.id === data.sourceId)?.pending;
+
+  if (pending === undefined) throw new Error("La deuda seleccionada ya no está pendiente.");
+  const amount = round2(data.amount);
+  if (amount > pending + 0.001) throw new Error("El monto supera el saldo pendiente.");
+
+  const { data: row, error } = await sb()
+    .from("provider_debt_settlements")
+    .insert({
+      provider: data.provider.trim(),
+      source_type: data.sourceType,
+      source_id: data.sourceId,
+      amount,
+      settlement_date: data.settlementDate,
+      note: data.note?.trim() || null,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await audit(
+    "settle",
+    (row?.id as string) ?? data.sourceId,
+    `Deuda saldada · ${data.provider} · ${amount.toFixed(2)}`,
+  );
 }
 
 /* ============================================================== SALARY ===== */

@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react";
 import { BalanceAccountDetail } from "@/components/finance/balance-account-detail";
 import { ProviderDebtDetail } from "@/components/finance/provider-debt-detail";
 import { getGeneralBalanceAccountReport, getProviderDebtDetail } from "@/lib/data/finance";
-import { listPaymentMethods } from "@/lib/data/projects";
 
 export async function generateMetadata({
   params,
@@ -56,10 +55,7 @@ export default async function FinanceAccountPage({
   }
 
   if (module === "deudas") {
-    const [detail, methods] = await Promise.all([
-      getProviderDebtDetail(account),
-      listPaymentMethods(),
-    ]);
+    const detail = await getProviderDebtDetail(account);
     if (!detail) notFound();
 
     return (
@@ -77,7 +73,7 @@ export default async function FinanceAccountPage({
           </p>
         </div>
 
-        <ProviderDebtDetail detail={detail} methods={methods} />
+        <ProviderDebtDetail detail={detail} />
       </div>
     );
   }

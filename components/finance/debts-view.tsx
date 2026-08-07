@@ -177,7 +177,13 @@ function DebtTableCard({
                     <div>
                       <div className="font-medium">{row.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        {row.source === "manual" ? "Registro manual" : "Calculado desde Pedidos"}
+                        {row.source === "manual"
+                          ? "Registro manual"
+                          : row.source === "works"
+                            ? "Calculado desde Obras"
+                            : row.source === "mixed"
+                              ? "Pedidos y Obras"
+                              : "Calculado desde Pedidos"}
                       </div>
                     </div>
                   </div>
