@@ -1,13 +1,15 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, TrendingUp, Wallet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type {
@@ -28,6 +30,7 @@ function Stat({
   icon,
   tone,
   accent,
+  footer,
 }: {
   label: string;
   value: string;
@@ -35,6 +38,7 @@ function Stat({
   icon: React.ReactNode;
   tone?: "success" | "danger";
   accent?: boolean;
+  footer?: React.ReactNode;
 }) {
   return (
     <Card className={cn("p-5", accent && "border-transparent bg-brand text-brand-foreground")}>
@@ -63,6 +67,7 @@ function Stat({
           {icon}
         </div>
       </div>
+      {footer ? <div className="mt-4">{footer}</div> : null}
     </Card>
   );
 }
@@ -74,7 +79,17 @@ export function WorkFinanceOverview({
   finance: WorkFinance;
   administrationUtilities: WorkAdministrationUtilityRow[];
 }) {
-  const totalAdministration = administrationUtilities.reduce((sum, row) => sum + row.amount, 0);
+  const sortedUtilities = useMemo(
+    () => administrationUtilities.slice().sort((a, b) => b.month.localeCompare(a.month)),
+    [administrationUtilities],
+  );
+  const [selectedMonth, setSelectedMonth] = useState(sortedUtilities[0]?.month ?? "");
+  const selectedUtility =
+    sortedUtilities.find((row) => row.month === selectedMonth) ?? sortedUtilities[0] ?? null;
+  const monthItems = sortedUtilities.map((row) => ({
+    label: monthLabel(row.month),
+    value: row.month,
+  }));
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -100,56 +115,32 @@ export function WorkFinanceOverview({
         tone="danger"
       />
       <Stat
-        label="Utilidades"
-        value={formatCurrency(totalAdministration)}
-        hint={`${administrationUtilities.length} mes${administrationUtilities.length === 1 ? "" : "es"} con honorarios`}
+        label="Utilidad por adm."
+        value={formatCurrency(selectedUtility?.amount ?? 0)}
+        hint={
+          sortedUtilities.length === 0
+            ? "Sin meses con honorarios"
+            : `${monthLabel(selectedUtility?.month ?? selectedMonth)}`
+        }
         icon={<TrendingUp className="size-5" />}
         tone="success"
+        footer={
+          sortedUtilities.length > 0 ? (
+            <Select value={selectedUtility?.month ?? selectedMonth} onValueChange={(value) => setSelectedMonth(value ?? "")} items={monthItems}>
+              <SelectTrigger size="sm" className="w-full bg-background">
+                <SelectValue placeholder="Mes" />
+              </SelectTrigger>
+              <SelectContent>
+                {sortedUtilities.map((row) => (
+                  <SelectItem key={row.month} value={row.month}>
+                    {monthLabel(row.month)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null
+        }
       />
     </div>
-  );
-}
-
-export function WorkAdministrationUtilityTable({
-  rows,
-}: {
-  rows: WorkAdministrationUtilityRow[];
-}) {
-  return (
-    <Card className="gap-0 overflow-hidden p-0">
-      <div className="border-b px-5 py-4">
-        <h2 className="font-semibold">Utilidad por administración</h2>
-        <p className="text-sm text-muted-foreground">
-          Suma mensual de movimientos con categoría Honorarios.
-        </p>
-      </div>
-      <Table>
-        <TableHeader className="bg-muted/40">
-          <TableRow>
-            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Fecha</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Utilidad</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.month}>
-              <TableCell className="px-5 font-medium capitalize">
-                {monthLabel(row.month)}
-              </TableCell>
-              <TableCell className="px-5 text-right font-semibold tabular-nums text-brand-foreground">
-                {formatCurrency(row.amount)}
-              </TableCell>
-            </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={2} className="h-20 text-center text-muted-foreground">
-                Sin honorarios registrados.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Card>
   );
 }
