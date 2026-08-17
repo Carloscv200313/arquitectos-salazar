@@ -29,6 +29,53 @@ function budgetInputValue(value: number | null) {
   return String(value);
 }
 
+function movementSummary(row: WorkCategorySummary) {
+  const hasIncome = row.income > 0.001;
+  const hasExpense = row.expense > 0.001;
+  if (hasIncome && hasExpense) {
+    const net = row.income - row.expense;
+    return {
+      type: "Mixto",
+      amount: net,
+      percent: null,
+      badgeClass: "bg-muted text-muted-foreground",
+      amountClass: net < -0.001 ? "text-destructive" : "text-brand-foreground",
+    };
+  }
+  if (hasIncome) {
+    return {
+      type: "Ingreso",
+      amount: row.income,
+      percent: row.incomePercent,
+      badgeClass: "bg-brand-muted text-brand-foreground",
+      amountClass: "text-brand-foreground",
+    };
+  }
+  if (hasExpense) {
+    return {
+      type: "Egreso",
+      amount: row.expense,
+      percent: row.expensePercent,
+      badgeClass: "bg-destructive/10 text-destructive",
+      amountClass: "text-destructive",
+    };
+  }
+  return {
+    type: "Sin movimiento",
+    amount: 0,
+    percent: null,
+    badgeClass: "bg-muted text-muted-foreground",
+    amountClass: "text-muted-foreground",
+  };
+}
+
+function differencePercentLabel(row: WorkCategorySummary) {
+  const budget = row.budget ?? 0;
+  const executed = row.executedAmount ?? 0;
+  if (budget <= 0.001 || executed <= 0.001) return "—";
+  return percentLabel((budget / executed) * 100);
+}
+
 export function WorkCategorySummaryTable({
   workId,
   workName,
@@ -124,87 +171,92 @@ export function WorkCategorySummaryTable({
             <TableRow>
               <TableHead className="px-5 text-xs uppercase text-muted-foreground">Categoría</TableHead>
               <TableHead className="text-right text-xs uppercase text-muted-foreground">Presupuesto</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Ingresos</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">% ingresos</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Egresos</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">% egresos</TableHead>
+              <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
+              <TableHead className="text-right text-xs uppercase text-muted-foreground">Monto registrado</TableHead>
+              <TableHead className="text-right text-xs uppercase text-muted-foreground">% sobre presupuesto</TableHead>
               <TableHead className="text-right text-xs uppercase text-muted-foreground">Ejecutado</TableHead>
+              <TableHead className="text-right text-xs uppercase text-muted-foreground">Diferencia %</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orderedRows.map((row) => (
-              <TableRow key={row.category}>
-                <TableCell className="px-5 font-medium">{row.category}</TableCell>
-                <TableCell className="min-w-44">
-                  <div className="flex items-center justify-end gap-2">
-                    <MoneyInput
-                      value={drafts[row.category]?.budget ?? ""}
-                      onValueChange={(value) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [row.category]: {
-                            budget: value,
-                            executed: current[row.category]?.executed ?? "",
-                          },
-                        }))
-                      }
-                      className="w-28 text-right tabular-nums"
-                      placeholder="0.00"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => saveBudget(row.category)}
-                      disabled={isPending}
-                      title="Guardar presupuesto"
-                    >
-                      {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                      <span className="sr-only">Guardar presupuesto</span>
-                    </Button>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-brand-foreground">
-                  {formatCurrency(row.income)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {percentLabel(row.incomePercent)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-destructive">
-                  {formatCurrency(row.expense)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {percentLabel(row.expensePercent)}
-                </TableCell>
-                <TableCell className="min-w-44">
-                  <div className="flex items-center justify-end gap-2">
-                    <MoneyInput
-                      value={drafts[row.category]?.executed ?? ""}
-                      onValueChange={(value) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [row.category]: {
-                            budget: current[row.category]?.budget ?? "",
-                            executed: value,
-                          },
-                        }))
-                      }
-                      className="w-28 text-right tabular-nums"
-                      placeholder="0.00"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      onClick={() => saveBudget(row.category)}
-                      disabled={isPending}
-                      title="Guardar ejecutado"
-                    >
-                      {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                      <span className="sr-only">Guardar ejecutado</span>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {orderedRows.map((row) => {
+              const movement = movementSummary(row);
+              return (
+                <TableRow key={row.category}>
+                  <TableCell className="px-5 font-medium">{row.category}</TableCell>
+                  <TableCell className="min-w-44">
+                    <div className="flex items-center justify-end gap-2">
+                      <MoneyInput
+                        value={drafts[row.category]?.budget ?? ""}
+                        onValueChange={(value) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [row.category]: {
+                              budget: value,
+                              executed: current[row.category]?.executed ?? "",
+                            },
+                          }))
+                        }
+                        className="w-28 text-right tabular-nums"
+                        placeholder="0.00"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => saveBudget(row.category)}
+                        disabled={isPending}
+                        title="Guardar presupuesto"
+                      >
+                        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                        <span className="sr-only">Guardar presupuesto</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${movement.badgeClass}`}>
+                      {movement.type}
+                    </span>
+                  </TableCell>
+                  <TableCell className={`text-right font-medium tabular-nums ${movement.amountClass}`}>
+                    {formatCurrency(Math.abs(movement.amount))}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {percentLabel(movement.percent)}
+                  </TableCell>
+                  <TableCell className="min-w-44">
+                    <div className="flex items-center justify-end gap-2">
+                      <MoneyInput
+                        value={drafts[row.category]?.executed ?? ""}
+                        onValueChange={(value) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [row.category]: {
+                              budget: current[row.category]?.budget ?? "",
+                              executed: value,
+                            },
+                          }))
+                        }
+                        className="w-28 text-right tabular-nums"
+                        placeholder="0.00"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        onClick={() => saveBudget(row.category)}
+                        disabled={isPending}
+                        title="Guardar ejecutado"
+                      >
+                        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                        <span className="sr-only">Guardar ejecutado</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-5 text-right font-medium tabular-nums text-muted-foreground">
+                    {differencePercentLabel(row)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
             {orderedRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
