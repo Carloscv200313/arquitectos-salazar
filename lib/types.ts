@@ -160,6 +160,7 @@ export interface Work {
 export interface WorkMovement {
   id: string;
   work_id: string;
+  folio: string | null;
   receipt: string;
   movement_date: string;
   concept: string;

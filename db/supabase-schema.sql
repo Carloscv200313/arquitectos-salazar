@@ -291,6 +291,7 @@ create table if not exists public.works (
 create table if not exists public.work_movements (
   id                uuid primary key default gen_random_uuid(),
   work_id           uuid not null references public.works(id) on delete cascade,
+  folio             text,
   receipt           text,
   movement_date     date not null,
   concept           text not null,

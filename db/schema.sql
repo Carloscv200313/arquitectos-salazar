@@ -158,7 +158,8 @@ create trigger trg_works_updated_at
 create table if not exists public.work_movements (
   id             uuid primary key default gen_random_uuid(),
   work_id        uuid not null references public.works (id) on delete cascade,
-  receipt        text not null check (char_length(trim(receipt)) between 1 and 80),
+  folio          text,
+  receipt        text check (receipt is null or char_length(trim(receipt)) between 1 and 80),
   movement_date  date not null,
   concept        text not null check (char_length(trim(concept)) between 2 and 160),
   supplier       text not null check (char_length(trim(supplier)) between 2 and 160),

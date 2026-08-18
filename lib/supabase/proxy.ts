@@ -7,7 +7,7 @@ const PUBLIC_PREFIXES = ["/login", "/auth", "/forgot-password", "/reset-password
 // Rutas abiertas a cualquiera, con o sin sesión. No se redirigen en ningún sentido:
 // el público registra abonos/pedidos sin login, y los usuarios logiados también
 // pueden abrir el recibo sin que se les rebote al dashboard.
-const OPEN_PREFIXES = ["/abono", "/pedido", "/recibo", "/api/order-notifications"];
+const OPEN_PREFIXES = ["/abono", "/pedido", "/recibo", "/firma", "/api/order-notifications"];
 
 function matchesPrefix(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));

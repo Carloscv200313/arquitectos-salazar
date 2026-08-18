@@ -46,6 +46,7 @@ export function RegisterWorkMovementSheet({
 }) {
   const [isPending, startTransition] = useTransition();
   const [movementType, setMovementType] = useState<"income" | "expense">("expense");
+  const [receipt, setReceipt] = useState("");
   const [movementDate, setMovementDate] = useState(todayISODate());
   const [concept, setConcept] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -61,6 +62,7 @@ export function RegisterWorkMovementSheet({
 
   function reset() {
     setMovementType("expense");
+    setReceipt("");
     setMovementDate(todayISODate());
     setConcept("");
     setSupplier("");
@@ -76,7 +78,7 @@ export function RegisterWorkMovementSheet({
     startTransition(async () => {
       const result = await registerWorkMovementAction({
         workId,
-        receipt: "",
+        receipt: movementType === "expense" ? receipt : "",
         movementDate,
         concept,
         supplier: movementType === "expense" ? supplier : "",
@@ -124,6 +126,7 @@ export function RegisterWorkMovementSheet({
               onValueChange={(value) => {
                 const next = (value ?? "expense") as "income" | "expense";
                 setMovementType(next);
+                setReceipt("");
                 setCategory(next === "income" ? WORK_INCOME_CATEGORY : "");
                 setSupplier("");
               }}
@@ -146,7 +149,20 @@ export function RegisterWorkMovementSheet({
             </Select>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {movementType === "expense" && (
+              <div className="grid gap-2">
+                <Label htmlFor="receipt">Recibo</Label>
+                <Input
+                  id="receipt"
+                  value={receipt}
+                  onChange={(e) => setReceipt(e.target.value)}
+                  placeholder="Ej. Factura, nota o folio externo"
+                  aria-invalid={!!errors.receipt}
+                />
+                {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="movement-date">Fecha</Label>
               <Input id="movement-date" type="date" value={movementDate} onChange={(e) => setMovementDate(e.target.value)} aria-invalid={!!errors.movementDate} />

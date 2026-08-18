@@ -72,8 +72,8 @@ function movementSummary(row: WorkCategorySummary) {
 function differencePercentLabel(row: WorkCategorySummary) {
   const budget = row.budget ?? 0;
   const executed = row.executedAmount ?? 0;
-  if (budget <= 0.001 || executed <= 0.001) return "—";
-  return percentLabel((budget / executed) * 100);
+  if (budget <= 0.001) return "—";
+  return percentLabel((executed * 100) / budget);
 }
 
 export function WorkCategorySummaryTable({

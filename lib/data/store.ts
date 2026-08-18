@@ -1311,6 +1311,7 @@ function workMovement(
   return {
     id: uuid(),
     work_id: workId,
+    folio: receipt,
     receipt,
     movement_date: date,
     concept,

@@ -79,6 +79,7 @@ function mapMovement(r: Row): WorkMovement {
   return {
     id: r.id as string,
     work_id: r.work_id as string,
+    folio: (r.folio as string) ?? null,
     receipt: (r.receipt as string) ?? "",
     movement_date: r.movement_date as string,
     concept: r.concept as string,
@@ -554,26 +555,28 @@ export interface RegisterWorkMovementData {
   userId: string | null;
 }
 
-async function nextWorkReceiptCode(): Promise<string> {
+export async function nextWorkFolioCode(): Promise<string> {
   const { data } = await sb()
     .from("work_movements")
-    .select("receipt")
-    .like("receipt", `${RECEIPT_PREFIX.obra}-%`)
-    .order("receipt", { ascending: false })
+    .select("folio, receipt")
+    .or(`folio.like.${RECEIPT_PREFIX.obra}-%,receipt.like.${RECEIPT_PREFIX.obra}-%`)
+    .order("folio", { ascending: false, nullsFirst: false })
     .limit(1);
-  const seq = parseReceiptSeq("obra", data?.[0]?.receipt as string | undefined) + 1;
+  const latest = (data?.[0]?.folio as string | undefined) ?? (data?.[0]?.receipt as string | undefined);
+  const seq = parseReceiptSeq("obra", latest) + 1;
   return formatReceiptCode("obra", seq);
 }
 
 export async function registerWorkMovement(
   data: RegisterWorkMovementData,
 ): Promise<{ id: string; receiptCode: string | null }> {
-  const receipt = await nextWorkReceiptCode();
+  const folio = await nextWorkFolioCode();
   const { data: row, error } = await sb()
     .from("work_movements")
     .insert({
       work_id: data.workId,
-      receipt,
+      folio,
+      receipt: data.receipt?.trim() || null,
       movement_date: data.movementDate,
       concept: data.concept.trim(),
       supplier: data.supplier?.trim() || "Cliente",
@@ -594,7 +597,7 @@ export async function registerWorkMovement(
     amount: data.amount,
     description: `${data.movementType === "income" ? "Ingreso" : "Egreso"} · ${data.concept.trim()}`,
   });
-  return { id: row.id as string, receiptCode: receipt };
+  return { id: row.id as string, receiptCode: folio };
 }
 
 export interface WorkMovementEditData {
@@ -612,7 +615,7 @@ async function workMovementSnapshot(id: string) {
   const { data } = await sb()
     .from("work_movements")
     .select(
-      "id, work_id, receipt, movement_date, concept, supplier, category, movement_type, amount, payment_method_id, observations, status, work:works(name)",
+      "id, work_id, folio, receipt, movement_date, concept, supplier, category, movement_type, amount, payment_method_id, observations, status, work:works(name)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -630,7 +633,7 @@ export async function updateWorkMovement(
     throw new Error("Movimiento no encontrado.");
   }
   const update = {
-    receipt: (patch.receipt ?? (before.receipt as string) ?? "").trim(),
+    receipt: (patch.receipt ?? (before.receipt as string) ?? "").trim() || null,
     movement_date: patch.movementDate,
     concept: patch.concept.trim(),
     supplier: patch.supplier?.trim() || "Cliente",
@@ -653,6 +656,8 @@ export async function updateWorkMovement(
     snapshot: {
       before: {
         concept: before.concept,
+        folio: before.folio,
+        receipt: before.receipt,
         amount: Number(before.amount),
         movement_date: before.movement_date,
         supplier: before.supplier,
@@ -685,6 +690,8 @@ export async function deleteWorkMovement(id: string, note: string): Promise<void
     snapshot: {
       before: {
         concept: before.concept,
+        folio: before.folio,
+        receipt: before.receipt,
         amount: Number(before.amount),
         movement_date: before.movement_date,
         supplier: before.supplier,
@@ -701,7 +708,7 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
   const { data } = await sb()
     .from("work_movements")
     .select(
-      "amount, concept, movement_date, receipt, movement_type, signature, work:works(name, client:clients(name))",
+      "amount, concept, movement_date, folio, receipt, movement_type, signature, work:works(name, client:clients(name))",
     )
     .eq("id", id)
     .maybeSingle();
@@ -710,7 +717,7 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
   return {
     docType: "abono",
     kind: "obra",
-    code: (data.receipt as string) ?? null,
+    code: ((data.folio as string) ?? (data.receipt as string)) ?? null,
     amount: Number(data.amount),
     concept: data.concept as string,
     date: data.movement_date as string,

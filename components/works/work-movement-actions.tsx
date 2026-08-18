@@ -61,6 +61,7 @@ export function WorkMovementActions({
   const isExpense = movement.movement_type === "expense";
 
   const [concept, setConcept] = useState(movement.concept);
+  const [receipt, setReceipt] = useState(movement.receipt ?? "");
   const [supplier, setSupplier] = useState(movement.supplier ?? "");
   const [category, setCategory] = useState(movement.category ?? "");
   const [amount, setAmount] = useState(String(movement.amount));
@@ -72,6 +73,7 @@ export function WorkMovementActions({
 
   function resetEdit() {
     setConcept(movement.concept);
+    setReceipt(movement.receipt ?? "");
     setSupplier(movement.supplier ?? "");
     setCategory(movement.category ?? "");
     setAmount(String(movement.amount));
@@ -89,7 +91,7 @@ export function WorkMovementActions({
         movementId: movement.id,
         workId,
         movementType: movement.movement_type,
-        receipt: movement.receipt,
+        receipt: isExpense ? receipt.trim() : movement.receipt,
         movementDate: date,
         concept: concept.trim(),
         supplier: isExpense ? supplier.trim() : "Cliente",
@@ -178,6 +180,18 @@ export function WorkMovementActions({
 
             {isExpense && (
               <>
+                <div className="grid gap-2">
+                  <Label htmlFor="wm-receipt">Recibo</Label>
+                  <Input
+                    id="wm-receipt"
+                    value={receipt}
+                    onChange={(e) => setReceipt(e.target.value)}
+                    placeholder="Ej. Factura, nota o comprobante externo"
+                    aria-invalid={!!errors.receipt}
+                  />
+                  {errors.receipt && <p className="text-xs text-destructive">{errors.receipt}</p>}
+                </div>
+
                 <div className="grid gap-2">
                   <Label htmlFor="wm-supplier">Proveedor</Label>
                   <Select

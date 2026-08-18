@@ -11,7 +11,7 @@ import type {
 } from "@/lib/types";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
-import { getWork, listWorks } from "./works";
+import { getWork, listWorks, nextWorkFolioCode } from "./works";
 import { writeAudit } from "./audit";
 
 type Row = Record<string, unknown>;
@@ -270,11 +270,13 @@ export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<void> {
   };
 
   if (advance > 0 && data.advancePaymentMethodId) {
+    const folio = await nextWorkFolioCode();
     const { data: mv, error } = await client
       .from("work_movements")
       .insert({
         work_id: order.work_id,
-        receipt: `PED-${order.id.slice(0, 8)}-A`,
+        folio,
+        receipt: null,
         movement_date: data.quoteDate,
         concept: `Adelanto pedido: ${order.material}`,
         supplier: order.supplier,
@@ -301,11 +303,13 @@ export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<void> {
 
   const payableAmount = round2(amount - advance);
   if (payableAmount > 0) {
+    const folio = await nextWorkFolioCode();
     const { data: mv, error } = await client
       .from("work_movements")
       .insert({
         work_id: order.work_id,
-        receipt: `PED-${order.id.slice(0, 8)}-P`,
+        folio,
+        receipt: null,
         movement_date: data.quoteDate,
         concept: `Pedido por pagar: ${order.material}`,
         supplier: order.supplier,
@@ -486,11 +490,13 @@ export async function updateWorkOrder(
     if (!order.category) {
       throw new Error("El pedido no tiene categoría para recalcular la cuenta por pagar.");
     }
+    const folio = await nextWorkFolioCode();
     const { data: movement, error } = await client
       .from("work_movements")
       .insert({
         work_id: order.work_id,
-        receipt: `PED-${order.id.slice(0, 8)}-P`,
+        folio,
+        receipt: null,
         movement_date: order.quoted_at ?? order.order_date,
         concept: `Pedido por pagar: ${nextMaterial}`,
         supplier: nextSupplier,

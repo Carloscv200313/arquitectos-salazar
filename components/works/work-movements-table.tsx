@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Download, FilterX, Loader2, Receipt } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, FilterX, Loader2, Receipt, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -54,15 +55,32 @@ export function WorkMovementsTable({
 }) {
   const [providerFilter, setProviderFilter] = useState(ALL_PROVIDERS);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
+  const [search, setSearch] = useState("");
   const [dateSort, setDateSort] = useState<"desc" | "asc">("desc");
   const [isExporting, setIsExporting] = useState(false);
 
   const hasActiveFilters =
-    providerFilter !== ALL_PROVIDERS || categoryFilter !== ALL_CATEGORIES;
+    providerFilter !== ALL_PROVIDERS || categoryFilter !== ALL_CATEGORIES || !!search.trim();
 
   const filteredMovements = useMemo(
     () =>
       movements.filter((movement) => {
+        const term = search.trim().toLowerCase();
+        if (term) {
+          const searchable = [
+            movement.folio,
+            movement.receipt,
+            movement.concept,
+            movement.supplier,
+            movement.category,
+            movement.method?.name,
+            movement.observations,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!searchable.includes(term)) return false;
+        }
         if (
           providerFilter !== ALL_PROVIDERS &&
           movement.supplier !== providerFilter
@@ -77,7 +95,7 @@ export function WorkMovementsTable({
         }
         return true;
       }),
-    [movements, providerFilter, categoryFilter],
+    [movements, providerFilter, categoryFilter, search],
   );
 
   const totals = useMemo(() => {
@@ -139,10 +157,11 @@ export function WorkMovementsTable({
       const marginX = 10;
       const marginTop = 12;
       const usableWidth = pageWidth - marginX * 2;
-      const colWidths = [22, 18, 54, 34, 28, 22, 22, 22, 28];
+      const colWidths = [22, 22, 18, 48, 30, 26, 21, 21, 21, 27];
       const rowHeight = 7;
       const contentBottom = pageHeight - 10;
       const headers = [
+        "Folio",
         "Recibo",
         "Fecha",
         "Concepto",
@@ -209,7 +228,8 @@ export function WorkMovementsTable({
 
       for (const movement of sortedMovements) {
         const cells = [
-          movement.receipt,
+          movement.folio ?? "—",
+          movement.receipt || "—",
           formatDate(movement.movement_date),
           movement.concept,
           movement.supplier,
@@ -264,7 +284,19 @@ export function WorkMovementsTable({
               Entradas y salidas con filtros en tiempo real.
             </p>
           </div>
-          <div className="grid gap-3 xl:mx-auto xl:min-w-[700px] xl:max-w-[760px] xl:grid-cols-[minmax(0,220px)_minmax(0,220px)_auto_auto_auto] xl:items-end">
+          <div className="grid gap-3 xl:mx-auto xl:min-w-[860px] xl:max-w-[920px] xl:grid-cols-[minmax(0,240px)_minmax(0,190px)_minmax(0,190px)_auto_auto] xl:items-end">
+            <div className="grid gap-1.5 xl:justify-self-center">
+              <span className="text-xs font-medium uppercase text-muted-foreground">Buscar</span>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Recibo o número de nota..."
+                  className="pl-9"
+                />
+              </div>
+            </div>
             <div className="grid gap-1.5 xl:justify-self-center">
               <span className="text-xs font-medium uppercase text-muted-foreground">Proveedor</span>
               <Select value={providerFilter} onValueChange={(value) => setProviderFilter(value ?? ALL_PROVIDERS)}>
@@ -305,6 +337,7 @@ export function WorkMovementsTable({
               <Button
                 variant="outline"
                 onClick={() => {
+                  setSearch("");
                   setProviderFilter(ALL_PROVIDERS);
                   setCategoryFilter(ALL_CATEGORIES);
                 }}
@@ -348,6 +381,7 @@ export function WorkMovementsTable({
       <Table>
         <TableHeader className="bg-muted/40">
           <TableRow>
+            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Folio</TableHead>
             <TableHead className="px-5 text-xs uppercase text-muted-foreground">Recibo</TableHead>
             <TableHead className="text-xs uppercase text-muted-foreground">
               <button
@@ -371,14 +405,17 @@ export function WorkMovementsTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Salida</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
             <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
-            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Recibo</TableHead>
+            <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Comprobante</TableHead>
             <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sortedMovements.map((movement) => (
             <TableRow key={movement.id}>
-              <TableCell className="px-5 font-medium">{movement.receipt}</TableCell>
+              <TableCell className="px-5 font-medium">{movement.folio ?? "—"}</TableCell>
+              <TableCell className="px-5 text-muted-foreground">
+                {movement.receipt || "—"}
+              </TableCell>
               <TableCell className="whitespace-nowrap text-muted-foreground">
                 {formatDate(movement.movement_date)}
               </TableCell>
@@ -421,7 +458,7 @@ export function WorkMovementsTable({
                     title="Imprimir recibo"
                   >
                     <Receipt className="size-3.5" />
-                    {movement.receipt}
+                    {movement.folio ?? movement.receipt}
                   </a>
                 ) : (
                   <span className="text-muted-foreground">—</span>
@@ -440,7 +477,7 @@ export function WorkMovementsTable({
           ))}
           {sortedMovements.length === 0 && (
             <TableRow>
-              <TableCell colSpan={11} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={12} className="h-20 text-center text-muted-foreground">
                 {hasActiveFilters
                   ? "No hay movimientos que coincidan con los filtros."
                   : "Sin movimientos registrados."}

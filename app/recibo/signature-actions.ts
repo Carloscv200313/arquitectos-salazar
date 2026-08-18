@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { setProjectPaymentSignature } from "@/lib/data/projects";
 import { setWorkMovementSignature } from "@/lib/data/works";
 import { setSalaryReceiptSignature } from "@/lib/data/finance";
@@ -30,6 +31,8 @@ export async function signAbonoAction(raw: unknown): Promise<SignResult> {
   try {
     if (kind === "proyecto") await setProjectPaymentSignature(id, sig);
     else await setWorkMovementSignature(id, sig);
+    revalidatePath(`/recibo/${kind}/${id}`);
+    revalidatePath(`/firma/recibo/${kind}/${id}`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "No se pudo guardar la firma." };

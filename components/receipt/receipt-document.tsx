@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Loader2, PenLine, Printer } from "lucide-react";
+import { Copy, Download, Loader2, PenLine, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/format";
 import { montoEnPalabras, RECEIPT_BUSINESS, type ReceiptData } from "@/lib/receipt";
@@ -112,6 +112,23 @@ export function ReceiptDocument({
   const recipientLabel = isPago ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
   const subjectLabel = data.kind === "obra" ? "de la obra" : "del proyecto";
   const showSubject = !isPago || !!data.subjectName?.trim();
+  const signatureSharePath =
+    data.docType === "abono" &&
+    (signPayload?.kind === "proyecto" || signPayload?.kind === "obra") &&
+    typeof signPayload.id === "string"
+      ? `/firma/recibo/${signPayload.kind}/${signPayload.id}`
+      : null;
+
+  async function copySignatureLink() {
+    if (!signatureSharePath) return;
+    const url = `${window.location.origin}${signatureSharePath}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Enlace de firma copiado");
+    } catch {
+      toast.error("No se pudo copiar el enlace.");
+    }
+  }
 
   return (
     <>
@@ -144,11 +161,22 @@ export function ReceiptDocument({
                 : "Dibuja la firma para guardarla. El documento se mostrará al terminar."}
             </p>
             <SignaturePad ref={padRef} />
+            {signatureSharePath ? (
+              <button
+                type="button"
+                onClick={copySignatureLink}
+                disabled={saving}
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-950 transition-colors hover:bg-amber-100 disabled:opacity-60"
+              >
+                <Copy className="size-4" />
+                Copiar enlace para firma del cliente
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={saveSignature}
               disabled={saving || !signAction}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background disabled:opacity-60"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background disabled:opacity-60"
             >
               {saving ? <Loader2 className="size-4 animate-spin" /> : <PenLine className="size-4" />}
               Guardar firma e imprimir
