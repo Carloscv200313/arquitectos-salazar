@@ -99,7 +99,7 @@ export function ReceiptDocument({
       const availW = pageW - margin * 2;
       const imgH = (canvas.height / canvas.width) * availW;
       pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, availW, imgH);
-      pdf.save(`recibo-${data.code ?? "documento"}.pdf`);
+      pdf.save(`${data.docType === "abono" ? "recibo" : "comprobante"}-${data.code ?? "documento"}.pdf`);
     } finally {
       setDownloading(false);
     }
@@ -108,8 +108,13 @@ export function ReceiptDocument({
   const { day, month, yearShort } = parseDate(data.date);
 
   const isPago = data.docType === "pago";
-  const title = isPago ? "COMPROBANTE DE PAGO POR" : "RECIBO DE DINERO POR";
-  const recipientLabel = isPago ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
+  const isEgreso = data.docType === "egreso";
+  const title = isPago
+    ? "COMPROBANTE DE PAGO POR"
+    : isEgreso
+      ? "COMPROBANTE DE EGRESO POR"
+      : "RECIBO DE DINERO POR";
+  const recipientLabel = isPago || isEgreso ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
   const subjectLabel = data.kind === "obra" ? "de la obra" : "del proyecto";
   const showSubject = !isPago || !!data.subjectName?.trim();
   const signatureSharePath =
@@ -156,8 +161,8 @@ export function ReceiptDocument({
               Firma requerida para {data.clientName || "el titular"}
             </div>
             <p className="mb-4 text-xs text-amber-800">
-              {isPago
-                ? "Si el empleado no está presente, deja el comprobante pendiente: se podrá firmar e imprimir después."
+              {isPago || isEgreso
+                ? "Si quien recibe el pago no está presente, deja el comprobante pendiente: se podrá firmar e imprimir después."
                 : "Dibuja la firma para guardarla. El documento se mostrará al terminar."}
             </p>
             <SignaturePad ref={padRef} />

@@ -708,20 +708,21 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
   const { data } = await sb()
     .from("work_movements")
     .select(
-      "amount, concept, movement_date, folio, receipt, movement_type, signature, work:works(name, client:clients(name))",
+      "amount, concept, movement_date, folio, receipt, movement_type, supplier, signature, work:works(name, client:clients(name))",
     )
     .eq("id", id)
     .maybeSingle();
-  if (!data || data.movement_type !== "income") return null;
+  if (!data) return null;
   const work = data.work as { name?: string; client?: { name?: string } } | null;
+  const isIncome = data.movement_type === "income";
   return {
-    docType: "abono",
+    docType: isIncome ? "abono" : "egreso",
     kind: "obra",
     code: ((data.folio as string) ?? (data.receipt as string)) ?? null,
     amount: Number(data.amount),
     concept: data.concept as string,
     date: data.movement_date as string,
-    clientName: work?.client?.name ?? "",
+    clientName: isIncome ? (work?.client?.name ?? "") : ((data.supplier as string | null) ?? ""),
     subjectName: work?.name ?? "",
     signature: (data.signature as string) ?? null,
   };

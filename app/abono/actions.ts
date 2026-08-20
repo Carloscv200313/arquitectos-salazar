@@ -5,7 +5,7 @@ import { z } from "zod";
 import { listProjects, getProject, registerMovement } from "@/lib/data/projects";
 import { listWorks, getWork, registerWorkMovement } from "@/lib/data/works";
 import { WORK_INCOME_CATEGORY } from "@/lib/constants";
-import { round2 } from "@/lib/calculations";
+import { hasMaxTwoDecimals, round2 } from "@/lib/calculations";
 
 // Public, unauthenticated endpoint. Intentionally narrow:
 //  - read: only minimal fields needed to pick a project/obra.
@@ -79,7 +79,7 @@ const publicAbonoSchema = z.object({
     .number()
     .positive("Ingresa un monto válido")
     .max(1_000_000_000, "Monto demasiado alto")
-    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+    .refine(hasMaxTwoDecimals, "Máximo 2 decimales"),
   concept: z.string().trim().min(2, "Ingresa un concepto").max(160, "Máximo 160 caracteres"),
   paymentMethodId: z.string().uuid("Selecciona forma de pago"),
   paymentDate: isoDate,

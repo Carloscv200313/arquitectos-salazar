@@ -92,7 +92,7 @@ export function RegisterWorkMovementSheet({
         toast.success("Movimiento registrado", {
           description: `${formatCurrency(Number(amount))} · ${concept}`,
         });
-        if (result.data?.isIncome && result.data.movementId) {
+        if (result.data?.movementId) {
           window.open(`/recibo/obra/${result.data.movementId}`, "_blank");
         }
         reset();

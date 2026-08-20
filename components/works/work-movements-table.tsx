@@ -36,6 +36,10 @@ function signedTone(value: number) {
   return "text-muted-foreground";
 }
 
+function movementReceiptCode(movement: WorkMovementWithBalance) {
+  return movement.folio ?? movement.receipt ?? "";
+}
+
 export function WorkMovementsTable({
   movements,
   workId,
@@ -410,71 +414,74 @@ export function WorkMovementsTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedMovements.map((movement) => (
-            <TableRow key={movement.id}>
-              <TableCell className="px-5 font-medium">{movement.folio ?? "—"}</TableCell>
-              <TableCell className="px-5 text-muted-foreground">
-                {movement.receipt || "—"}
-              </TableCell>
-              <TableCell className="whitespace-nowrap text-muted-foreground">
-                {formatDate(movement.movement_date)}
-              </TableCell>
-              <TableCell className="font-medium">{movement.concept}</TableCell>
-              <TableCell className="text-muted-foreground">{movement.supplier}</TableCell>
-              <TableCell className="text-muted-foreground">{movement.category}</TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-semibold tabular-nums",
-                  movement.movement_type === "income"
-                    ? "text-brand-foreground"
-                    : "text-muted-foreground",
-                )}
-              >
-                {movement.movement_type === "income" ? formatCurrency(movement.amount) : "—"}
-              </TableCell>
-              <TableCell
-                className={cn(
-                  "text-right font-semibold tabular-nums",
-                  movement.movement_type === "expense"
-                    ? "text-destructive"
-                    : "text-muted-foreground",
-                )}
-              >
-                {movement.movement_type === "expense" ? formatCurrency(movement.amount) : "—"}
-              </TableCell>
-              <TableCell className={cn("text-right font-semibold tabular-nums", signedTone(movement.balance))}>
-                {formatCurrency(movement.balance)}
-              </TableCell>
-              <TableCell className="px-5 text-muted-foreground">
-                {movement.method?.name ?? "Sin forma"}
-              </TableCell>
-              <TableCell className="px-5 text-right">
-                {movement.movement_type === "income" ? (
-                  <a
-                    href={`/recibo/obra/${movement.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
-                    title="Imprimir recibo"
-                  >
-                    <Receipt className="size-3.5" />
-                    {movement.folio ?? movement.receipt}
-                  </a>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </TableCell>
-              <TableCell className="px-5 text-right">
-                <WorkMovementActions
-                  movement={movement}
-                  workId={workId}
-                  methods={methods}
-                  providers={providers}
-                  categories={categories}
-                />
-              </TableCell>
-            </TableRow>
-          ))}
+          {sortedMovements.map((movement) => {
+            const receiptCode = movementReceiptCode(movement);
+            return (
+              <TableRow key={movement.id}>
+                <TableCell className="px-5 font-medium">{movement.folio ?? "—"}</TableCell>
+                <TableCell className="px-5 text-muted-foreground">
+                  {movement.receipt || "—"}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">
+                  {formatDate(movement.movement_date)}
+                </TableCell>
+                <TableCell className="font-medium">{movement.concept}</TableCell>
+                <TableCell className="text-muted-foreground">{movement.supplier}</TableCell>
+                <TableCell className="text-muted-foreground">{movement.category}</TableCell>
+                <TableCell
+                  className={cn(
+                    "text-right font-semibold tabular-nums",
+                    movement.movement_type === "income"
+                      ? "text-brand-foreground"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {movement.movement_type === "income" ? formatCurrency(movement.amount) : "—"}
+                </TableCell>
+                <TableCell
+                  className={cn(
+                    "text-right font-semibold tabular-nums",
+                    movement.movement_type === "expense"
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {movement.movement_type === "expense" ? formatCurrency(movement.amount) : "—"}
+                </TableCell>
+                <TableCell className={cn("text-right font-semibold tabular-nums", signedTone(movement.balance))}>
+                  {formatCurrency(movement.balance)}
+                </TableCell>
+                <TableCell className="px-5 text-muted-foreground">
+                  {movement.method?.name ?? "Sin forma"}
+                </TableCell>
+                <TableCell className="px-5 text-right">
+                  {receiptCode ? (
+                    <a
+                      href={`/recibo/obra/${movement.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+                      title={movement.movement_type === "income" ? "Imprimir recibo" : "Imprimir comprobante"}
+                    >
+                      <Receipt className="size-3.5" />
+                      {receiptCode}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="px-5 text-right">
+                  <WorkMovementActions
+                    movement={movement}
+                    workId={workId}
+                    methods={methods}
+                    providers={providers}
+                    categories={categories}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
           {sortedMovements.length === 0 && (
             <TableRow>
               <TableCell colSpan={12} className="h-20 text-center text-muted-foreground">

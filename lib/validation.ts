@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { computeBreakdown } from "./calculations";
+import { computeBreakdown, hasMaxTwoDecimals } from "./calculations";
 import {
   EMPLOYEE_DEFAULT_WORK_TYPES,
   PROJECT_DISTRIBUTION,
@@ -21,7 +21,7 @@ const money = z
   .finite("Monto inválido")
   .positive("El monto debe ser mayor a 0")
   .max(1_000_000_000, "Monto demasiado alto")
-  .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales");
+  .refine(hasMaxTwoDecimals, "Máximo 2 decimales");
 
 const name = z
   .string()
@@ -229,13 +229,13 @@ export const saveWorkCategoryBudgetSchema = z.object({
     .finite("Monto inválido")
     .min(0, "El monto no puede ser negativo")
     .max(1_000_000_000, "Monto demasiado alto")
-    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+    .refine(hasMaxTwoDecimals, "Máximo 2 decimales"),
   executedAmount: z
     .number({ error: "Ingresa un monto ejecutado válido" })
     .finite("Monto inválido")
     .min(0, "El monto no puede ser negativo")
     .max(1_000_000_000, "Monto demasiado alto")
-    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+    .refine(hasMaxTwoDecimals, "Máximo 2 decimales"),
 });
 
 export type SaveWorkCategoryBudgetInput = z.infer<typeof saveWorkCategoryBudgetSchema>;
@@ -515,7 +515,7 @@ export const manualDebtorSchema = z.object({
     .finite("Monto inválido")
     .min(0, "El monto no puede ser negativo")
     .max(1_000_000_000, "Monto demasiado alto")
-    .refine((n) => Math.round(n * 100) === n * 100, "Máximo 2 decimales"),
+    .refine(hasMaxTwoDecimals, "Máximo 2 decimales"),
 });
 
 export type ManualDebtorInput = z.infer<typeof manualDebtorSchema>;

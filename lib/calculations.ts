@@ -20,6 +20,10 @@ export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+export function hasMaxTwoDecimals(value: number): boolean {
+  return Number(value.toFixed(2)) === value;
+}
+
 /**
  * Split `total` across the given weights (which must sum to 1).
  * The last bucket absorbs any rounding remainder so the parts always re-sum to `total`.

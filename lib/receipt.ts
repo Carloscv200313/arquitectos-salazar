@@ -9,8 +9,9 @@ export const RECEIPT_BUSINESS = {
 export type ReceiptKind = "proyecto" | "obra";
 
 // abono = "RECIBO DE DINERO" (cobro a cliente)
+// egreso = "COMPROBANTE DE EGRESO" (salida de obra)
 // pago  = "COMPROBANTE DE PAGO" (pago a empleado)
-export type ReceiptDocType = "abono" | "pago";
+export type ReceiptDocType = "abono" | "egreso" | "pago";
 
 export interface ReceiptData {
   docType: ReceiptDocType;
