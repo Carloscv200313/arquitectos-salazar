@@ -46,10 +46,14 @@ function guard(): ActionResult | null {
   return null;
 }
 
-async function run(fn: () => Promise<void>): Promise<ActionResult> {
+function revalidate(paths: string[]) {
+  for (const path of paths) revalidatePath(path);
+}
+
+async function run(fn: () => Promise<void>, paths = ["/configuracion"]): Promise<ActionResult> {
   try {
     await fn();
-    revalidatePath("/configuracion");
+    revalidate(paths);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "No se pudo guardar." };
@@ -137,8 +141,18 @@ export async function saveWorkCategoryAction(raw: unknown): Promise<ActionResult
   const parsed = workCategorySchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   const d = parsed.data;
-  return run(() =>
-    d.id ? updateWorkCategory({ id: d.id, name: d.name }) : createWorkCategory({ name: d.name }),
+  return run(
+    () => (d.id ? updateWorkCategory({ id: d.id, name: d.name }) : createWorkCategory({ name: d.name })),
+    [
+      "/configuracion",
+      "/dashboard",
+      "/obras",
+      "/obras/reports",
+      "/pedidos",
+      "/pedidos/reports",
+      "/finance/deudas",
+      "/finance/balance-general",
+    ],
   );
 }
 export async function hideWorkCategoryAction(id: string): Promise<ActionResult> {

@@ -250,7 +250,7 @@ export const WORK_CATEGORIES = [
   "Instalaciones",
   "Maquinaria",
   "Equipo y herramientas",
-  "Herrería",
+  "Herrería Arquitectónica",
   "Aluminio",
   "Tabla roca",
   "Abono de obra",

@@ -18,7 +18,7 @@ insert into public.work_categories (name) values
   ('Instalaciones'),
   ('Maquinaria'),
   ('Equipo y herramientas'),
-  ('Herrería'),
+  ('Herrería Arquitectónica'),
   ('Aluminio'),
   ('Tabla roca'),
   ('Honorarios'),

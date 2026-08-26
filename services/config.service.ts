@@ -40,6 +40,105 @@ export interface HelpItem {
   order_index: number;
 }
 
+type AdminClient = ReturnType<typeof createAdminClient>;
+type WorkCategoryBudgetRow = {
+  id: string;
+  work_id: string;
+  amount: number | string | null;
+  executed_amount: number | string | null;
+};
+
+function money(value: number | string | null | undefined): number {
+  return Number(value ?? 0);
+}
+
+async function updateCategoryText(
+  client: AdminClient,
+  table: "work_movements" | "work_orders",
+  previousName: string,
+  nextName: string,
+) {
+  const { error } = await client
+    .from(table)
+    .update({ category: nextName })
+    .eq("category", previousName);
+  if (error) throw new Error(error.message);
+}
+
+async function mergeWorkCategoryBudgets(
+  client: AdminClient,
+  previousName: string,
+  nextName: string,
+) {
+  const { error } = await client
+    .from("work_category_budgets")
+    .update({ category: nextName })
+    .eq("category", previousName);
+
+  if (!error) return;
+  if (error.code !== "23505") throw new Error(error.message);
+
+  const { data: previousRows, error: previousError } = await client
+    .from("work_category_budgets")
+    .select("id, work_id, amount, executed_amount")
+    .eq("category", previousName);
+  if (previousError) throw new Error(previousError.message);
+
+  const budgets = ((previousRows ?? []) as WorkCategoryBudgetRow[]).filter((row) => row.work_id);
+  if (budgets.length === 0) return;
+
+  const { data: nextRows, error: nextError } = await client
+    .from("work_category_budgets")
+    .select("id, work_id, amount, executed_amount")
+    .eq("category", nextName)
+    .in(
+      "work_id",
+      budgets.map((row) => row.work_id),
+    );
+  if (nextError) throw new Error(nextError.message);
+
+  const nextByWork = new Map(
+    ((nextRows ?? []) as WorkCategoryBudgetRow[]).map((row) => [row.work_id, row]),
+  );
+
+  for (const previous of budgets) {
+    const existing = nextByWork.get(previous.work_id);
+    if (!existing || existing.id === previous.id) {
+      const { error: renameError } = await client
+        .from("work_category_budgets")
+        .update({ category: nextName })
+        .eq("id", previous.id);
+      if (renameError) throw new Error(renameError.message);
+      continue;
+    }
+
+    const { error: mergeError } = await client
+      .from("work_category_budgets")
+      .update({
+        amount: money(existing.amount) + money(previous.amount),
+        executed_amount: money(existing.executed_amount) + money(previous.executed_amount),
+      })
+      .eq("id", existing.id);
+    if (mergeError) throw new Error(mergeError.message);
+
+    const { error: deleteError } = await client
+      .from("work_category_budgets")
+      .delete()
+      .eq("id", previous.id);
+    if (deleteError) throw new Error(deleteError.message);
+  }
+}
+
+async function renameWorkCategoryUsage(
+  client: AdminClient,
+  previousName: string,
+  nextName: string,
+) {
+  await updateCategoryText(client, "work_movements", previousName, nextName);
+  await updateCategoryText(client, "work_orders", previousName, nextName);
+  await mergeWorkCategoryBudgets(client, previousName, nextName);
+}
+
 /* ------------------------------------------------------------- Employees */
 
 export async function listEmployees(): Promise<Employee[]> {
@@ -231,11 +330,36 @@ export async function createWorkCategory(input: { name: string }) {
 }
 
 export async function updateWorkCategory(input: { id: string; name: string }) {
-  const { error } = await createAdminClient()
+  const client = createAdminClient();
+  const nextName = input.name.trim();
+
+  const { data: current, error: currentError } = await client
     .from("work_categories")
-    .update({ name: input.name.trim() })
+    .select("name")
+    .eq("id", input.id)
+    .maybeSingle();
+  if (currentError) throw new Error(currentError.message);
+  if (!current) throw new Error("Categoría no encontrada.");
+
+  const previousName = String(current.name ?? "").trim();
+  if (previousName === nextName) return;
+
+  const { data: duplicate, error: duplicateError } = await client
+    .from("work_categories")
+    .select("id")
+    .eq("name", nextName)
+    .neq("id", input.id)
+    .maybeSingle();
+  if (duplicateError) throw new Error(duplicateError.message);
+  if (duplicate) throw new Error("Ya existe una categoría con ese nombre.");
+
+  const { error } = await client
+    .from("work_categories")
+    .update({ name: nextName, updated_at: new Date().toISOString() })
     .eq("id", input.id);
   if (error) throw new Error(error.message);
+
+  await renameWorkCategoryUsage(client, previousName, nextName);
 }
 
 export async function hideWorkCategory(id: string) {

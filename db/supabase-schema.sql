@@ -22,6 +22,45 @@ begin
 end;
 $$;
 
+create or replace function public.cascade_work_category_name()
+returns trigger language plpgsql as $$
+begin
+  if old.name is distinct from new.name then
+    update public.work_movements
+      set category = new.name
+      where category = old.name;
+
+    update public.work_orders
+      set category = new.name
+      where category = old.name;
+
+    insert into public.work_category_budgets (
+      work_id,
+      category,
+      amount,
+      executed_amount
+    )
+    select
+      work_id,
+      new.name,
+      sum(coalesce(amount, 0)),
+      sum(coalesce(executed_amount, 0))
+    from public.work_category_budgets
+    where category = old.name
+    group by work_id
+    on conflict (work_id, category) do update
+      set amount = public.work_category_budgets.amount + excluded.amount,
+          executed_amount = public.work_category_budgets.executed_amount + excluded.executed_amount,
+          updated_at = now();
+
+    delete from public.work_category_budgets
+      where category = old.name;
+  end if;
+
+  return new;
+end;
+$$;
+
 -- Auto-perfil + app_user al registrarse en auth.users (rol Administrador).
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -505,7 +544,7 @@ declare t text;
 begin
   foreach t in array array[
     'roles','profiles','app_users','employees','payment_accounts','task_types',
-    'system_settings','help_items','clients','projects','works','work_files','work_category_budgets','work_orders',
+    'system_settings','help_items','clients','projects','works','work_categories','work_files','work_category_budgets','work_orders',
     'salary_weeks','salary_day_records','manual_debtors','provider_debt_settlements'
   ] loop
     execute format('drop trigger if exists set_updated_at on public.%I;', t);
@@ -514,6 +553,11 @@ begin
        for each row execute function public.set_updated_at();', t);
   end loop;
 end $$;
+
+drop trigger if exists cascade_work_category_name on public.work_categories;
+create trigger cascade_work_category_name
+  after update of name on public.work_categories
+  for each row execute function public.cascade_work_category_name();
 
 -- Trigger de creación de usuario (auth.users -> profiles + app_users)
 drop trigger if exists on_auth_user_created on auth.users;
@@ -607,7 +651,7 @@ insert into public.work_categories (name) values
   ('Instalaciones'),
   ('Maquinaria'),
   ('Equipo y herramientas'),
-  ('Herrería'),
+  ('Herrería Arquitectónica'),
   ('Aluminio'),
   ('Tabla roca'),
   ('Honorarios'),
