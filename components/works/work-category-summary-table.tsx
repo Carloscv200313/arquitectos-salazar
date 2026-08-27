@@ -166,106 +166,108 @@ export function WorkCategorySummaryTable({
             Archivos
           </Button>
         </div>
-        <Table>
-          <TableHeader className="bg-muted/40">
-            <TableRow>
-              <TableHead className="px-5 text-xs uppercase text-muted-foreground">Categoría</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Presupuesto</TableHead>
-              <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Monto registrado</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">% sobre presupuesto</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Ejecutado</TableHead>
-              <TableHead className="text-right text-xs uppercase text-muted-foreground">Diferencia %</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orderedRows.map((row) => {
-              const movement = movementSummary(row);
-              return (
-                <TableRow key={row.category}>
-                  <TableCell className="px-5 font-medium">{row.category}</TableCell>
-                  <TableCell className="min-w-44">
-                    <div className="flex items-center justify-end gap-2">
-                      <MoneyInput
-                        value={drafts[row.category]?.budget ?? ""}
-                        onValueChange={(value) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [row.category]: {
-                              budget: value,
-                              executed: current[row.category]?.executed ?? "",
-                            },
-                          }))
-                        }
-                        className="w-28 text-right tabular-nums"
-                        placeholder="0.00"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => saveBudget(row.category)}
-                        disabled={isPending}
-                        title="Guardar presupuesto"
-                      >
-                        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                        <span className="sr-only">Guardar presupuesto</span>
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${movement.badgeClass}`}>
-                      {movement.type}
-                    </span>
-                  </TableCell>
-                  <TableCell className={`text-right font-medium tabular-nums ${movement.amountClass}`}>
-                    {formatCurrency(Math.abs(movement.amount))}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {percentLabel(movement.percent)}
-                  </TableCell>
-                  <TableCell className="min-w-44">
-                    <div className="flex items-center justify-end gap-2">
-                      <MoneyInput
-                        value={drafts[row.category]?.executed ?? ""}
-                        onValueChange={(value) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [row.category]: {
-                              budget: current[row.category]?.budget ?? "",
-                              executed: value,
-                            },
-                          }))
-                        }
-                        className="w-28 text-right tabular-nums"
-                        placeholder="0.00"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        onClick={() => saveBudget(row.category)}
-                        disabled={isPending}
-                        title="Guardar ejecutado"
-                      >
-                        {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-                        <span className="sr-only">Guardar ejecutado</span>
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-5 text-right font-medium tabular-nums text-muted-foreground">
-                    {differencePercentLabel(row)}
+        <div className="max-h-[14.5rem] overflow-y-auto">
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 px-5 text-xs uppercase text-muted-foreground">Categoría</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-right text-xs uppercase text-muted-foreground">Presupuesto</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-right text-xs uppercase text-muted-foreground">Monto registrado</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-right text-xs uppercase text-muted-foreground">% sobre presupuesto</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-right text-xs uppercase text-muted-foreground">Ejecutado</TableHead>
+                <TableHead className="sticky top-0 z-10 bg-muted/95 text-right text-xs uppercase text-muted-foreground">Diferencia %</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orderedRows.map((row) => {
+                const movement = movementSummary(row);
+                return (
+                  <TableRow key={row.category}>
+                    <TableCell className="px-5 font-medium">{row.category}</TableCell>
+                    <TableCell className="min-w-44">
+                      <div className="flex items-center justify-end gap-2">
+                        <MoneyInput
+                          value={drafts[row.category]?.budget ?? ""}
+                          onValueChange={(value) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [row.category]: {
+                                budget: value,
+                                executed: current[row.category]?.executed ?? "",
+                              },
+                            }))
+                          }
+                          className="w-28 text-right tabular-nums"
+                          placeholder="0.00"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => saveBudget(row.category)}
+                          disabled={isPending}
+                          title="Guardar presupuesto"
+                        >
+                          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                          <span className="sr-only">Guardar presupuesto</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${movement.badgeClass}`}>
+                        {movement.type}
+                      </span>
+                    </TableCell>
+                    <TableCell className={`text-right font-medium tabular-nums ${movement.amountClass}`}>
+                      {formatCurrency(Math.abs(movement.amount))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {percentLabel(movement.percent)}
+                    </TableCell>
+                    <TableCell className="min-w-44">
+                      <div className="flex items-center justify-end gap-2">
+                        <MoneyInput
+                          value={drafts[row.category]?.executed ?? ""}
+                          onValueChange={(value) =>
+                            setDrafts((current) => ({
+                              ...current,
+                              [row.category]: {
+                                budget: current[row.category]?.budget ?? "",
+                                executed: value,
+                              },
+                            }))
+                          }
+                          className="w-28 text-right tabular-nums"
+                          placeholder="0.00"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon-sm"
+                          onClick={() => saveBudget(row.category)}
+                          disabled={isPending}
+                          title="Guardar ejecutado"
+                        >
+                          {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                          <span className="sr-only">Guardar ejecutado</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-5 text-right font-medium tabular-nums text-muted-foreground">
+                      {differencePercentLabel(row)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {orderedRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+                    Sin categorías registradas.
                   </TableCell>
                 </TableRow>
-              );
-            })}
-            {orderedRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
-                  Sin categorías registradas.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </Card>
 
       <WorkFilesSheet
