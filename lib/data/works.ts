@@ -37,6 +37,7 @@ export interface WorkFilters {
 }
 
 type Row = Record<string, unknown>;
+const SUPABASE_PAGE_SIZE = 1000;
 
 function sb() {
   return createAdminClient();
@@ -130,12 +131,9 @@ function computeWorkFinance(movements: WorkMovement[]) {
   };
 }
 
-function enrichRow(r: Row): WorkWithFinance | null {
+function enrichRow(r: Row, movements: WorkMovement[] = []): WorkWithFinance | null {
   const client = r.client as Row | null;
   if (!client) return null;
-  const movements = ((r.movements as Row[]) ?? [])
-    .filter((m) => (m.status as number) !== 0)
-    .map(mapMovement);
   return {
     ...mapWork(r),
     client: mapClient(client),
@@ -170,7 +168,80 @@ async function findOrCreateClientId(
   return created.id as string;
 }
 
-const WORK_SELECT = "*, client:clients(*), movements:work_movements(*)";
+const WORK_SELECT = "*, client:clients(*)";
+
+async function listWorkMovementRows({
+  select = "*",
+  workId,
+  category,
+  includeMethod = false,
+}: {
+  select?: string;
+  workId?: string;
+  category?: string;
+  includeMethod?: boolean;
+} = {}): Promise<Row[]> {
+  const rows: Row[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    let query = sb()
+      .from("work_movements")
+      .select(includeMethod ? "*, method:payment_accounts(id, name, created_at)" : select)
+      .eq("status", 1);
+
+    if (workId) {
+      query = query
+        .eq("work_id", workId)
+        .order("movement_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
+    } else {
+      query = query
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true });
+    }
+    if (category) query = query.eq("category", category);
+
+    const { data, error } = await query.range(from, to);
+    if (error) throw new Error(error.message);
+
+    const page = (data ?? []) as unknown as Row[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+async function listWorkMovementsByWorkIds(workIds: string[]): Promise<Map<string, WorkMovement[]>> {
+  const movementsByWork = new Map<string, WorkMovement[]>();
+  if (workIds.length === 0) return movementsByWork;
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await sb()
+      .from("work_movements")
+      .select("*")
+      .eq("status", 1)
+      .in("work_id", workIds)
+      .order("work_id", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+    if (error) throw new Error(error.message);
+
+    const page = ((data ?? []) as unknown as Row[]).map(mapMovement);
+    for (const movement of page) {
+      const bucket = movementsByWork.get(movement.work_id) ?? [];
+      bucket.push(movement);
+      movementsByWork.set(movement.work_id, bucket);
+    }
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  return movementsByWork;
+}
 
 async function listWorkFilesByWorkIds(workIds: string[]): Promise<Map<string, WorkFile[]>> {
   const filesByWork = new Map<string, WorkFile[]>();
@@ -215,12 +286,16 @@ async function listConfiguredWorkCategories(): Promise<string[]> {
 export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFinance[]> {
   if (!isAdminConfigured()) return [];
   const { data } = await sb().from("works").select(WORK_SELECT).eq("status", 1);
+  const workRows = (data ?? []) as Row[];
+  const movementsByWork = await listWorkMovementsByWorkIds(
+    workRows.map((work) => work.id as string).filter(Boolean),
+  );
 
   const search = filters.search?.trim().toLowerCase();
   const client = filters.client?.trim().toLowerCase();
 
-  const works = (data ?? [])
-    .map(enrichRow)
+  const works = workRows
+    .map((row) => enrichRow(row, movementsByWork.get(row.id as string) ?? []))
     .filter((w): w is WorkWithFinance => w !== null)
     .filter((w) => {
       if (
@@ -249,34 +324,23 @@ export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFina
 
 export async function getWork(id: string): Promise<WorkWithFinance | null> {
   if (!isAdminConfigured()) return null;
-  const { data } = await sb().from("works").select(WORK_SELECT).eq("id", id).maybeSingle();
-  const work = data ? enrichRow(data) : null;
+  const [workRes, movements] = await Promise.all([
+    sb().from("works").select(WORK_SELECT).eq("id", id).maybeSingle(),
+    movementsOf(id),
+  ]);
+  const work = workRes.data ? enrichRow(workRes.data as Row, movements) : null;
   if (!work) return null;
   const filesByWork = await listWorkFilesByWorkIds([id]);
   return { ...work, files: filesByWork.get(id) ?? [] };
 }
 
 async function movementsOf(workId: string): Promise<WorkMovement[]> {
-  const { data } = await sb()
-    .from("work_movements")
-    .select("*")
-    .eq("work_id", workId)
-    .eq("status", 1);
-  return (data ?? []).map(mapMovement);
+  return (await listWorkMovementRows({ workId })).map(mapMovement);
 }
 
 export async function listWorkMovements(workId: string): Promise<WorkMovementWithBalance[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await sb()
-    .from("work_movements")
-    .select("*, method:payment_accounts(id, name, created_at)")
-    .eq("work_id", workId)
-    .eq("status", 1);
-  const sorted = (data ?? []).sort((a, b) => {
-    const byDate = (a.movement_date as string).localeCompare(b.movement_date as string);
-    if (byDate !== 0) return byDate;
-    return (a.created_at as string).localeCompare(b.created_at as string);
-  });
+  const sorted = await listWorkMovementRows({ workId, includeMethod: true });
   let balance = 0;
   return sorted.map((r) => {
     const m = mapMovement(r);
@@ -387,9 +451,9 @@ export async function getWorkAdministrationUtilities(
 export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReportRow[]> {
   if (!isAdminConfigured()) return [];
   const client = sb();
-  const [methodsRes, movementsRes, transfersRes] = await Promise.all([
+  const [methodsRes, movementRows, transfersRes] = await Promise.all([
     client.from("payment_accounts").select("id, name").eq("status", 1),
-    client.from("work_movements").select("payment_method_id, movement_type, amount").eq("status", 1),
+    listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
     client
       .from("work_internal_transfers")
       .select("from_payment_method_id, to_payment_method_id, amount")
@@ -406,7 +470,7 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
       finalBalance: 0,
     });
   }
-  for (const mv of movementsRes.data ?? []) {
+  for (const mv of movementRows) {
     const row = rows.get(mv.payment_method_id as string);
     if (!row) continue;
     const sign = (mv.movement_type as string) === "income" ? 1 : -1;
@@ -451,13 +515,12 @@ export async function getWorksAdministrationUtilityReport(): Promise<
   WorkAdministrationUtilityRow[]
 > {
   if (!isAdminConfigured()) return [];
-  const { data } = await sb()
-    .from("work_movements")
-    .select("category, movement_date, amount")
-    .eq("status", 1)
-    .eq("category", "Honorarios");
+  const data = await listWorkMovementRows({
+    select: "category, movement_date, amount",
+    category: "Honorarios",
+  });
   const byMonth = new Map<string, number>();
-  for (const m of data ?? []) {
+  for (const m of data) {
     const month = (m.movement_date as string).slice(0, 7);
     byMonth.set(month, round2((byMonth.get(month) ?? 0) + Number(m.amount)));
   }

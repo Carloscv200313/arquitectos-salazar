@@ -36,9 +36,45 @@ import { getWorksAdministrationUtilityReport, listWorks } from "./works";
 import { listWorkOrders } from "./orders";
 
 type Row = Record<string, unknown>;
+const SUPABASE_PAGE_SIZE = 1000;
 
 function sb() {
   return createAdminClient();
+}
+
+async function listWorkMovementRows({
+  select = "*",
+  paymentMethodId,
+  movementType,
+}: {
+  select?: string;
+  paymentMethodId?: string;
+  movementType?: "income" | "expense";
+} = {}): Promise<Row[]> {
+  const rows: Row[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    let query = sb()
+      .from("work_movements")
+      .select(select)
+      .eq("status", 1);
+
+    if (paymentMethodId) query = query.eq("payment_method_id", paymentMethodId);
+    if (movementType) query = query.eq("movement_type", movementType);
+    query = query
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    const { data, error } = await query.range(from, to);
+    if (error) throw new Error(error.message);
+
+    const page = (data ?? []) as unknown as Row[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
 function accountIdFromMethodName(name: string) {
@@ -72,7 +108,7 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
   const [pp, wm, it, wt] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
-    client.from("work_movements").select("payment_method_id, movement_type, amount").eq("status", 1),
+    listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
   ]);
@@ -84,7 +120,7 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   };
   for (const p of pp.data ?? [])
     add(p.payment_method_id as string, (p.movement_type as string) === "income" ? num(p.amount) : -num(p.amount));
-  for (const m of wm.data ?? [])
+  for (const m of wm)
     add(m.payment_method_id as string, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount));
   for (const t of it.data ?? []) {
     add(t.from_payment_method_id as string, -num(t.amount));
@@ -143,16 +179,10 @@ async function getAccountsPayableWorkMovementDebts(
   const payableMethodId = await accountsPayableMethodId();
   if (!payableMethodId) return [];
 
-  const client = sb();
   const [works, movementsRes, orderLinksRes] = await Promise.all([
     listWorks(),
-    client
-      .from("work_movements")
-      .select("*")
-      .eq("status", 1)
-      .eq("movement_type", "expense")
-      .eq("payment_method_id", payableMethodId),
-    client
+    listWorkMovementRows({ paymentMethodId: payableMethodId, movementType: "expense" }),
+    sb()
       .from("work_orders")
       .select("payable_movement_id")
       .eq("status", 1)
@@ -164,7 +194,7 @@ async function getAccountsPayableWorkMovementDebts(
     (orderLinksRes.data ?? []).map((row) => row.payable_movement_id as string).filter(Boolean),
   );
 
-  return (movementsRes.data ?? [])
+  return movementsRes
     .filter((movement) => !orderPayableMovementIds.has(movement.id as string))
     .map((movement) => {
       const amount = num(movement.amount);
@@ -421,12 +451,12 @@ export async function getGeneralBalanceAccountReport(
       }
     } else {
       const [wmRes, ppRes, projRes] = await Promise.all([
-        client.from("work_movements").select("*").eq("status", 1).eq("payment_method_id", method.id),
+        listWorkMovementRows({ paymentMethodId: method.id }),
         client.from("project_payments").select("*").eq("status", 1).eq("payment_method_id", method.id),
         client.from("projects").select("id, name"),
       ]);
       const projectName = new Map((projRes.data ?? []).map((p) => [p.id as string, p.name as string]));
-      for (const m of wmRes.data ?? []) {
+      for (const m of wmRes) {
         const expense = (m.movement_type as string) === "expense";
         history.push({
           id: `work-${m.id}`,
