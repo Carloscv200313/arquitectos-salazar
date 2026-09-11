@@ -10,6 +10,8 @@ import {
   BadgeDollarSign,
   TrendingUp,
   Banknote,
+  FileText,
+  ListOrdered,
   ScrollText,
   Settings,
   LifeBuoy,
@@ -54,6 +56,8 @@ export const NAV_SECTIONS: NavSection[] = [
         groupOnly: true,
         children: [
           { label: "Caja y Bancos", href: "/finance/balance-general", icon: Landmark, permission: "finance.view" },
+          { label: "Estados Financieros", href: "/finance/estados-financieros", icon: FileText, permission: "finance.view" },
+          { label: "Movimientos", href: "/finance/movimientos", icon: ListOrdered, permission: "finance.view" },
           { label: "Deudas", href: "/finance/deudas", icon: BadgeDollarSign, permission: "finance.view" },
           { label: "Utilidades", href: "/finance/utilidades", icon: TrendingUp, permission: "finance.view" },
           { label: "Movimientos internos", href: "/finance/movimientos-internos", icon: ArrowLeftRight, permission: "finance.view" },

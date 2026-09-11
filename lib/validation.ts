@@ -552,6 +552,46 @@ export type GeneralBalanceAccountMovementInput = z.infer<
   typeof generalBalanceAccountMovementSchema
 >;
 
+export const financeMovementPaymentForms = [
+  "transfer",
+  "cash",
+  "check",
+  "deposit",
+] as const;
+
+export const financeMovementTagSchema = z.object({
+  id: z.string().uuid("Etiqueta inválida").optional().or(z.literal("")),
+  name,
+});
+
+export type FinanceMovementTagInput = z.infer<typeof financeMovementTagSchema>;
+
+export const financeMovementConceptSchema = z.object({
+  id: z.string().uuid("Concepto inválido").optional().or(z.literal("")),
+  name,
+  place: z.string().trim().max(120, "Máximo 120 caracteres").optional().or(z.literal("")),
+  type: z.string().trim().max(80, "Máximo 80 caracteres").optional().or(z.literal("")),
+  method: z.string().trim().max(120, "Máximo 120 caracteres").optional().or(z.literal("")),
+  tagId: z.string().uuid("Selecciona etiqueta").nullable().optional().or(z.literal("")),
+});
+
+export type FinanceMovementConceptInput = z.infer<
+  typeof financeMovementConceptSchema
+>;
+
+export const financeCaptureSchema = z.object({
+  conceptId: z.string().uuid("Selecciona concepto"),
+  captureDate: isoDate,
+  amount: money,
+  sourceAccountId: z.string().uuid("Selecciona cuenta de origen"),
+  paymentForm: z.enum(financeMovementPaymentForms, {
+    error: "Selecciona forma de pago",
+  }),
+  description: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+});
+
+export type FinanceCaptureInput = z.infer<typeof financeCaptureSchema>;
+
 export const settleProviderDebtSchema = z.object({
   provider: name,
   sourceType: z.enum(["work_order", "work_movement"]),

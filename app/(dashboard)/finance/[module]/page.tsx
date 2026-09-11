@@ -3,9 +3,17 @@ import { Card } from "@/components/ui/card";
 import { DebtsView } from "@/components/finance/debts-view";
 import { GeneralBalanceView } from "@/components/finance/general-balance-view";
 import { InternalTransfersView } from "@/components/finance/internal-transfers-view";
+import { MovementsView } from "@/components/finance/movements-view";
 import { SalaryView } from "@/components/finance/salary-view";
 import { UtilitiesView } from "@/components/finance/utilities-view";
-import { getDebtReport, getFinanceUtilityReport, getGeneralBalanceReport, getProviderDebtDetails, getSalaryReport } from "@/lib/data/finance";
+import {
+  getDebtReport,
+  getFinanceCaptureReport,
+  getFinanceUtilityReport,
+  getGeneralBalanceReport,
+  getProviderDebtDetails,
+  getSalaryReport,
+} from "@/lib/data/finance";
 import { getProjectsInternalAreaPaid, listPaymentMethods, listProjects } from "@/lib/data/projects";
 import {
   getWorksPaymentMethodReport,
@@ -40,8 +48,9 @@ export default async function FinanceModulePage({
   const item = FINANCE_MODULES.find((entry) => entry.slug === module);
   if (!item) notFound();
   const Icon = item.icon;
-  const [balance, debts, utilities, internalTransferData, salaryData] = await Promise.all([
+  const [balance, movements, debts, utilities, internalTransferData, salaryData] = await Promise.all([
     item.slug === "balance-general" ? getGeneralBalanceReport() : Promise.resolve(null),
+    item.slug === "movimientos" ? getFinanceCaptureReport() : Promise.resolve(null),
     item.slug === "deudas"
       ? Promise.all([getDebtReport(), getProviderDebtDetails(), listPaymentMethods()])
       : Promise.resolve(null),
@@ -82,6 +91,15 @@ export default async function FinanceModulePage({
 
       {balance ? (
         <GeneralBalanceView report={balance} />
+      ) : movements ? (
+        <MovementsView report={movements} />
+      ) : item.slug === "estados-financieros" ? (
+        <Card className="border-dashed p-8 text-center">
+          <p className="font-medium">Submódulo en construcción</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Estados Financieros se habilitará en una siguiente etapa.
+          </p>
+        </Card>
       ) : debts ? (
         <DebtsView rows={debts[0]} providerDetails={debts[1]} />
       ) : utilities ? (

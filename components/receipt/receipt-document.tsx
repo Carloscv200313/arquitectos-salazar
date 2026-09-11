@@ -117,12 +117,13 @@ export function ReceiptDocument({
   const recipientLabel = isPago || isEgreso ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
   const subjectLabel = data.kind === "obra" ? "de la obra" : "del proyecto";
   const showSubject = !isPago || !!data.subjectName?.trim();
-  const signatureSharePath =
-    data.docType === "abono" &&
-    (signPayload?.kind === "proyecto" || signPayload?.kind === "obra") &&
-    typeof signPayload.id === "string"
-      ? `/firma/recibo/${signPayload.kind}/${signPayload.id}`
-      : null;
+  const signatureSharePath = getSignatureSharePath(signPayload);
+  const signatureShareLabel =
+    data.docType === "abono"
+      ? "Copiar enlace para firma del cliente"
+      : data.docType === "egreso"
+        ? "Copiar enlace para firma del receptor"
+        : "Copiar enlace para firma del empleado";
 
   async function copySignatureLink() {
     if (!signatureSharePath) return;
@@ -174,7 +175,7 @@ export function ReceiptDocument({
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-950 transition-colors hover:bg-amber-100 disabled:opacity-60"
               >
                 <Copy className="size-4" />
-                Copiar enlace para firma del cliente
+                {signatureShareLabel}
               </button>
             ) : null}
             <button
@@ -319,4 +320,28 @@ function Field({ label, value }: { label: string; value: string }) {
       </span>
     </div>
   );
+}
+
+function getSignatureSharePath(signPayload?: Record<string, unknown>) {
+  if (!signPayload) return null;
+
+  const kind = signPayload?.kind;
+  if (kind !== "proyecto" && kind !== "obra") return null;
+
+  if (typeof signPayload.id === "string") {
+    return `/firma/recibo/${kind}/${signPayload.id}`;
+  }
+
+  const weekId = signPayload.weekId;
+  const employeeId = signPayload.employeeId;
+  const refId = signPayload.refId;
+  if (
+    typeof weekId === "string" &&
+    typeof employeeId === "string" &&
+    typeof refId === "string"
+  ) {
+    return `/firma/comprobante/${kind}/${weekId}/${employeeId}/${refId}`;
+  }
+
+  return null;
 }

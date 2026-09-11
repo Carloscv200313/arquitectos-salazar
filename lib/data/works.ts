@@ -791,13 +791,12 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
   };
 }
 
-/** Guarda la firma dibujada del recibo de abono de obra. */
+/** Guarda la firma dibujada del movimiento de obra. */
 export async function setWorkMovementSignature(id: string, signature: string): Promise<void> {
   const { error } = await sb()
     .from("work_movements")
     .update({ signature, signed_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("movement_type", "income");
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 

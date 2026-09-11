@@ -2,7 +2,9 @@ import {
   ArrowLeftRight,
   BadgeDollarSign,
   Banknote,
+  FileText,
   Landmark,
+  ListOrdered,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +22,18 @@ export const FINANCE_MODULES: FinanceModule[] = [
     title: "Caja y Bancos",
     description: "Vista consolidada de saldos, entradas, salidas y cuentas.",
     icon: Landmark,
+  },
+  {
+    slug: "estados-financieros",
+    title: "Estados Financieros",
+    description: "Submódulo financiero en proceso de construcción.",
+    icon: FileText,
+  },
+  {
+    slug: "movimientos",
+    title: "Movimientos",
+    description: "Captura contable y catálogos de conceptos.",
+    icon: ListOrdered,
   },
   {
     slug: "deudas",

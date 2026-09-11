@@ -536,6 +536,57 @@ create table if not exists public.general_balance_account_movements (
   created_by    uuid references auth.users(id)
 );
 
+create table if not exists public.finance_movement_tags (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  status     smallint not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+create unique index if not exists finance_movement_tags_name_uidx
+  on public.finance_movement_tags (lower(name))
+  where status = 1;
+
+create table if not exists public.finance_movement_concepts (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  place      text,
+  type       text,
+  method     text,
+  tag_id     uuid references public.finance_movement_tags(id) on delete set null,
+  status     smallint not null default 1,
+  created_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+create unique index if not exists finance_movement_concepts_name_uidx
+  on public.finance_movement_concepts (lower(name))
+  where status = 1;
+create index if not exists finance_movement_concepts_tag_idx
+  on public.finance_movement_concepts(tag_id)
+  where status = 1;
+
+create table if not exists public.finance_movement_captures (
+  id                uuid primary key default gen_random_uuid(),
+  concept_id        uuid not null references public.finance_movement_concepts(id),
+  capture_date      date not null,
+  amount            numeric(14,2) not null default 0,
+  source_account_id uuid not null references public.payment_accounts(id),
+  payment_form      text not null check (payment_form in ('transfer','cash','check','deposit')),
+  description       text,
+  status            smallint not null default 1,
+  created_at        timestamptz not null default now(),
+  created_by        uuid references auth.users(id)
+);
+create index if not exists finance_movement_captures_date_idx
+  on public.finance_movement_captures(capture_date desc, created_at desc)
+  where status = 1;
+create index if not exists finance_movement_captures_concept_idx
+  on public.finance_movement_captures(concept_id)
+  where status = 1;
+create index if not exists finance_movement_captures_account_idx
+  on public.finance_movement_captures(source_account_id)
+  where status = 1;
+
 -- ============================================================================
 -- Triggers updated_at
 -- ============================================================================
@@ -578,7 +629,7 @@ begin
     'work_category_budgets',
     'work_internal_transfers','work_orders','work_order_payments','salary_weeks',
     'salary_day_records','salary_payments','manual_debtors','provider_debt_settlements','general_balance_entries',
-    'general_balance_account_movements'
+    'general_balance_account_movements','finance_movement_tags','finance_movement_concepts','finance_movement_captures'
   ] loop
     execute format('alter table public.%I enable row level security;', t);
 

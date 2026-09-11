@@ -96,7 +96,7 @@ export function RegisterPaymentSheet({
         toast.success("Movimiento registrado", {
           description: `${formatCurrency(Number(amount))} · ${concept.trim()}`,
         });
-        if (movementType === "income" && res.data?.paymentId) {
+        if (res.data?.paymentId) {
           window.open(`/recibo/proyecto/${res.data.paymentId}`, "_blank");
         }
         reset();

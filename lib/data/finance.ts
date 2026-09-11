@@ -11,6 +11,11 @@ import {
 import type {
   DebtReportRow,
   Employee,
+  FinanceCapturePaymentForm,
+  FinanceCaptureReport,
+  FinanceCaptureRow,
+  FinanceMovementConcept,
+  FinanceMovementTag,
   FinanceUtilityReport,
   GeneralBalanceAccountReport,
   GeneralBalanceHistoryRow,
@@ -658,7 +663,7 @@ export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
   const projectByMonth = new Map(projectRows.map((r) => [r.month, r.utilityAmount]));
   const workByMonth = new Map(workRows.map((r) => [r.month, r.amount]));
   const rows = [...months]
-    .sort((a, b) => a.localeCompare(b))
+    .sort((a, b) => b.localeCompare(a))
     .map((month) => {
       const projectUtility = round2(projectByMonth.get(month) ?? 0);
       const workUtility = round2(workByMonth.get(month) ?? 0);
@@ -667,6 +672,228 @@ export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
   const projectTotal = round2(rows.reduce((s, r) => s + r.projectUtility, 0));
   const workTotal = round2(rows.reduce((s, r) => s + r.workUtility, 0));
   return { rows, projectTotal, workTotal, total: round2(projectTotal + workTotal) };
+}
+
+function mapFinanceMovementTag(r: Row): FinanceMovementTag {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    created_at: (r.created_at as string) ?? "",
+    created_by: (r.created_by as string) ?? null,
+  };
+}
+
+function mapFinanceMovementConcept(r: Row): FinanceMovementConcept {
+  const tag = r.tag as Row | null;
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    place: (r.place as string) ?? null,
+    type: (r.type as string) ?? null,
+    method: (r.method as string) ?? null,
+    tag_id: (r.tag_id as string) ?? null,
+    created_at: (r.created_at as string) ?? "",
+    created_by: (r.created_by as string) ?? null,
+    tag: tag ? mapFinanceMovementTag(tag) : null,
+  };
+}
+
+function mapFinanceCapture(r: Row, balanceAfter: number): FinanceCaptureRow {
+  const concept = r.concept as Row | null;
+  const account = r.account as Row | null;
+  return {
+    id: r.id as string,
+    concept_id: r.concept_id as string,
+    capture_date: r.capture_date as string,
+    amount: num(r.amount),
+    source_account_id: r.source_account_id as string,
+    payment_form: r.payment_form as FinanceCapturePaymentForm,
+    description: (r.description as string) ?? null,
+    balance_after: balanceAfter,
+    created_at: (r.created_at as string) ?? "",
+    created_by: (r.created_by as string) ?? null,
+    concept: concept ? mapFinanceMovementConcept(concept) : null,
+    account: account
+      ? {
+          id: account.id as string,
+          name: account.name as string,
+          is_active: true,
+          created_at: (account.created_at as string) ?? "",
+        }
+      : null,
+  };
+}
+
+export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
+  if (!isAdminConfigured()) {
+    return {
+      rows: [],
+      concepts: [],
+      tags: [],
+      accounts: [],
+      totals: { amount: 0, count: 0, currentBalance: 0, currentMonthAmount: 0 },
+    };
+  }
+
+  const client = sb();
+  const [captureRes, conceptRes, tagRes, accounts] = await Promise.all([
+    client
+      .from("finance_movement_captures")
+      .select(
+        "*, concept:finance_movement_concepts(id,name,place,type,method,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)), account:payment_accounts(id,name,created_at)",
+      )
+      .eq("status", 1)
+      .order("capture_date", { ascending: true })
+      .order("created_at", { ascending: true }),
+    client
+      .from("finance_movement_concepts")
+      .select("id,name,place,type,method,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)")
+      .eq("status", 1)
+      .order("name", { ascending: true }),
+    client
+      .from("finance_movement_tags")
+      .select("id,name,created_at,created_by")
+      .eq("status", 1)
+      .order("name", { ascending: true }),
+    loadMethods(),
+  ]);
+
+  let runningBalance = 0;
+  const chronological = ((captureRes.data ?? []) as Row[]).map((row) => {
+    runningBalance = round2(runningBalance + num(row.amount));
+    return mapFinanceCapture(row, runningBalance);
+  });
+  const rows = chronological.sort((a, b) => {
+    const byDate = b.capture_date.localeCompare(a.capture_date);
+    if (byDate !== 0) return byDate;
+    return b.created_at.localeCompare(a.created_at);
+  });
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  return {
+    rows,
+    concepts: ((conceptRes.data ?? []) as Row[]).map(mapFinanceMovementConcept),
+    tags: ((tagRes.data ?? []) as Row[]).map(mapFinanceMovementTag),
+    accounts,
+    totals: {
+      amount: round2(rows.reduce((sum, row) => sum + row.amount, 0)),
+      count: rows.length,
+      currentBalance: runningBalance,
+      currentMonthAmount: round2(
+        rows
+          .filter((row) => row.capture_date.startsWith(currentMonth))
+          .reduce((sum, row) => sum + row.amount, 0),
+      ),
+    },
+  };
+}
+
+export async function saveFinanceMovementTag(data: {
+  id?: string;
+  name: string;
+  userId: string | null;
+}): Promise<string> {
+  const client = sb();
+  const name = data.name.trim();
+  if (data.id) {
+    const { error } = await client
+      .from("finance_movement_tags")
+      .update({ name })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+  const { data: created, error } = await client
+    .from("finance_movement_tags")
+    .insert({ name, created_by: data.userId })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+export async function deleteFinanceMovementTag(id: string): Promise<void> {
+  const client = sb();
+  const { error: conceptsError } = await client
+    .from("finance_movement_concepts")
+    .update({ tag_id: null })
+    .eq("tag_id", id);
+  if (conceptsError) throw new Error(conceptsError.message);
+
+  const { error } = await client
+    .from("finance_movement_tags")
+    .update({ status: 0 })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function saveFinanceMovementConcept(data: {
+  id?: string;
+  name: string;
+  place?: string;
+  type?: string;
+  method?: string;
+  tagId: string | null;
+  userId: string | null;
+}): Promise<string> {
+  const client = sb();
+  const payload = {
+    name: data.name.trim(),
+    place: data.place?.trim() || null,
+    type: data.type?.trim() || null,
+    method: data.method?.trim() || null,
+    tag_id: data.tagId || null,
+  };
+  if (data.id) {
+    const { error } = await client
+      .from("finance_movement_concepts")
+      .update(payload)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+  const { data: created, error } = await client
+    .from("finance_movement_concepts")
+    .insert({ ...payload, created_by: data.userId })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+export async function deleteFinanceMovementConcept(id: string): Promise<void> {
+  const { error } = await sb()
+    .from("finance_movement_concepts")
+    .update({ status: 0 })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function saveFinanceCapture(data: {
+  conceptId: string;
+  captureDate: string;
+  amount: number;
+  sourceAccountId: string;
+  paymentForm: FinanceCapturePaymentForm;
+  description: string | null;
+  userId: string | null;
+}): Promise<string> {
+  const { data: created, error } = await sb()
+    .from("finance_movement_captures")
+    .insert({
+      concept_id: data.conceptId,
+      capture_date: data.captureDate,
+      amount: round2(data.amount),
+      source_account_id: data.sourceAccountId,
+      payment_form: data.paymentForm,
+      description: data.description?.trim() || null,
+      created_by: data.userId,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
 }
 
 export interface SaveManualDebtorData {

@@ -5,8 +5,13 @@ import { z } from "zod";
 import {
   deleteSalaryDayRecord,
   deleteSalaryPayment,
+  deleteFinanceMovementConcept,
+  deleteFinanceMovementTag,
   registerGeneralBalanceAccountMovement,
   registerGeneralBalanceEntry,
+  saveFinanceCapture,
+  saveFinanceMovementConcept,
+  saveFinanceMovementTag,
   saveSalaryDayRecord,
   saveSalaryPayment,
   saveSalaryWeek,
@@ -18,6 +23,9 @@ import { registerWorkInternalTransfer } from "@/lib/data/works";
 import {
   generalBalanceAccountMovementSchema,
   generalBalanceEntrySchema,
+  financeCaptureSchema,
+  financeMovementConceptSchema,
+  financeMovementTagSchema,
   manualDebtorSchema,
   registerInternalTransferSchema,
   saveSalaryDayRecordSchema,
@@ -198,6 +206,141 @@ export async function registerFinanceInternalTransferAction(
     return { ok: true, data: undefined };
   } catch {
     return { ok: false, error: "No se pudo registrar el traspaso interno." };
+  }
+}
+
+export async function saveFinanceMovementTagAction(
+  raw: unknown,
+): Promise<ActionResult<{ tagId: string }>> {
+  const parsed = financeMovementTagSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos de la etiqueta.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const tagId = await saveFinanceMovementTag({
+      id: d.id || undefined,
+      name: d.name,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/movimientos");
+    return { ok: true, data: { tagId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar la etiqueta.",
+    };
+  }
+}
+
+export async function deleteFinanceMovementTagAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = z.object({ id: z.string().uuid("Etiqueta inválida") }).safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Etiqueta inválida.", fieldErrors: fieldErrorsFrom(parsed.error) };
+  }
+
+  try {
+    await deleteFinanceMovementTag(parsed.data.id);
+    revalidatePath("/finance/movimientos");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar la etiqueta.",
+    };
+  }
+}
+
+export async function saveFinanceMovementConceptAction(
+  raw: unknown,
+): Promise<ActionResult<{ conceptId: string }>> {
+  const parsed = financeMovementConceptSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del concepto.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const conceptId = await saveFinanceMovementConcept({
+      id: d.id || undefined,
+      name: d.name,
+      place: d.place,
+      type: d.type,
+      method: d.method,
+      tagId: d.tagId || null,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/movimientos");
+    return { ok: true, data: { conceptId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar el concepto.",
+    };
+  }
+}
+
+export async function deleteFinanceMovementConceptAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = z.object({ id: z.string().uuid("Concepto inválido") }).safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, error: "Concepto inválido.", fieldErrors: fieldErrorsFrom(parsed.error) };
+  }
+
+  try {
+    await deleteFinanceMovementConcept(parsed.data.id);
+    revalidatePath("/finance/movimientos");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar el concepto.",
+    };
+  }
+}
+
+export async function saveFinanceCaptureAction(
+  raw: unknown,
+): Promise<ActionResult<{ captureId: string }>> {
+  const parsed = financeCaptureSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos de la captura.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const captureId = await saveFinanceCapture({
+      conceptId: d.conceptId,
+      captureDate: d.captureDate,
+      amount: d.amount,
+      sourceAccountId: d.sourceAccountId,
+      paymentForm: d.paymentForm,
+      description: d.description?.trim() || null,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/movimientos");
+    return { ok: true, data: { captureId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar la captura.",
+    };
   }
 }
 

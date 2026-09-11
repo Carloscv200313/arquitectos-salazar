@@ -21,7 +21,7 @@ const abonoSchema = z.object({
   signature,
 });
 
-/** Firma un recibo de abono (proyecto u obra). */
+/** Firma un recibo o comprobante de movimiento (proyecto u obra). */
 export async function signAbonoAction(raw: unknown): Promise<SignResult> {
   const parsed = abonoSchema.safeParse(raw);
   if (!parsed.success) {
@@ -57,6 +57,8 @@ export async function signPagoAction(raw: unknown): Promise<SignResult> {
   const refType = kind === "proyecto" ? "project" : "work";
   try {
     await setSalaryReceiptSignature(weekId, employeeId, refType, refId, sig);
+    revalidatePath(`/comprobante/${kind}/${weekId}/${employeeId}/${refId}`);
+    revalidatePath(`/firma/comprobante/${kind}/${weekId}/${employeeId}/${refId}`);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "No se pudo guardar la firma." };

@@ -382,6 +382,59 @@ export interface FinanceUtilityReport {
   total: number;
 }
 
+export type FinanceCapturePaymentForm =
+  | "transfer"
+  | "cash"
+  | "check"
+  | "deposit";
+
+export interface FinanceMovementTag {
+  id: string;
+  name: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface FinanceMovementConcept {
+  id: string;
+  name: string;
+  place: string | null;
+  type: string | null;
+  method: string | null;
+  tag_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  tag: FinanceMovementTag | null;
+}
+
+export interface FinanceCaptureRow {
+  id: string;
+  concept_id: string;
+  capture_date: string;
+  amount: number;
+  source_account_id: string;
+  payment_form: FinanceCapturePaymentForm;
+  description: string | null;
+  balance_after: number;
+  created_at: string;
+  created_by: string | null;
+  concept: FinanceMovementConcept | null;
+  account: PaymentMethod | null;
+}
+
+export interface FinanceCaptureReport {
+  rows: FinanceCaptureRow[];
+  concepts: FinanceMovementConcept[];
+  tags: FinanceMovementTag[];
+  accounts: PaymentMethod[];
+  totals: {
+    amount: number;
+    count: number;
+    currentBalance: number;
+    currentMonthAmount: number;
+  };
+}
+
 export type SalaryWeekday =
   | "monday"
   | "tuesday"

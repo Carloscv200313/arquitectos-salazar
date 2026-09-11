@@ -93,20 +93,16 @@ export function PaymentHistory({
                     {formatCurrency(p.amount)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {p.movement_type === "income" ? (
-                      <a
-                        href={`/recibo/proyecto/${p.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
-                        title="Imprimir recibo"
-                      >
-                        <Receipt className="size-3.5" />
-                        {p.receipt_code ?? "Recibo"}
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <a
+                      href={`/recibo/proyecto/${p.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+                      title={p.movement_type === "income" ? "Imprimir recibo" : "Imprimir comprobante"}
+                    >
+                      <Receipt className="size-3.5" />
+                      {p.receipt_code ?? (p.movement_type === "income" ? "Recibo" : "Comprobante")}
+                    </a>
                   </TableCell>
                   <TableCell className="text-right">
                     <ProjectMovementActions payment={p} projectId={projectId} methods={methods} />

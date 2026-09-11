@@ -11,7 +11,7 @@ import {
   weightsFromAmounts,
   type Addon,
 } from "@/lib/calculations";
-import { MARKUP, resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
+import { MARKUP, PROJECT_SLICE_LABELS, resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
 import {
   RECEIPT_PREFIX,
   formatReceiptCode,
@@ -645,32 +645,49 @@ export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData 
   const { data } = await sb()
     .from("project_payments")
     .select(
-      "amount, concept, payment_date, receipt_code, movement_type, signature, project:projects(name, client:clients(name))",
+      "amount, concept, payment_date, receipt_code, movement_type, internal_area, signature, project:projects(name, proposal_responsible, modeling_3d_responsible, plans_responsible, render_responsible, client:clients(name))",
     )
     .eq("id", id)
     .maybeSingle();
-  if (!data || data.movement_type !== "income") return null;
-  const project = data.project as { name?: string; client?: { name?: string } } | null;
+  if (!data) return null;
+  const project = data.project as {
+    name?: string;
+    proposal_responsible?: string;
+    modeling_3d_responsible?: string;
+    plans_responsible?: string;
+    render_responsible?: string;
+    client?: { name?: string };
+  } | null;
+  const isIncome = data.movement_type === "income";
+  const internalArea = (data.internal_area as InternalArea | null) ?? null;
+  const responsibleByArea: Partial<Record<InternalArea, string | undefined>> = {
+    proposal: project?.proposal_responsible,
+    modeling_3d: project?.modeling_3d_responsible,
+    plans: project?.plans_responsible,
+    render: project?.render_responsible,
+  };
+  const expenseRecipient = internalArea
+    ? responsibleByArea[internalArea] || PROJECT_SLICE_LABELS[internalArea]
+    : "Responsable";
   return {
-    docType: "abono",
+    docType: isIncome ? "abono" : "egreso",
     kind: "proyecto",
     code: (data.receipt_code as string) ?? null,
     amount: Number(data.amount),
     concept: data.concept as string,
     date: data.payment_date as string,
-    clientName: project?.client?.name ?? "",
+    clientName: isIncome ? (project?.client?.name ?? "") : expenseRecipient,
     subjectName: project?.name ?? "",
     signature: (data.signature as string) ?? null,
   };
 }
 
-/** Guarda la firma dibujada del recibo de abono de proyecto. */
+/** Guarda la firma dibujada del movimiento de proyecto. */
 export async function setProjectPaymentSignature(id: string, signature: string): Promise<void> {
   const { error } = await sb()
     .from("project_payments")
     .update({ signature, signed_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("movement_type", "income");
+    .eq("id", id);
   if (error) throw new Error(error.message);
 }
 

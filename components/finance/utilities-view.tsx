@@ -124,7 +124,7 @@ export function UtilitiesView({ report }: { report: FinanceUtilityReport }) {
             {report.rows.map((row) => (
               <TableRow key={row.month}>
                 <TableCell className="px-5 font-medium capitalize">
-                  <span className="inline-flex items-center gap-2">
+                  <span data-no-table-truncate className="inline-flex items-center gap-2">
                     <span className="size-2 rounded-full bg-brand" />
                     {monthLabel(row.month)}
                   </span>
