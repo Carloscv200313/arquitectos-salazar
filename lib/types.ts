@@ -398,9 +398,6 @@ export interface FinanceMovementTag {
 export interface FinanceMovementConcept {
   id: string;
   name: string;
-  place: string | null;
-  type: string | null;
-  method: string | null;
   tag_id: string | null;
   created_at: string;
   created_by: string | null;

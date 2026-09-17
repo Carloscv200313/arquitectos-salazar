@@ -275,9 +275,6 @@ export async function saveFinanceMovementConceptAction(
     const conceptId = await saveFinanceMovementConcept({
       id: d.id || undefined,
       name: d.name,
-      place: d.place,
-      type: d.type,
-      method: d.method,
       tagId: d.tagId || null,
       userId: currentUserId(),
     });

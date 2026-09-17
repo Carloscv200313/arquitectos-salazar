@@ -569,9 +569,6 @@ export type FinanceMovementTagInput = z.infer<typeof financeMovementTagSchema>;
 export const financeMovementConceptSchema = z.object({
   id: z.string().uuid("Concepto inválido").optional().or(z.literal("")),
   name,
-  place: z.string().trim().max(120, "Máximo 120 caracteres").optional().or(z.literal("")),
-  type: z.string().trim().max(80, "Máximo 80 caracteres").optional().or(z.literal("")),
-  method: z.string().trim().max(120, "Máximo 120 caracteres").optional().or(z.literal("")),
   tagId: z.string().uuid("Selecciona etiqueta").nullable().optional().or(z.literal("")),
 });
 

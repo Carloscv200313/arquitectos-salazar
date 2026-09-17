@@ -62,7 +62,6 @@ import { cn } from "@/lib/utils";
 const NO_TAG = "__no_tag__";
 const ALL_CONCEPTS = "__all_concepts__";
 const ALL_TAGS = "__all_tags__";
-const ALL_TYPES = "__all_types__";
 
 const PAYMENT_FORM_LABELS: Record<FinanceCapturePaymentForm, string> = {
   transfer: "Transferencia",
@@ -310,9 +309,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
   const [tagFormOpen, setTagFormOpen] = useState(false);
   const [tagName, setTagName] = useState("");
   const [conceptName, setConceptName] = useState("");
-  const [conceptPlace, setConceptPlace] = useState("");
-  const [conceptType, setConceptType] = useState("");
-  const [conceptMethod, setConceptMethod] = useState("");
   const [tagId, setTagId] = useState<string>(NO_TAG);
   const [editingTag, setEditingTag] = useState<FinanceMovementTag | null>(null);
   const [editingConcept, setEditingConcept] = useState<FinanceMovementConcept | null>(null);
@@ -328,9 +324,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
 
   function resetConceptForm() {
     setConceptName("");
-    setConceptPlace("");
-    setConceptType("");
-    setConceptMethod("");
     setTagId(NO_TAG);
     setEditingConcept(null);
     setErrors({});
@@ -367,9 +360,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
       const result = await saveFinanceMovementConceptAction({
         id: editingConcept?.id ?? "",
         name: conceptName,
-        place: conceptPlace,
-        type: conceptType,
-        method: conceptMethod,
         tagId: tagId === NO_TAG ? null : tagId,
       });
       if (result.ok) {
@@ -448,9 +438,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
                 <TableRow>
                   <TableHead className="w-16 px-5 text-xs uppercase text-muted-foreground">ID</TableHead>
                   <TableHead className="min-w-72 text-xs uppercase text-muted-foreground">Nombre</TableHead>
-                  <TableHead className="min-w-40 text-xs uppercase text-muted-foreground">Lugar</TableHead>
-                  <TableHead className="min-w-32 text-xs uppercase text-muted-foreground">Tipo</TableHead>
-                  <TableHead className="min-w-40 text-xs uppercase text-muted-foreground">Método</TableHead>
                   <TableHead className="min-w-56 text-xs uppercase text-muted-foreground">Etiqueta</TableHead>
                   <TableHead className="w-28 px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
                 </TableRow>
@@ -460,9 +447,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
                   <TableRow key={concept.id}>
                     <TableCell className="px-5 text-muted-foreground">{index + 1}</TableCell>
                     <TableCell className="font-medium">{concept.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{concept.place ?? "-"}</TableCell>
-                    <TableCell className="text-muted-foreground">{concept.type ?? "-"}</TableCell>
-                    <TableCell className="text-muted-foreground">{concept.method ?? "-"}</TableCell>
                     <TableCell className="text-muted-foreground">{concept.tag?.name ?? "-"}</TableCell>
                     <TableCell className="px-5">
                       <div className="flex justify-end gap-2">
@@ -472,9 +456,6 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
                           className="size-8"
                           onClick={() => {
                             setConceptName(concept.name);
-                            setConceptPlace(concept.place ?? "");
-                            setConceptType(concept.type ?? "");
-                            setConceptMethod(concept.method ?? "");
                             setTagId(concept.tag_id ?? NO_TAG);
                             setEditingConcept(concept);
                             setConceptFormOpen(true);
@@ -493,7 +474,7 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
                 ))}
                 {report.concepts.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                       Sin conceptos registrados.
                     </TableCell>
                   </TableRow>
@@ -587,7 +568,7 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader>
           <SheetTitle>{editingConcept ? "Editar Concepto" : "Nuevo Concepto"}</SheetTitle>
-          <SheetDescription>Configura los datos del concepto para el catálogo.</SheetDescription>
+          <SheetDescription>Registra el concepto y asígnalo a una etiqueta.</SheetDescription>
         </SheetHeader>
         <div className="grid gap-4 px-4 pb-4">
           <div className="grid gap-2">
@@ -601,59 +582,22 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
             />
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="concept-place">Lugar</Label>
-              <Input
-                id="concept-place"
-                value={conceptPlace}
-                onChange={(event) => setConceptPlace(event.target.value)}
-                placeholder="Lugar"
-                aria-invalid={!!errors.place}
-              />
-              {errors.place && <p className="text-xs text-destructive">{errors.place}</p>}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="concept-type">Tipo</Label>
-              <Input
-                id="concept-type"
-                value={conceptType}
-                onChange={(event) => setConceptType(event.target.value)}
-                placeholder="Tipo"
-                aria-invalid={!!errors.type}
-              />
-              {errors.type && <p className="text-xs text-destructive">{errors.type}</p>}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="concept-method">Método</Label>
-              <Input
-                id="concept-method"
-                value={conceptMethod}
-                onChange={(event) => setConceptMethod(event.target.value)}
-                placeholder="Método"
-                aria-invalid={!!errors.method}
-              />
-              {errors.method && <p className="text-xs text-destructive">{errors.method}</p>}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="concept-tag">Etiqueta</Label>
-              <Select value={tagId} onValueChange={(value) => setTagId(value ?? NO_TAG)} items={tagItems}>
-                <SelectTrigger id="concept-tag" className="w-full">
-                  <SelectValue placeholder="Etiqueta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_TAG}>Sin etiqueta</SelectItem>
-                  {report.tags.map((tagItem) => (
-                    <SelectItem key={tagItem.id} value={tagItem.id}>
-                      {tagItem.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.tagId && <p className="text-xs text-destructive">{errors.tagId}</p>}
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="concept-tag">Etiqueta</Label>
+            <Select value={tagId} onValueChange={(value) => setTagId(value ?? NO_TAG)} items={tagItems}>
+              <SelectTrigger id="concept-tag" className="w-full">
+                <SelectValue placeholder="Etiqueta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TAG}>Sin etiqueta</SelectItem>
+                {report.tags.map((tagItem) => (
+                  <SelectItem key={tagItem.id} value={tagItem.id}>
+                    {tagItem.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.tagId && <p className="text-xs text-destructive">{errors.tagId}</p>}
           </div>
           <Button onClick={saveConcept} disabled={isPending}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
@@ -704,13 +648,11 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
   const currentMonthEnd = monthEndISO(todayISODate());
   const [draftFrom, setDraftFrom] = useState(currentMonthStart);
   const [draftTo, setDraftTo] = useState(currentMonthEnd);
-  const [draftType, setDraftType] = useState(ALL_TYPES);
   const [draftTag, setDraftTag] = useState(ALL_TAGS);
   const [draftConcept, setDraftConcept] = useState(ALL_CONCEPTS);
   const [filters, setFilters] = useState({
     from: currentMonthStart,
     to: currentMonthEnd,
-    type: ALL_TYPES,
     tag: ALL_TAGS,
     concept: ALL_CONCEPTS,
   });
@@ -729,22 +671,12 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
     ],
     [report.tags],
   );
-  const typeItems = useMemo(() => {
-    const types = Array.from(
-      new Set(report.concepts.map((concept) => concept.type?.trim()).filter(Boolean)),
-    ) as string[];
-    return [
-      { value: ALL_TYPES, label: "Todos" },
-      ...types.sort((a, b) => a.localeCompare(b)).map((type) => ({ value: type, label: type })),
-    ];
-  }, [report.concepts]);
 
   const filteredRows = useMemo(
     () =>
       report.rows.filter((row) => {
         if (filters.from && row.capture_date < filters.from) return false;
         if (filters.to && row.capture_date > filters.to) return false;
-        if (filters.type !== ALL_TYPES && row.concept?.type !== filters.type) return false;
         if (filters.tag !== ALL_TAGS && row.concept?.tag_id !== filters.tag) return false;
         if (filters.concept !== ALL_CONCEPTS && row.concept_id !== filters.concept) return false;
         return true;
@@ -803,7 +735,7 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
               </Button>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[110px_110px_1fr_1fr_1fr_auto]">
+          <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[110px_110px_1fr_1fr_auto]">
             <div className="grid gap-1.5">
               <Label htmlFor="movement-from" className="text-xs">Desde:</Label>
               <Input
@@ -821,22 +753,6 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                 value={draftTo}
                 onChange={(event) => setDraftTo(event.target.value)}
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="movement-type" className="text-xs">Tipo:</Label>
-              <Select value={draftType} onValueChange={(value) => setDraftType(value ?? ALL_TYPES)} items={typeItems}>
-                <SelectTrigger id="movement-type" className="w-full">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_TYPES}>Todos</SelectItem>
-                  {typeItems.slice(1).map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="movement-tag" className="text-xs">Etiquetas:</Label>
@@ -876,7 +792,6 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                   setFilters({
                     from: draftFrom,
                     to: draftTo,
-                    type: draftType,
                     tag: draftTag,
                     concept: draftConcept,
                   })

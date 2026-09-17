@@ -13,9 +13,6 @@ create unique index if not exists finance_movement_tags_name_uidx
 create table if not exists public.finance_movement_concepts (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
-  place      text,
-  type       text,
-  method     text,
   tag_id     uuid references public.finance_movement_tags(id) on delete set null,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
@@ -23,9 +20,9 @@ create table if not exists public.finance_movement_concepts (
 );
 
 alter table public.finance_movement_concepts
-  add column if not exists place text,
-  add column if not exists type text,
-  add column if not exists method text;
+  drop column if exists place,
+  drop column if exists type,
+  drop column if exists method;
 
 create unique index if not exists finance_movement_concepts_name_uidx
   on public.finance_movement_concepts (lower(name))

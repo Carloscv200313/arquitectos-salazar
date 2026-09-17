@@ -688,9 +688,6 @@ function mapFinanceMovementConcept(r: Row): FinanceMovementConcept {
   return {
     id: r.id as string,
     name: r.name as string,
-    place: (r.place as string) ?? null,
-    type: (r.type as string) ?? null,
-    method: (r.method as string) ?? null,
     tag_id: (r.tag_id as string) ?? null,
     created_at: (r.created_at as string) ?? "",
     created_by: (r.created_by as string) ?? null,
@@ -740,14 +737,14 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
     client
       .from("finance_movement_captures")
       .select(
-        "*, concept:finance_movement_concepts(id,name,place,type,method,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)), account:payment_accounts(id,name,created_at)",
+        "*, concept:finance_movement_concepts(id,name,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)), account:payment_accounts(id,name,created_at)",
       )
       .eq("status", 1)
       .order("capture_date", { ascending: true })
       .order("created_at", { ascending: true }),
     client
       .from("finance_movement_concepts")
-      .select("id,name,place,type,method,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)")
+      .select("id,name,tag_id,created_at,created_by, tag:finance_movement_tags(id,name,created_at,created_by)")
       .eq("status", 1)
       .order("name", { ascending: true }),
     client
@@ -831,18 +828,12 @@ export async function deleteFinanceMovementTag(id: string): Promise<void> {
 export async function saveFinanceMovementConcept(data: {
   id?: string;
   name: string;
-  place?: string;
-  type?: string;
-  method?: string;
   tagId: string | null;
   userId: string | null;
 }): Promise<string> {
   const client = sb();
   const payload = {
     name: data.name.trim(),
-    place: data.place?.trim() || null,
-    type: data.type?.trim() || null,
-    method: data.method?.trim() || null,
     tag_id: data.tagId || null,
   };
   if (data.id) {
