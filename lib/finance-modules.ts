@@ -26,7 +26,7 @@ export const FINANCE_MODULES: FinanceModule[] = [
   {
     slug: "estados-financieros",
     title: "Estados Financieros",
-    description: "Submódulo financiero en proceso de construcción.",
+    description: "Flujo de caja y estado de resultados mensual.",
     icon: FileText,
   },
   {

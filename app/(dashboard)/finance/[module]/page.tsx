@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { DebtsView } from "@/components/finance/debts-view";
+import { FinancialStatementsView } from "@/components/finance/financial-statements-view";
 import { GeneralBalanceView } from "@/components/finance/general-balance-view";
 import { InternalTransfersView } from "@/components/finance/internal-transfers-view";
 import { MovementsView } from "@/components/finance/movements-view";
@@ -48,9 +49,12 @@ export default async function FinanceModulePage({
   const item = FINANCE_MODULES.find((entry) => entry.slug === module);
   if (!item) notFound();
   const Icon = item.icon;
-  const [balance, movements, debts, utilities, internalTransferData, salaryData] = await Promise.all([
+  const [balance, movements, statements, debts, utilities, internalTransferData, salaryData] = await Promise.all([
     item.slug === "balance-general" ? getGeneralBalanceReport() : Promise.resolve(null),
     item.slug === "movimientos" ? getFinanceCaptureReport() : Promise.resolve(null),
+    item.slug === "estados-financieros"
+      ? Promise.all([getFinanceCaptureReport(), getFinanceUtilityReport()])
+      : Promise.resolve(null),
     item.slug === "deudas"
       ? Promise.all([getDebtReport(), getProviderDebtDetails(), listPaymentMethods()])
       : Promise.resolve(null),
@@ -93,13 +97,8 @@ export default async function FinanceModulePage({
         <GeneralBalanceView report={balance} />
       ) : movements ? (
         <MovementsView report={movements} />
-      ) : item.slug === "estados-financieros" ? (
-        <Card className="border-dashed p-8 text-center">
-          <p className="font-medium">Submódulo en construcción</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Estados Financieros se habilitará en una siguiente etapa.
-          </p>
-        </Card>
+      ) : statements ? (
+        <FinancialStatementsView movements={statements[0]} utilities={statements[1]} />
       ) : debts ? (
         <DebtsView rows={debts[0]} providerDetails={debts[1]} />
       ) : utilities ? (
