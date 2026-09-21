@@ -88,9 +88,13 @@ export interface InternalTransfer {
   transfer_date: string;
   from_payment_method_id: string;
   to_payment_method_id: string;
+  from_account_bucket?: InternalTransferBucket;
+  to_account_bucket?: InternalTransferBucket;
   created_at: string;
   created_by: string | null;
 }
+
+export type InternalTransferBucket = "normal" | "office";
 
 // Derived financial snapshot of a project (computed, never stored).
 export interface ProjectFinance {
@@ -132,6 +136,8 @@ export interface PaymentMethodReportRow {
   methodName: string;
   clientMovements: number;
   internalMovements: number;
+  normalBalance: number;
+  officeBalance: number;
   finalBalance: number;
 }
 

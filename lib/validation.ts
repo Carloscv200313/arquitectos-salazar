@@ -199,6 +199,8 @@ export const registerMovementSchema = z
 export type RegisterMovementInput = z.infer<typeof registerMovementSchema>;
 
 // ── Register internal transfer between payment methods ───────────
+const internalTransferBucket = z.enum(["normal", "office"]);
+
 export const registerInternalTransferSchema = z
   .object({
     description: concept,
@@ -206,9 +208,14 @@ export const registerInternalTransferSchema = z
     transferDate: isoDate,
     fromPaymentMethodId: z.string().uuid("Selecciona la cuenta de origen"),
     toPaymentMethodId: z.string().uuid("Selecciona la cuenta de destino"),
+    fromAccountBucket: internalTransferBucket.default("normal"),
+    toAccountBucket: internalTransferBucket.default("normal"),
   })
   .superRefine((data, ctx) => {
-    if (data.fromPaymentMethodId === data.toPaymentMethodId) {
+    if (
+      data.fromPaymentMethodId === data.toPaymentMethodId &&
+      data.fromAccountBucket === data.toAccountBucket
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["toPaymentMethodId"],

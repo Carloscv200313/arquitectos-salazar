@@ -48,8 +48,10 @@ interface StatementRow {
   values: MonthlyValues;
   description?: string;
   section?: boolean;
+  mutedBlock?: boolean;
   strong?: boolean;
   dark?: boolean;
+  hideValues?: boolean;
 }
 
 function zeroValues(): MonthlyValues {
@@ -104,6 +106,14 @@ function utilityValues(report: FinanceUtilityReport, field: "projectUtility" | "
   return values;
 }
 
+function monthlyAmountValues(rows: Array<{ month: string; amount: number }>) {
+  const values = zeroValues();
+  for (const row of rows) {
+    addValue(values, monthKeyFromPeriod(row.month), row.amount);
+  }
+  return values;
+}
+
 function money(value: number) {
   return formatCurrency(value);
 }
@@ -152,6 +162,7 @@ function StatementTable({
                   className={cn(
                     "h-10",
                     row.section && "bg-muted/40 hover:bg-muted/40",
+                    row.mutedBlock && "bg-muted hover:bg-muted",
                     row.dark && "bg-brand-muted/60 hover:bg-brand-muted/60",
                   )}
                 >
@@ -159,6 +170,7 @@ function StatementTable({
                     className={cn(
                       "h-10 px-5 py-0 pr-8",
                       row.section && "font-semibold",
+                      row.mutedBlock && "font-semibold text-foreground",
                       row.strong && "font-semibold",
                       row.dark && "font-semibold text-brand-foreground",
                     )}
@@ -200,6 +212,7 @@ function StatementTable({
                     className={cn(
                       "h-10",
                       row.section && "bg-muted/40 hover:bg-muted/40",
+                      row.mutedBlock && "bg-muted hover:bg-muted",
                       row.dark && "bg-brand-muted/60 hover:bg-brand-muted/60",
                     )}
                   >
@@ -208,21 +221,23 @@ function StatementTable({
                         key={month.key}
                         className={cn(
                           "h-10 px-3 py-0 text-right tabular-nums",
+                          row.mutedBlock && "font-semibold text-foreground",
                           row.strong && "font-semibold",
                           row.dark && "font-semibold text-brand-foreground",
                         )}
                       >
-                        {money(row.values[month.key] ?? 0)}
+                        {row.hideValues ? null : money(row.values[month.key] ?? 0)}
                       </TableCell>
                     ))}
                     {showPercent && (
                       <TableCell
                         className={cn(
                           "h-10 px-3 py-0 text-right font-semibold tabular-nums",
+                          row.mutedBlock && "text-foreground",
                           row.dark && "text-brand-foreground",
                         )}
                       >
-                        {percent(total, incomeTotal)}
+                        {row.hideValues ? null : percent(total, incomeTotal)}
                       </TableCell>
                     )}
                     <TableCell className="h-10 px-5 py-0 text-xs text-muted-foreground">
@@ -234,7 +249,7 @@ function StatementTable({
                         >
                           {row.description}
                         </span>
-                      ) : (
+                      ) : row.hideValues ? null : (
                         <span className="text-muted-foreground/40">-</span>
                       )}
                     </TableCell>
@@ -252,16 +267,20 @@ function StatementTable({
 export function FinancialStatementsView({
   movements,
   utilities,
+  workExpenses,
+  architectCommissions,
 }: {
   movements: FinanceCaptureReport;
   utilities: FinanceUtilityReport;
+  workExpenses: Array<{ month: string; amount: number }>;
+  architectCommissions: Array<{ month: string; amount: number }>;
 }) {
   const projectIncome = utilityValues(utilities, "projectUtility");
   const workIncome = utilityValues(utilities, "workUtility");
   const totalIncome = sumValues(projectIncome, workIncome);
-  const workExpenses = zeroValues();
-  const architectCommissions = zeroValues();
-  const directCosts = sumValues(workExpenses, architectCommissions);
+  const workExpenseValues = monthlyAmountValues(workExpenses);
+  const architectCommissionValues = monthlyAmountValues(architectCommissions);
+  const directCosts = sumValues(workExpenseValues, architectCommissionValues);
   const adminRows = valuesByTag(movements, ADMIN_ROWS);
   const financeRows = valuesByTag(movements, FINANCING_ROWS);
   const adminTotal = sumValues(...adminRows.map((row) => row.values));
@@ -280,41 +299,47 @@ export function FinancialStatementsView({
       label: "Ingresos por proyectos",
       values: projectIncome,
       description:
-        "Estos ingresos vienen del 50% de utilidad que se registra en cada proyecto. Si se llena automáticamente, la utilidad suma aquí.",
+        "Estos ingresos vienen del 50% de utilidad que se registra en cada proyecto. Esta información se llena de forma automática: si dan un abono a un proyecto en Utilidad, entonces esa utilidad suma aquí.",
     },
     {
       label: "Ingresos de obras",
       values: workIncome,
       description:
-        "Estos ingresos vendrán de la categoría Cuenta de Oficina y de los gastos registrados del mes en obras.",
+        "Estos ingresos van a venir de la categoría que se va a dar de alta llamada Cuenta de Oficina, más todos los gastos registrados ese mes en las obras. En ese momento aparece aquí el ingreso por obra en el estado de resultados. Se registra un movimiento en la categoría Cuenta de Oficina donde se registran los movimientos de obras como una salida de utilidad. Este movimiento queda registrado en la obra y en la tabla Resumen por categoría.",
     },
     { label: "Gastos", values: sumValues(directCosts, adminTotal, financeTotal), section: true },
-    { label: "Costos directos del servicio", values: directCosts, section: true },
+    {
+      label: "Costos directos del servicio",
+      values: directCosts,
+      section: true,
+      mutedBlock: true,
+      hideValues: true,
+    },
     {
       label: "Gastos en Obras",
-      values: workExpenses,
+      values: workExpenseValues,
       description:
-        "Aquí van los gastos acumulados de obras, menos la salida de la categoría Cuenta de oficina.",
+        "Aquí se van a poner todos los gastos que se van sumando de todas las categorías que existen en las obras, menos la salida de la categoría Cuenta de Oficina.",
     },
     {
       label: "Comisión a Arquitectos por Proyecto",
-      values: architectCommissions,
+      values: architectCommissionValues,
       description:
-        "Comisión o pago semanal a arquitectos tomado del área de Salario.",
+        "Comisión o pago. Aquí entran los pagos semanales que se les dan a los arquitectos del área de Salario.",
     },
-    { label: "Gastos administrativos", values: adminTotal, section: true },
+    { label: "Gastos administrativos", values: adminTotal, section: true, mutedBlock: true, hideValues: true },
     ...adminRows.map((row) => ({
       label: row.label,
       values: row.values,
       description:
-        "Esta fila se alimenta con los movimientos que estén amarrados a una etiqueta con este nombre.",
+        "Estos campos quedan pendientes de nombre o se ponen dinámicos para que aparezcan cuando se agreguen etiquetas.",
     })),
-    { label: "Gasto financiero mensual", values: financeTotal, section: true },
+    { label: "Gasto financiero mensual", values: financeTotal, section: true, mutedBlock: true, hideValues: true },
     ...financeRows.map((row) => ({
       label: row.label,
       values: row.values,
       description:
-        "Esta fila se alimenta con los movimientos que estén amarrados a una etiqueta con este nombre.",
+        "Estos campos quedan pendientes de nombre o se ponen dinámicos para que aparezcan cuando se agreguen etiquetas.",
     })),
   ];
 

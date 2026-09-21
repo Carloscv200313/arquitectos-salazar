@@ -269,6 +269,8 @@ export async function getPaymentMethodReport(): Promise<PaymentMethodReportRow[]
       methodName: m.name as string,
       clientMovements: 0,
       internalMovements: 0,
+      normalBalance: 0,
+      officeBalance: 0,
       finalBalance: 0,
     });
   }
@@ -286,6 +288,8 @@ export async function getPaymentMethodReport(): Promise<PaymentMethodReportRow[]
   }
   return [...rows.values()].map((row) => ({
     ...row,
+    normalBalance: round2(row.clientMovements + row.internalMovements),
+    officeBalance: 0,
     finalBalance: round2(row.clientMovements + row.internalMovements),
   }));
 }

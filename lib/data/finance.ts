@@ -674,6 +674,45 @@ export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
   return { rows, projectTotal, workTotal, total: round2(projectTotal + workTotal) };
 }
 
+export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
+  if (!isAdminConfigured()) return [];
+  const rows = await listWorkMovementRows({
+    select: "movement_date, category, amount",
+    movementType: "expense",
+  });
+  const byMonth = new Map<string, number>();
+  for (const row of rows) {
+    const category = String(row.category ?? "").trim().toLowerCase();
+    if (category === "cuenta de oficina") continue;
+    const date = String(row.movement_date ?? "");
+    const month = date.slice(0, 7);
+    if (!month) continue;
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount: round2(amount) }));
+}
+
+export async function getProjectArchitectCommissionMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
+  if (!isAdminConfigured()) return [];
+  const { data, error } = await sb()
+    .from("salary_payments")
+    .select("payment_date, amount")
+    .eq("status", 1)
+    .eq("payment_type", "project");
+  if (error) throw new Error(error.message);
+  const byMonth = new Map<string, number>();
+  for (const row of data ?? []) {
+    const month = String(row.payment_date ?? "").slice(0, 7);
+    if (!month) continue;
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount: round2(amount) }));
+}
+
 function mapFinanceMovementTag(r: Row): FinanceMovementTag {
   return {
     id: r.id as string,

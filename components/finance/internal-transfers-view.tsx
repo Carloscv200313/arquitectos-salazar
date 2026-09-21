@@ -34,11 +34,21 @@ import {
 import { round2 } from "@/lib/calculations";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
 import type {
+  InternalTransferBucket,
   PaymentMethod,
   PaymentMethodReportRow,
   WorkInternalTransferWithMethods,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const ACCOUNT_BUCKET_OPTIONS: Array<{ value: InternalTransferBucket; label: string }> = [
+  { value: "normal", label: "Normal" },
+  { value: "office", label: "Cuenta de oficina" },
+];
+
+function bucketLabel(bucket: InternalTransferBucket | undefined) {
+  return ACCOUNT_BUCKET_OPTIONS.find((option) => option.value === bucket)?.label ?? "Normal";
+}
 
 function signedCurrency(value: number) {
   if (Math.abs(value) < 0.001) return formatCurrency(0);
@@ -60,6 +70,8 @@ function TransferDrawer({
   const [transferDate, setTransferDate] = useState(todayISODate());
   const [fromMethodId, setFromMethodId] = useState("");
   const [toMethodId, setToMethodId] = useState("");
+  const [fromAccountBucket, setFromAccountBucket] = useState<InternalTransferBucket>("normal");
+  const [toAccountBucket, setToAccountBucket] = useState<InternalTransferBucket>("normal");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const methodItems = useMemo(
@@ -73,6 +85,8 @@ function TransferDrawer({
     setTransferDate(todayISODate());
     setFromMethodId("");
     setToMethodId("");
+    setFromAccountBucket("normal");
+    setToAccountBucket("normal");
     setErrors({});
   }
 
@@ -85,6 +99,8 @@ function TransferDrawer({
         transferDate,
         fromPaymentMethodId: fromMethodId,
         toPaymentMethodId: toMethodId,
+        fromAccountBucket,
+        toAccountBucket,
       });
 
       if (result.ok) {
@@ -131,58 +147,106 @@ function TransferDrawer({
             )}
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="finance-from-method">Desde</Label>
-            <Select
-              value={fromMethodId}
-              onValueChange={(value) => setFromMethodId(value ?? "")}
-              items={methodItems}
-            >
-              <SelectTrigger
-                id="finance-from-method"
-                className="w-full"
-                aria-invalid={!!errors.fromPaymentMethodId}
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+            <div className="grid gap-2">
+              <Label htmlFor="finance-from-method">Desde</Label>
+              <Select
+                value={fromMethodId}
+                onValueChange={(value) => setFromMethodId(value ?? "")}
+                items={methodItems}
               >
-                <SelectValue placeholder="Cuenta origen" />
-              </SelectTrigger>
-              <SelectContent>
-                {methods.map((method) => (
-                  <SelectItem key={method.id} value={method.id}>
-                    {method.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.fromPaymentMethodId && (
-              <p className="text-xs text-destructive">{errors.fromPaymentMethodId}</p>
-            )}
+                <SelectTrigger
+                  id="finance-from-method"
+                  className="w-full"
+                  aria-invalid={!!errors.fromPaymentMethodId}
+                >
+                  <SelectValue placeholder="Cuenta origen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {methods.map((method) => (
+                    <SelectItem key={method.id} value={method.id}>
+                      {method.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.fromPaymentMethodId && (
+                <p className="text-xs text-destructive">{errors.fromPaymentMethodId}</p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="finance-from-bucket">Apartado origen</Label>
+              <Select
+                value={fromAccountBucket}
+                onValueChange={(value) => setFromAccountBucket((value as InternalTransferBucket) ?? "normal")}
+                items={ACCOUNT_BUCKET_OPTIONS}
+              >
+                <SelectTrigger id="finance-from-bucket" className="w-full" aria-invalid={!!errors.fromAccountBucket}>
+                  <SelectValue placeholder="Apartado origen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_BUCKET_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.fromAccountBucket && (
+                <p className="text-xs text-destructive">{errors.fromAccountBucket}</p>
+              )}
+            </div>
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="finance-to-method">Hacia</Label>
-            <Select
-              value={toMethodId}
-              onValueChange={(value) => setToMethodId(value ?? "")}
-              items={methodItems}
-            >
-              <SelectTrigger
-                id="finance-to-method"
-                className="w-full"
-                aria-invalid={!!errors.toPaymentMethodId}
+          <div className="grid gap-3 rounded-lg border bg-muted/20 p-3">
+            <div className="grid gap-2">
+              <Label htmlFor="finance-to-method">Hacia</Label>
+              <Select
+                value={toMethodId}
+                onValueChange={(value) => setToMethodId(value ?? "")}
+                items={methodItems}
               >
-                <SelectValue placeholder="Cuenta destino" />
-              </SelectTrigger>
-              <SelectContent>
-                {methods.map((method) => (
-                  <SelectItem key={method.id} value={method.id}>
-                    {method.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.toPaymentMethodId && (
-              <p className="text-xs text-destructive">{errors.toPaymentMethodId}</p>
-            )}
+                <SelectTrigger
+                  id="finance-to-method"
+                  className="w-full"
+                  aria-invalid={!!errors.toPaymentMethodId}
+                >
+                  <SelectValue placeholder="Cuenta destino" />
+                </SelectTrigger>
+                <SelectContent>
+                  {methods.map((method) => (
+                    <SelectItem key={method.id} value={method.id}>
+                      {method.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.toPaymentMethodId && (
+                <p className="text-xs text-destructive">{errors.toPaymentMethodId}</p>
+              )}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="finance-to-bucket">Apartado destino</Label>
+              <Select
+                value={toAccountBucket}
+                onValueChange={(value) => setToAccountBucket((value as InternalTransferBucket) ?? "normal")}
+                items={ACCOUNT_BUCKET_OPTIONS}
+              >
+                <SelectTrigger id="finance-to-bucket" className="w-full" aria-invalid={!!errors.toAccountBucket}>
+                  <SelectValue placeholder="Apartado destino" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_BUCKET_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.toAccountBucket && (
+                <p className="text-xs text-destructive">{errors.toAccountBucket}</p>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -295,7 +359,7 @@ export function InternalTransfersView({
     paymentMethodRows.reduce((sum, row) => sum + row.internalMovements, 0),
   );
   const touchedAccounts = paymentMethodRows.filter(
-    (row) => Math.abs(row.internalMovements) > 0.001,
+    (row) => Math.abs(row.internalMovements) > 0.001 || Math.abs(row.officeBalance) > 0.001,
   ).length;
 
   return (
@@ -322,6 +386,61 @@ export function InternalTransfersView({
             icon={<WalletCards className="size-5" />}
           />
         </div>
+
+        <Card className="gap-0 overflow-hidden p-0">
+          <div className="border-b px-5 py-4">
+            <h2 className="font-semibold">Saldos por cuenta</h2>
+            <p className="text-sm text-muted-foreground">
+              Separación entre saldo normal y Cuenta de oficina.
+            </p>
+          </div>
+          <Table>
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead className="px-5 text-xs uppercase text-muted-foreground">
+                  Cuenta
+                </TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">
+                  Normal
+                </TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">
+                  Cuenta de oficina
+                </TableHead>
+                <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">
+                  Total
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paymentMethodRows.map((row) => (
+                <TableRow key={row.methodId}>
+                  <TableCell className="px-5 font-medium">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-brand" />
+                      {row.methodName}
+                    </span>
+                  </TableCell>
+                  <TableCell className={cn("text-right tabular-nums", row.normalBalance < -0.001 && "text-destructive")}>
+                    {signedCurrency(row.normalBalance)}
+                  </TableCell>
+                  <TableCell className={cn("text-right tabular-nums", row.officeBalance < -0.001 && "text-destructive")}>
+                    {signedCurrency(row.officeBalance)}
+                  </TableCell>
+                  <TableCell className={cn("px-5 text-right font-semibold tabular-nums", row.finalBalance < -0.001 && "text-destructive")}>
+                    {signedCurrency(row.finalBalance)}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {paymentMethodRows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                    Sin cuentas activas.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
 
         <Card className="gap-0 overflow-hidden p-0">
           <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -367,10 +486,10 @@ export function InternalTransfersView({
                     {transfer.description}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {transfer.fromMethod?.name ?? "Sin cuenta"}
+                    {transfer.fromMethod?.name ?? "Sin cuenta"} · {bucketLabel(transfer.from_account_bucket)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {transfer.toMethod?.name ?? "Sin cuenta"}
+                    {transfer.toMethod?.name ?? "Sin cuenta"} · {bucketLabel(transfer.to_account_bucket)}
                   </TableCell>
                   <TableCell className="px-5 text-right font-semibold tabular-nums">
                     {formatCurrency(transfer.amount)}

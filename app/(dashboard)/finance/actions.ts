@@ -198,6 +198,8 @@ export async function registerFinanceInternalTransferAction(
       transferDate: d.transferDate,
       fromPaymentMethodId: d.fromPaymentMethodId,
       toPaymentMethodId: d.toPaymentMethodId,
+      fromAccountBucket: d.fromAccountBucket,
+      toAccountBucket: d.toAccountBucket,
       userId: currentUserId(),
     });
     revalidatePath("/finance/movimientos-internos");

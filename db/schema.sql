@@ -216,10 +216,12 @@ create table if not exists public.work_internal_transfers (
   transfer_date           date not null,
   from_payment_method_id  uuid not null references public.payment_methods (id) on delete restrict,
   to_payment_method_id    uuid not null references public.payment_methods (id) on delete restrict,
+  from_account_bucket     text not null default 'normal' check (from_account_bucket in ('normal','office')),
+  to_account_bucket       text not null default 'normal' check (to_account_bucket in ('normal','office')),
   created_at              timestamptz not null default now(),
   created_by              uuid references auth.users (id) on delete set null,
-  constraint chk_work_internal_transfers_different_methods
-    check (from_payment_method_id <> to_payment_method_id)
+  constraint chk_work_internal_transfers_different_targets
+    check (from_payment_method_id <> to_payment_method_id or from_account_bucket <> to_account_bucket)
 );
 
 create index if not exists idx_work_internal_transfers_date

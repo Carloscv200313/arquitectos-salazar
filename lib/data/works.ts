@@ -10,6 +10,7 @@ import {
 } from "@/lib/receipt";
 import { round2 } from "@/lib/calculations";
 import type {
+  InternalTransferBucket,
   WorkAdministrationUtilityRow,
   WorkCategorySummary,
   PaymentMethodReportRow,
@@ -38,6 +39,10 @@ export interface WorkFilters {
 
 type Row = Record<string, unknown>;
 const SUPABASE_PAGE_SIZE = 1000;
+
+function transferBucket(value: unknown): InternalTransferBucket {
+  return value === "office" ? "office" : "normal";
+}
 
 function sb() {
   return createAdminClient();
@@ -456,7 +461,7 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
     listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
     client
       .from("work_internal_transfers")
-      .select("from_payment_method_id, to_payment_method_id, amount")
+      .select("from_payment_method_id, to_payment_method_id, from_account_bucket, to_account_bucket, amount")
       .eq("status", 1),
   ]);
 
@@ -467,6 +472,8 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
       methodName: m.name as string,
       clientMovements: 0,
       internalMovements: 0,
+      normalBalance: 0,
+      officeBalance: 0,
       finalBalance: 0,
     });
   }
@@ -479,11 +486,24 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
   for (const t of transfersRes.data ?? []) {
     const from = rows.get(t.from_payment_method_id as string);
     const to = rows.get(t.to_payment_method_id as string);
-    if (from) from.internalMovements = round2(from.internalMovements - Number(t.amount));
-    if (to) to.internalMovements = round2(to.internalMovements + Number(t.amount));
+    const amount = Number(t.amount);
+    const fromBucket = transferBucket(t.from_account_bucket);
+    const toBucket = transferBucket(t.to_account_bucket);
+    if (from) {
+      from.internalMovements = round2(from.internalMovements - amount);
+      if (fromBucket === "office") from.officeBalance = round2(from.officeBalance - amount);
+      else from.normalBalance = round2(from.normalBalance - amount);
+    }
+    if (to) {
+      to.internalMovements = round2(to.internalMovements + amount);
+      if (toBucket === "office") to.officeBalance = round2(to.officeBalance + amount);
+      else to.normalBalance = round2(to.normalBalance + amount);
+    }
   }
   return [...rows.values()].map((row) => ({
     ...row,
+    normalBalance: round2(row.clientMovements + row.normalBalance),
+    officeBalance: round2(row.officeBalance),
     finalBalance: round2(row.clientMovements + row.internalMovements),
   }));
 }
@@ -504,6 +524,8 @@ export async function listWorkInternalTransfers(): Promise<WorkInternalTransferW
     transfer_date: r.transfer_date as string,
     from_payment_method_id: (r.from_payment_method_id as string) ?? "",
     to_payment_method_id: (r.to_payment_method_id as string) ?? "",
+    from_account_bucket: transferBucket(r.from_account_bucket),
+    to_account_bucket: transferBucket(r.to_account_bucket),
     created_at: r.created_at as string,
     created_by: (r.created_by as string) ?? null,
     fromMethod: r.fromMethod ? mapMethod(r.fromMethod as Row) : null,
@@ -537,13 +559,17 @@ export interface RegisterWorkInternalTransferData {
   transferDate: string;
   fromPaymentMethodId: string;
   toPaymentMethodId: string;
+  fromAccountBucket?: InternalTransferBucket;
+  toAccountBucket?: InternalTransferBucket;
   userId: string | null;
 }
 
 export async function registerWorkInternalTransfer(
   data: RegisterWorkInternalTransferData,
 ): Promise<void> {
-  if (data.fromPaymentMethodId === data.toPaymentMethodId) {
+  const fromAccountBucket = data.fromAccountBucket ?? "normal";
+  const toAccountBucket = data.toAccountBucket ?? "normal";
+  if (data.fromPaymentMethodId === data.toPaymentMethodId && fromAccountBucket === toAccountBucket) {
     throw new Error("Las cuentas deben ser diferentes");
   }
   const { error } = await sb().from("work_internal_transfers").insert({
@@ -552,6 +578,8 @@ export async function registerWorkInternalTransfer(
     transfer_date: data.transferDate,
     from_payment_method_id: data.fromPaymentMethodId,
     to_payment_method_id: data.toPaymentMethodId,
+    from_account_bucket: fromAccountBucket,
+    to_account_bucket: toAccountBucket,
     created_by: await getCurrentUserId(),
   });
   if (error) throw new Error(error.message);

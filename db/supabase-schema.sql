@@ -382,9 +382,13 @@ create table if not exists public.work_internal_transfers (
   transfer_date          date not null,
   from_payment_method_id uuid references public.payment_accounts(id),
   to_payment_method_id   uuid references public.payment_accounts(id),
+  from_account_bucket    text not null default 'normal' check (from_account_bucket in ('normal','office')),
+  to_account_bucket      text not null default 'normal' check (to_account_bucket in ('normal','office')),
   status                 smallint not null default 1,
   created_at             timestamptz not null default now(),
-  created_by             uuid references auth.users(id)
+  created_by             uuid references auth.users(id),
+  constraint chk_work_internal_transfers_different_targets
+    check (from_payment_method_id <> to_payment_method_id or from_account_bucket <> to_account_bucket)
 );
 
 -- ----------------------------------------------------------------------------

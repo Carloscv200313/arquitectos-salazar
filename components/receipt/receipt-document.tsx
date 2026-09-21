@@ -33,6 +33,18 @@ function parseDate(iso: string) {
   };
 }
 
+async function loadImageDataUrl(src: string) {
+  const response = await fetch(src);
+  if (!response.ok) throw new Error("No se pudo cargar la imagen del documento");
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
 export function ReceiptDocument({
   data,
   autoPrint = true,
@@ -45,7 +57,6 @@ export function ReceiptDocument({
   signAction?: (raw: unknown) => Promise<SignResult>;
   signPayload?: Record<string, unknown>;
 }) {
-  const cardRef = useRef<HTMLDivElement>(null);
   const padRef = useRef<SignaturePadHandle>(null);
   const [downloading, setDownloading] = useState(false);
   const [signature, setSignature] = useState<string | null>(data.signature);
@@ -85,20 +96,135 @@ export function ReceiptDocument({
   }
 
   async function downloadPdf() {
-    if (!cardRef.current) return;
     setDownloading(true);
     try {
-      const [{ domToCanvas }, { default: jsPDF }] = await Promise.all([
-        import("modern-screenshot"),
+      const [{ default: jsPDF }, logoData] = await Promise.all([
         import("jspdf"),
+        loadImageDataUrl("/logo-negro-trimmed.png").catch(() => null),
       ]);
-      const canvas = await domToCanvas(cardRef.current, { scale: 2, backgroundColor: "#ffffff" });
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const margin = 12;
-      const availW = pageW - margin * 2;
-      const imgH = (canvas.height / canvas.width) * availW;
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, availW, imgH);
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const marginX = 16;
+      const topY = 18;
+      const black = "#171717";
+      const muted = "#525252";
+      const border = "#a3a3a3";
+
+      function text(value: string | number | null | undefined) {
+        const next = String(value ?? "").trim();
+        return next || "-";
+      }
+
+      function setText(color = black, font: "normal" | "bold" = "normal", size = 10) {
+        pdf.setTextColor(color);
+        pdf.setFont("helvetica", font);
+        pdf.setFontSize(size);
+      }
+
+      function drawWrappedField(label: string, value: string, y: number) {
+        setText("#404040", "normal", 10);
+        const labelWidth = Math.min(54, pdf.getTextWidth(label) + 4);
+        const valueX = marginX + labelWidth;
+        const valueWidth = pageWidth - marginX - valueX;
+        const lines = pdf.splitTextToSize(value, valueWidth - 4) as string[];
+        const lineHeight = 6;
+        pdf.text(label, marginX, y);
+        setText(black, "bold", 10);
+        for (let index = 0; index < lines.length; index += 1) {
+          const lineY = y + index * lineHeight;
+          pdf.text(lines[index], valueX + 2, lineY);
+          pdf.setDrawColor(border);
+          pdf.line(valueX, lineY + 1.6, pageWidth - marginX, lineY + 1.6);
+        }
+        return y + Math.max(10, lines.length * lineHeight + 4);
+      }
+
+      function drawDate(y: number) {
+        const dateItems = [
+          { text: "a", width: 7 },
+          { text: text(day), width: 16, underline: true },
+          { text: "de", width: 9 },
+          { text: text(month), width: 40, underline: true },
+          { text: "20", width: 10 },
+          { text: text(yearShort), width: 16, underline: true },
+          { text: ".", width: 3 },
+        ];
+        let x = marginX;
+        setText("#404040", "normal", 10);
+        for (const item of dateItems) {
+          const center = x + item.width / 2;
+          if (item.underline) {
+            setText(black, "bold", 10);
+            pdf.text(item.text, center, y, { align: "center" });
+            pdf.setDrawColor(border);
+            pdf.line(x, y + 1.6, x + item.width, y + 1.6);
+            setText("#404040", "normal", 10);
+          } else {
+            pdf.text(item.text, x, y);
+          }
+          x += item.width + 2;
+        }
+        return y + 14;
+      }
+
+      pdf.setFillColor(255, 255, 255);
+      pdf.rect(0, 0, pageWidth, pageHeight, "F");
+      pdf.setDrawColor("#e5e5e5");
+      pdf.roundedRect(10, 10, pageWidth - 20, pageHeight - 20, 7, 7);
+
+      const amountText = formatCurrency(data.amount);
+      const amountWidth = Math.min(66, Math.max(44, pdf.getTextWidth(amountText) + 16));
+      const codeWidth = 34;
+      pdf.setDrawColor("#fca5a5");
+      pdf.setLineWidth(0.6);
+      pdf.roundedRect(marginX, topY, codeWidth, 10, 5, 5);
+      setText("#dc2626", "bold", 10);
+      pdf.text(data.code ?? "-", marginX + codeWidth / 2, topY + 6.6, { align: "center" });
+
+      pdf.setFillColor("#f5f5f5");
+      pdf.setDrawColor("#f5f5f5");
+      pdf.roundedRect(pageWidth - marginX - amountWidth, topY, amountWidth, 12, 2, 2, "F");
+      setText(black, "bold", 15);
+      pdf.text(amountText, pageWidth - marginX - 4, topY + 8.2, { align: "right" });
+
+      const titleX = marginX + codeWidth + 7;
+      const titleWidth = pageWidth - marginX - amountWidth - 7 - titleX;
+      setText(black, "bold", titleWidth < 72 ? 10 : 11);
+      const titleLines = pdf.splitTextToSize(title, titleWidth) as string[];
+      pdf.text(titleLines, titleX, topY + (titleLines.length > 1 ? 4.4 : 6.9), { baseline: "top" });
+
+      let y = 48;
+      y = drawWrappedField(recipientLabel, text(data.clientName), y);
+      y = drawWrappedField("la cantidad de", `${amountText} (${montoEnPalabras(data.amount)})`, y);
+      y = drawWrappedField("por concepto de", text(data.concept), y);
+      if (showSubject) y = drawWrappedField(subjectLabel, text(data.subjectName), y);
+      y = drawDate(y + 4);
+
+      const signatureTop = Math.min(Math.max(y + 24, 178), 218);
+      const signatureWidth = 82;
+      const signatureX = (pageWidth - signatureWidth) / 2;
+      if (signature) {
+        try {
+          pdf.addImage(signature, "PNG", signatureX + 8, signatureTop - 30, signatureWidth - 16, 28);
+        } catch {
+          // Si la firma guardada no se puede leer, se conserva la línea para firmar a mano.
+        }
+      }
+      pdf.setDrawColor("#737373");
+      pdf.line(signatureX, signatureTop, signatureX + signatureWidth, signatureTop);
+      setText(muted, "normal", 8);
+      pdf.text("Firma", pageWidth / 2, signatureTop + 5, { align: "center" });
+
+      const footerY = pageHeight - 30;
+      if (logoData) {
+        pdf.addImage(logoData, "PNG", marginX, footerY - 4, 44, 16);
+      }
+      setText(muted, "normal", 8);
+      pdf.text(RECEIPT_BUSINESS.address, pageWidth - marginX, footerY, { align: "right" });
+      pdf.text(RECEIPT_BUSINESS.phone, pageWidth - marginX, footerY + 5, { align: "right" });
+      pdf.text(RECEIPT_BUSINESS.email, pageWidth - marginX, footerY + 10, { align: "right" });
+
       pdf.save(`${data.docType === "abono" ? "recibo" : "comprobante"}-${data.code ?? "documento"}.pdf`);
     } finally {
       setDownloading(false);
@@ -219,7 +345,6 @@ export function ReceiptDocument({
 
             {/* Hoja A4: proporción carta vertical, contenido distribuido arriba/abajo */}
             <div
-              ref={cardRef}
               className="receipt-card relative flex aspect-210/297 w-full flex-col overflow-hidden rounded-[28px] border border-neutral-200 bg-white p-[clamp(1.25rem,5vw,3rem)] text-neutral-800 shadow-[0_12px_45px_rgba(0,0,0,0.14)]"
             >
           {/* Marca de agua centrada */}
