@@ -26,6 +26,7 @@ import { WORK_INCOME_CATEGORY } from "@/lib/constants";
 import { formatCurrency, todayISODate } from "@/lib/format";
 import { registerWorkMovementAction } from "@/app/(dashboard)/obras/actions";
 import type { PaymentMethod } from "@/lib/types";
+import { WorkAutocompleteInput } from "./work-autocomplete-input";
 
 export function RegisterWorkMovementSheet({
   open,
@@ -35,6 +36,7 @@ export function RegisterWorkMovementSheet({
   methods,
   providers,
   categories,
+  concepts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,6 +45,7 @@ export function RegisterWorkMovementSheet({
   methods: PaymentMethod[];
   providers: string[];
   categories: string[];
+  concepts: string[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [movementType, setMovementType] = useState<"income" | "expense">("expense");
@@ -57,7 +60,6 @@ export function RegisterWorkMovementSheet({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const categoryItems = categories.map((item) => ({ label: item, value: item }));
-  const providerItems = providers.map((item) => ({ label: item, value: item }));
   const methodItems = methods.map((method) => ({ label: method.name, value: method.id }));
 
   function reset() {
@@ -172,10 +174,11 @@ export function RegisterWorkMovementSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="concept">Concepto</Label>
-            <Input
+            <WorkAutocompleteInput
               id="concept"
               value={concept}
-              onChange={(e) => setConcept(e.target.value)}
+              onValueChange={setConcept}
+              options={concepts}
               placeholder={movementType === "income" ? "Ej. Abono inicial" : "Ej. Compra de material"}
               aria-invalid={!!errors.concept}
             />
@@ -185,22 +188,14 @@ export function RegisterWorkMovementSheet({
           {movementType === "expense" && (
             <div className="grid gap-2">
               <Label htmlFor="supplier">Proveedor</Label>
-              <Select
+              <WorkAutocompleteInput
+                id="supplier"
                 value={supplier}
-                onValueChange={(value) => setSupplier(value ?? "")}
-                items={providerItems}
-              >
-                <SelectTrigger id="supplier" className="w-full" aria-invalid={!!errors.supplier}>
-                  <SelectValue placeholder="Selecciona proveedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={setSupplier}
+                options={providers}
+                placeholder="Selecciona proveedor"
+                aria-invalid={!!errors.supplier}
+              />
               {errors.supplier && <p className="text-xs text-destructive">{errors.supplier}</p>}
             </div>
           )}

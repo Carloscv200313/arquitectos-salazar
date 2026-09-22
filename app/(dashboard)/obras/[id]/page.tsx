@@ -5,6 +5,8 @@ import {
   getWork,
   getWorkAdministrationUtilities,
   getWorkCategorySummary,
+  listWorkMovementConceptNames,
+  listWorkMovementSupplierNames,
   listWorkMovements,
 } from "@/lib/data/works";
 import { listPaymentMethods } from "@/lib/data/projects";
@@ -34,17 +36,38 @@ export default async function WorkDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [work, movements, categorySummary, administrationUtilities, methods, providers, categories] =
-    await Promise.all([
-      getWork(id),
-      listWorkMovements(id),
-      getWorkCategorySummary(id),
-      getWorkAdministrationUtilities(id),
-      listPaymentMethods(),
-      listProviderNames(),
-      listWorkCategoryNames(),
-    ]);
+  const [
+    work,
+    movements,
+    categorySummary,
+    administrationUtilities,
+    methods,
+    providers,
+    categories,
+    movementConcepts,
+    movementSuppliers,
+  ] = await Promise.all([
+    getWork(id),
+    listWorkMovements(id),
+    getWorkCategorySummary(id),
+    getWorkAdministrationUtilities(id),
+    listPaymentMethods(),
+    listProviderNames(),
+    listWorkCategoryNames(),
+    listWorkMovementConceptNames(),
+    listWorkMovementSupplierNames(),
+  ]);
   if (!work) notFound();
+
+  const movementProviderOptions = movements
+    .map((movement) => movement.supplier)
+    .filter((supplier) => supplier && supplier !== "Cliente");
+  const providerOptions = Array.from(
+    new Set([...providers, ...movementSuppliers, ...movementProviderOptions]),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  const conceptOptions = Array.from(
+    new Set([...movementConcepts, ...movements.map((movement) => movement.concept)]),
+  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,7 +102,14 @@ export default async function WorkDetailPage({
             </p>
           )}
         </div>
-        <WorkDetailActions workId={work.id} workName={work.name} methods={methods} providers={providers} categories={categories} />
+        <WorkDetailActions
+          workId={work.id}
+          workName={work.name}
+          methods={methods}
+          providers={providerOptions}
+          categories={categories}
+          concepts={conceptOptions}
+        />
       </div>
 
       <WorkFinanceOverview
@@ -99,8 +129,9 @@ export default async function WorkDetailPage({
         workName={work.name}
         clientName={work.client.name}
         methods={methods}
-        providers={providers}
+        providers={providerOptions}
         categories={categories}
+        concepts={conceptOptions}
       />
     </div>
   );

@@ -3,7 +3,12 @@ import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { listWorks, type WorkFilters } from "@/lib/data/works";
+import {
+  listWorkMovementConceptNames,
+  listWorkMovementSupplierNames,
+  listWorks,
+  type WorkFilters,
+} from "@/lib/data/works";
 import { listPaymentMethods } from "@/lib/data/projects";
 import { listProviderNames, listWorkCategoryNames } from "@/services/config.service";
 import { WorksOverview } from "@/components/works/works-overview";
@@ -31,12 +36,18 @@ export default async function WorksPage({
     client: sp.client,
     status,
   };
-  const [works, methods, providers, categories] = await Promise.all([
-    listWorks(filters),
-    listPaymentMethods(),
-    listProviderNames(),
-    listWorkCategoryNames(),
-  ]);
+  const [works, methods, providers, categories, movementConcepts, movementSuppliers] =
+    await Promise.all([
+      listWorks(filters),
+      listPaymentMethods(),
+      listProviderNames(),
+      listWorkCategoryNames(),
+      listWorkMovementConceptNames(),
+      listWorkMovementSupplierNames(),
+    ]);
+  const providerOptions = Array.from(new Set([...providers, ...movementSuppliers])).sort((a, b) =>
+    a.localeCompare(b, "es", { sensitivity: "base" }),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,7 +84,13 @@ export default async function WorksPage({
               No hay obras para mostrar.
             </div>
           ) : (
-            <WorksTable works={works} methods={methods} providers={providers} categories={categories} />
+            <WorksTable
+              works={works}
+              methods={methods}
+              providers={providerOptions}
+              categories={categories}
+              concepts={movementConcepts}
+            />
           )}
         </div>
       </Card>

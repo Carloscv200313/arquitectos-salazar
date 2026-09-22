@@ -37,11 +37,13 @@ export function WorksTable({
   methods,
   providers,
   categories,
+  concepts,
 }: {
   works: WorkWithFinance[];
   methods: PaymentMethod[];
   providers: string[];
   categories: string[];
+  concepts: string[];
 }) {
   const router = useRouter();
   const [movementTarget, setMovementTarget] = useState<WorkWithFinance | null>(null);
@@ -153,6 +155,7 @@ export function WorksTable({
           methods={methods}
           providers={providers}
           categories={categories}
+          concepts={concepts}
         />
       )}
       {deleteTarget && (

@@ -48,6 +48,7 @@ export function WorkMovementsTable({
   methods,
   providers,
   categories,
+  concepts,
 }: {
   movements: WorkMovementWithBalance[];
   workId: string;
@@ -56,6 +57,7 @@ export function WorkMovementsTable({
   methods: PaymentMethod[];
   providers: string[];
   categories: string[];
+  concepts: string[];
 }) {
   const [providerFilter, setProviderFilter] = useState(ALL_PROVIDERS);
   const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
@@ -477,6 +479,7 @@ export function WorkMovementsTable({
                     methods={methods}
                     providers={providers}
                     categories={categories}
+                    concepts={concepts}
                   />
                 </TableCell>
               </TableRow>

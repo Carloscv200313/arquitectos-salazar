@@ -286,6 +286,22 @@ async function listConfiguredWorkCategories(): Promise<string[]> {
   return ["Abono de obra", ...categories.filter((item) => item !== "Abono de obra")];
 }
 
+function distinctNames(values: unknown[], excluded: string[] = []): string[] {
+  const excludedKeys = new Set(excluded.map((item) => item.trim().toLocaleLowerCase("es-MX")));
+  const seen = new Set<string>();
+  const names: string[] = [];
+
+  for (const value of values) {
+    const name = String(value ?? "").trim();
+    const key = name.toLocaleLowerCase("es-MX");
+    if (!name || excludedKeys.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    names.push(name);
+  }
+
+  return names.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+}
+
 /* ----------------------------------------------------------------- reads */
 
 export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFinance[]> {
@@ -352,6 +368,23 @@ export async function listWorkMovements(workId: string): Promise<WorkMovementWit
     balance = round2(balance + (m.movement_type === "income" ? m.amount : -m.amount));
     return { ...m, balance, method: r.method ? mapMethod(r.method as Row) : null };
   });
+}
+
+export async function listWorkMovementConceptNames(): Promise<string[]> {
+  if (!isAdminConfigured()) return [];
+  const rows = await listWorkMovementRows({ select: "concept" });
+  return distinctNames(rows.map((row) => row.concept));
+}
+
+export async function listWorkMovementSupplierNames(): Promise<string[]> {
+  if (!isAdminConfigured()) return [];
+  const rows = await listWorkMovementRows({ select: "supplier,movement_type" });
+  return distinctNames(
+    rows
+      .filter((row) => row.movement_type === "expense")
+      .map((row) => row.supplier),
+    ["Cliente"],
+  );
 }
 
 export async function getWorkCategorySummary(workId: string): Promise<WorkCategorySummary[]> {

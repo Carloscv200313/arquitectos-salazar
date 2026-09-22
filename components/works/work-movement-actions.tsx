@@ -38,6 +38,7 @@ import {
   editWorkMovementAction,
   deleteWorkMovementAction,
 } from "@/app/(dashboard)/obras/actions";
+import { WorkAutocompleteInput } from "./work-autocomplete-input";
 
 export function WorkMovementActions({
   movement,
@@ -45,12 +46,14 @@ export function WorkMovementActions({
   methods,
   providers,
   categories,
+  concepts,
 }: {
   movement: WorkMovementWithBalance;
   workId: string;
   methods: PaymentMethod[];
   providers: string[];
   categories: string[];
+  concepts: string[];
 }) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
@@ -169,10 +172,11 @@ export function WorkMovementActions({
           <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
             <div className="grid gap-2">
               <Label htmlFor="wm-concept">Concepto</Label>
-              <Input
+              <WorkAutocompleteInput
                 id="wm-concept"
                 value={concept}
-                onChange={(e) => setConcept(e.target.value)}
+                onValueChange={setConcept}
+                options={concepts}
                 aria-invalid={!!errors.concept}
               />
               {errors.concept && <p className="text-xs text-destructive">{errors.concept}</p>}
@@ -194,22 +198,14 @@ export function WorkMovementActions({
 
                 <div className="grid gap-2">
                   <Label htmlFor="wm-supplier">Proveedor</Label>
-                  <Select
+                  <WorkAutocompleteInput
+                    id="wm-supplier"
                     value={supplier}
-                    onValueChange={(v) => setSupplier(v ?? "")}
-                    items={providers.map((p) => ({ label: p, value: p }))}
-                  >
-                    <SelectTrigger id="wm-supplier" className="w-full" aria-invalid={!!errors.supplier}>
-                      <SelectValue placeholder="Selecciona proveedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {providers.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={setSupplier}
+                    options={providers}
+                    placeholder="Selecciona proveedor"
+                    aria-invalid={!!errors.supplier}
+                  />
                   {errors.supplier && <p className="text-xs text-destructive">{errors.supplier}</p>}
                 </div>
 
