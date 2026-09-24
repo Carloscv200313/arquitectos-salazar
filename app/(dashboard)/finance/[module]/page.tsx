@@ -12,6 +12,7 @@ import {
   getFinanceCaptureReport,
   getFinanceUtilityReport,
   getGeneralBalanceReport,
+  getManualDebtorDetails,
   getProjectArchitectCommissionMonthlyReport,
   getProviderDebtDetails,
   getWorkExpenseMonthlyReport,
@@ -63,7 +64,12 @@ export default async function FinanceModulePage({
         ])
       : Promise.resolve(null),
     item.slug === "deudas"
-      ? Promise.all([getDebtReport(), getProviderDebtDetails(), listPaymentMethods()])
+      ? Promise.all([
+          getDebtReport(),
+          getProviderDebtDetails(),
+          getManualDebtorDetails(),
+          listPaymentMethods(),
+        ])
       : Promise.resolve(null),
     item.slug === "utilidades" ? getFinanceUtilityReport() : Promise.resolve(null),
     item.slug === "movimientos-internos"
@@ -112,7 +118,12 @@ export default async function FinanceModulePage({
           architectCommissions={statements[3]}
         />
       ) : debts ? (
-        <DebtsView rows={debts[0]} providerDetails={debts[1]} />
+        <DebtsView
+          rows={debts[0]}
+          providerDetails={debts[1]}
+          debtorDetails={debts[2]}
+          accounts={debts[3]}
+        />
       ) : utilities ? (
         <UtilitiesView report={utilities} />
       ) : internalTransferData ? (

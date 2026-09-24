@@ -22,6 +22,10 @@ import type {
   GeneralBalanceReport,
   GeneralBalanceRow,
   InternalArea,
+  ManualDebtor,
+  ManualDebtorDetail,
+  ManualDebtorPayment,
+  MovementType,
   PaymentMethod,
   ProviderDebtDetail,
   SalaryDayRecordWithRelations,
@@ -39,6 +43,7 @@ import { getCurrentUserId } from "@/features/auth/get-user";
 import { getUtilityReport, listProjects } from "./projects";
 import { getWorksAdministrationUtilityReport, listWorks } from "./works";
 import { listWorkOrders } from "./orders";
+import { writeAudit } from "./audit";
 
 type Row = Record<string, unknown>;
 const SUPABASE_PAGE_SIZE = 1000;
@@ -97,6 +102,20 @@ function num(v: unknown) {
   return Number(v ?? 0);
 }
 
+function normalizedFinanceCategory(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+const WORK_SALARY_CATEGORIES = new Set(["honorario", "honorarios", "mano de obra"]);
+
+function isWorkSalaryCategory(value: unknown) {
+  return WORK_SALARY_CATEGORIES.has(normalizedFinanceCategory(value));
+}
+
 async function audit(action: string, recordId: string, description: string) {
   await sb().from("audit_logs").insert({
     user_id: await getCurrentUserId(),
@@ -111,11 +130,13 @@ async function audit(action: string, recordId: string, description: string) {
 
 async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
-  const [pp, wm, it, wt] = await Promise.all([
+  const [pp, wm, it, wt, debtorRows, debtorPayments] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
     listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
+    client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
+    client.from("manual_debtor_payments").select("to_account_id, amount").eq("status", 1),
   ]);
 
   const balances = new Map<string, number>();
@@ -135,6 +156,12 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
     add(t.from_payment_method_id as string, -num(t.amount));
     add(t.to_payment_method_id as string, num(t.amount));
   }
+  for (const debtor of debtorRows.data ?? []) {
+    add((debtor.source_account_id as string) ?? null, -num(debtor.amount));
+  }
+  for (const payment of debtorPayments.data ?? []) {
+    add((payment.to_account_id as string) ?? null, num(payment.amount));
+  }
   return balances;
 }
 
@@ -149,6 +176,45 @@ async function loadMethods(): Promise<PaymentMethod[]> {
     is_active: true,
     created_at: r.created_at as string,
   }));
+}
+
+function mapPaymentAccount(row: Row | null | undefined): PaymentMethod | null {
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    is_active: true,
+    created_at: (row.created_at as string) ?? "",
+  };
+}
+
+function mapManualDebtor(row: Row): ManualDebtor & { account: PaymentMethod | null } {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    amount: num(row.amount),
+    source_account_id: (row.source_account_id as string) ?? null,
+    loan_date: (row.loan_date as string) ?? (row.created_at as string)?.slice(0, 10) ?? "",
+    note: (row.note as string) ?? null,
+    created_at: row.created_at as string,
+    updated_at: (row.updated_at as string) ?? (row.created_at as string),
+    created_by: (row.created_by as string) ?? null,
+    account: mapPaymentAccount(row.account as Row | null),
+  };
+}
+
+function mapManualDebtorPayment(row: Row): ManualDebtorPayment {
+  return {
+    id: row.id as string,
+    debtor_id: row.debtor_id as string,
+    payment_date: row.payment_date as string,
+    amount: num(row.amount),
+    to_account_id: row.to_account_id as string,
+    note: (row.note as string) ?? null,
+    created_at: row.created_at as string,
+    created_by: (row.created_by as string) ?? null,
+    account: mapPaymentAccount(row.account as Row | null),
+  };
 }
 
 async function accountsPayableMethodId(): Promise<string | null> {
@@ -224,21 +290,72 @@ async function getAccountsPayableWorkMovementDebts(
     .filter((movement) => movement.pending > 0.001);
 }
 
+export async function getManualDebtorDetails(): Promise<ManualDebtorDetail[]> {
+  if (!isAdminConfigured()) return [];
+  const client = sb();
+  const [debtorRes, paymentRes] = await Promise.all([
+    client
+      .from("manual_debtors")
+      .select("*, account:payment_accounts(id,name,created_at)")
+      .eq("status", 1)
+      .order("name", { ascending: true }),
+    client
+      .from("manual_debtor_payments")
+      .select("*, account:payment_accounts(id,name,created_at)")
+      .eq("status", 1)
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (debtorRes.error) throw new Error(debtorRes.error.message);
+  if (paymentRes.error) throw new Error(paymentRes.error.message);
+
+  const paymentsByDebtor = new Map<string, ManualDebtorPayment[]>();
+  for (const payment of ((paymentRes.data ?? []) as unknown as Row[]).map(mapManualDebtorPayment)) {
+    const list = paymentsByDebtor.get(payment.debtor_id) ?? [];
+    list.push(payment);
+    paymentsByDebtor.set(payment.debtor_id, list);
+  }
+
+  return ((debtorRes.data ?? []) as unknown as Row[])
+    .map(mapManualDebtor)
+    .map((debtor) => {
+      const payments = paymentsByDebtor.get(debtor.id) ?? [];
+      const totalPaid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+      const totalAmount = round2(debtor.amount);
+      return {
+        debtor,
+        totalAmount,
+        totalPaid,
+        totalPending: round2(Math.max(totalAmount - totalPaid, 0)),
+        payments,
+      };
+    })
+    .sort((a, b) => b.totalPending - a.totalPending || a.debtor.name.localeCompare(b.debtor.name, "es"));
+}
+
+export async function getManualDebtorDetail(id: string): Promise<ManualDebtorDetail | null> {
+  const details = await getManualDebtorDetails();
+  return details.find((detail) => detail.debtor.id === id) ?? null;
+}
+
 export async function getDebtReport(): Promise<DebtReportRow[]> {
   if (!isAdminConfigured()) return [];
-  const providerDetails = await getProviderDebtDetails();
+  const [providerDetails, debtorDetails] = await Promise.all([
+    getProviderDebtDetails(),
+    getManualDebtorDetails(),
+  ]);
 
-  const { data: debtorRows } = await sb()
-    .from("manual_debtors")
-    .select("id, name, amount")
-    .eq("status", 1);
-
-  const debtors: DebtReportRow[] = (debtorRows ?? []).map((d) => ({
-    id: d.id as string,
-    name: d.name as string,
-    amount: num(d.amount),
+  const debtors: DebtReportRow[] = debtorDetails.map((detail) => ({
+    id: detail.debtor.id,
+    name: detail.debtor.name,
+    amount: detail.totalPending,
     type: "debtor",
     source: "manual",
+    totalAmount: detail.totalAmount,
+    totalPaid: detail.totalPaid,
+    sourceAccountName: detail.debtor.account?.name ?? null,
+    loanDate: detail.debtor.loan_date,
   }));
   const providers: DebtReportRow[] = providerDetails.map((detail) => ({
     id: `provider-${detail.provider}`,
@@ -455,10 +572,20 @@ export async function getGeneralBalanceAccountReport(
         }
       }
     } else {
-      const [wmRes, ppRes, projRes] = await Promise.all([
+      const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes] = await Promise.all([
         listWorkMovementRows({ paymentMethodId: method.id }),
         client.from("project_payments").select("*").eq("status", 1).eq("payment_method_id", method.id),
         client.from("projects").select("id, name"),
+        client
+          .from("manual_debtors")
+          .select("id, name, amount, loan_date")
+          .eq("status", 1)
+          .eq("source_account_id", method.id),
+        client
+          .from("manual_debtor_payments")
+          .select("id, debtor_id, amount, payment_date, debtor:manual_debtors(name)")
+          .eq("status", 1)
+          .eq("to_account_id", method.id),
       ]);
       const projectName = new Map((projRes.data ?? []).map((p) => [p.id as string, p.name as string]));
       for (const m of wmRes) {
@@ -484,6 +611,29 @@ export async function getGeneralBalanceAccountReport(
           incomeAccount: expense ? counterparty : method.name,
           amount: num(p.amount),
           source: "projects",
+        });
+      }
+      for (const debtor of debtorLoanRes.data ?? []) {
+        history.push({
+          id: `debtor-loan-${debtor.id}`,
+          date: debtor.loan_date as string,
+          description: `Préstamo a ${debtor.name}`,
+          expenseAccount: method.name,
+          incomeAccount: debtor.name as string,
+          amount: num(debtor.amount),
+          source: "manual",
+        });
+      }
+      for (const payment of debtorPaymentRes.data ?? []) {
+        const debtor = payment.debtor as { name?: string } | null;
+        history.push({
+          id: `debtor-payment-${payment.id}`,
+          date: payment.payment_date as string,
+          description: `Abono de ${debtor?.name ?? "deudor"}`,
+          expenseAccount: debtor?.name ?? "Deudor",
+          incomeAccount: method.name,
+          amount: num(payment.amount),
+          source: "manual",
         });
       }
     }
@@ -682,8 +832,8 @@ export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: stri
   });
   const byMonth = new Map<string, number>();
   for (const row of rows) {
-    const category = String(row.category ?? "").trim().toLowerCase();
-    if (category === "cuenta de oficina") continue;
+    const category = normalizedFinanceCategory(row.category);
+    if (category === "cuenta de oficina" || isWorkSalaryCategory(row.category)) continue;
     const date = String(row.movement_date ?? "");
     const month = date.slice(0, 7);
     if (!month) continue;
@@ -696,15 +846,43 @@ export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: stri
 
 export async function getProjectArchitectCommissionMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
   if (!isAdminConfigured()) return [];
-  const { data, error } = await sb()
-    .from("salary_payments")
-    .select("payment_date, amount")
-    .eq("status", 1)
-    .eq("payment_type", "project");
-  if (error) throw new Error(error.message);
+  const client = sb();
+  const [salaryRes, projectPaymentRes, workMovementRows] = await Promise.all([
+    client
+      .from("salary_payments")
+      .select("payment_date, amount")
+      .eq("status", 1)
+      .eq("payment_type", "project"),
+    client
+      .from("project_payments")
+      .select("payment_date, amount, concept, internal_area")
+      .eq("status", 1)
+      .eq("movement_type", "expense")
+      .not("internal_area", "is", null),
+    listWorkMovementRows({
+      select: "movement_date, amount, category",
+      movementType: "expense",
+    }),
+  ]);
+  if (salaryRes.error) throw new Error(salaryRes.error.message);
+  if (projectPaymentRes.error) throw new Error(projectPaymentRes.error.message);
+
   const byMonth = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of salaryRes.data ?? []) {
     const month = String(row.payment_date ?? "").slice(0, 7);
+    if (!month) continue;
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
+  }
+  for (const row of projectPaymentRes.data ?? []) {
+    const concept = String(row.concept ?? "").trim().toLowerCase();
+    if (!concept.startsWith("pago de ")) continue;
+    const month = String(row.payment_date ?? "").slice(0, 7);
+    if (!month) continue;
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
+  }
+  for (const row of workMovementRows) {
+    if (!isWorkSalaryCategory(row.category)) continue;
+    const month = String(row.movement_date ?? "").slice(0, 7);
     if (!month) continue;
     byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
   }
@@ -741,6 +919,7 @@ function mapFinanceCapture(r: Row, balanceAfter: number): FinanceCaptureRow {
     id: r.id as string,
     concept_id: r.concept_id as string,
     capture_date: r.capture_date as string,
+    movement_type: (r.movement_type as MovementType) ?? "expense",
     amount: num(r.amount),
     source_account_id: r.source_account_id as string,
     payment_form: r.payment_form as FinanceCapturePaymentForm,
@@ -767,7 +946,16 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
       concepts: [],
       tags: [],
       accounts: [],
-      totals: { amount: 0, count: 0, currentBalance: 0, currentMonthAmount: 0 },
+      totals: {
+        amount: 0,
+        incomeAmount: 0,
+        expenseAmount: 0,
+        count: 0,
+        currentBalance: 0,
+        currentMonthAmount: 0,
+        currentMonthIncome: 0,
+        currentMonthExpense: 0,
+      },
     };
   }
 
@@ -796,7 +984,8 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
 
   let runningBalance = 0;
   const chronological = ((captureRes.data ?? []) as Row[]).map((row) => {
-    runningBalance = round2(runningBalance + num(row.amount));
+    const signedAmount = (row.movement_type as string) === "income" ? num(row.amount) : -num(row.amount);
+    runningBalance = round2(runningBalance + signedAmount);
     return mapFinanceCapture(row, runningBalance);
   });
   const rows = chronological.sort((a, b) => {
@@ -806,6 +995,11 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
   });
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthRows = rows.filter((row) => row.capture_date.startsWith(currentMonth));
+  const incomeAmount = round2(rows.filter((row) => row.movement_type === "income").reduce((sum, row) => sum + row.amount, 0));
+  const expenseAmount = round2(rows.filter((row) => row.movement_type === "expense").reduce((sum, row) => sum + row.amount, 0));
+  const currentMonthIncome = round2(currentMonthRows.filter((row) => row.movement_type === "income").reduce((sum, row) => sum + row.amount, 0));
+  const currentMonthExpense = round2(currentMonthRows.filter((row) => row.movement_type === "expense").reduce((sum, row) => sum + row.amount, 0));
 
   return {
     rows,
@@ -814,13 +1008,13 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
     accounts,
     totals: {
       amount: round2(rows.reduce((sum, row) => sum + row.amount, 0)),
+      incomeAmount,
+      expenseAmount,
       count: rows.length,
       currentBalance: runningBalance,
-      currentMonthAmount: round2(
-        rows
-          .filter((row) => row.capture_date.startsWith(currentMonth))
-          .reduce((sum, row) => sum + row.amount, 0),
-      ),
+      currentMonthAmount: round2(currentMonthRows.reduce((sum, row) => sum + row.amount, 0)),
+      currentMonthIncome,
+      currentMonthExpense,
     },
   };
 }
@@ -900,24 +1094,86 @@ export async function deleteFinanceMovementConcept(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+async function financeCaptureSnapshot(id: string): Promise<Row | null> {
+  const { data, error } = await sb()
+    .from("finance_movement_captures")
+    .select(
+      "id, concept_id, capture_date, movement_type, amount, source_account_id, payment_form, description, status, concept:finance_movement_concepts(name), account:payment_accounts(name)",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as Row | null) ?? null;
+}
+
+function financeCaptureAuditSnapshot(row: Row) {
+  const concept = row.concept as { name?: string } | null;
+  return {
+    concept: concept?.name ?? row.concept_id,
+    capture_date: row.capture_date,
+    movement_type: row.movement_type ?? "expense",
+    amount: num(row.amount),
+    source_account_id: row.source_account_id,
+    payment_form: row.payment_form,
+    description: row.description,
+  };
+}
+
 export async function saveFinanceCapture(data: {
+  id?: string;
   conceptId: string;
   captureDate: string;
+  movementType: MovementType;
   amount: number;
   sourceAccountId: string;
   paymentForm: FinanceCapturePaymentForm;
   description: string | null;
+  note?: string | null;
   userId: string | null;
 }): Promise<string> {
+  const payload = {
+    concept_id: data.conceptId,
+    capture_date: data.captureDate,
+    movement_type: data.movementType,
+    amount: round2(data.amount),
+    source_account_id: data.sourceAccountId,
+    payment_form: data.paymentForm,
+    description: data.description?.trim() || null,
+  };
+
+  if (data.id) {
+    const before = await financeCaptureSnapshot(data.id);
+    if (!before || (before.status as number) === 0) {
+      throw new Error("Captura no encontrada.");
+    }
+    const { error } = await sb()
+      .from("finance_movement_captures")
+      .update(payload)
+      .eq("id", data.id)
+      .eq("status", 1);
+    if (error) throw new Error(error.message);
+
+    const after = await financeCaptureSnapshot(data.id);
+    const concept = (after?.concept ?? before.concept) as { name?: string } | null;
+    await writeAudit({
+      entityType: "finance_movement",
+      entityId: data.id,
+      operation: "update",
+      note: data.note,
+      amount: data.amount,
+      description: `Captura · ${concept?.name ?? "Movimiento"}`,
+      snapshot: {
+        before: financeCaptureAuditSnapshot(before),
+        after: after ? financeCaptureAuditSnapshot(after) : payload,
+      },
+    });
+    return data.id;
+  }
+
   const { data: created, error } = await sb()
     .from("finance_movement_captures")
     .insert({
-      concept_id: data.conceptId,
-      capture_date: data.captureDate,
-      amount: round2(data.amount),
-      source_account_id: data.sourceAccountId,
-      payment_form: data.paymentForm,
-      description: data.description?.trim() || null,
+      ...payload,
       created_by: data.userId,
     })
     .select("id")
@@ -926,29 +1182,109 @@ export async function saveFinanceCapture(data: {
   return created.id as string;
 }
 
+export async function deleteFinanceCapture(id: string, note: string): Promise<void> {
+  const before = await financeCaptureSnapshot(id);
+  if (!before || (before.status as number) === 0) {
+    throw new Error("Captura no encontrada.");
+  }
+  const { error } = await sb()
+    .from("finance_movement_captures")
+    .update({ status: 0 })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const concept = before.concept as { name?: string } | null;
+  await writeAudit({
+    entityType: "finance_movement",
+    entityId: id,
+    operation: "delete",
+    note,
+    amount: num(before.amount),
+    description: `Captura · ${concept?.name ?? "Movimiento"}`,
+    snapshot: {
+      before: financeCaptureAuditSnapshot(before),
+    },
+  });
+}
+
 export interface SaveManualDebtorData {
   id?: string;
   name: string;
   amount: number;
+  sourceAccountId: string;
+  loanDate: string;
+  note?: string | null;
   userId: string | null;
 }
 
 export async function saveManualDebtor(data: SaveManualDebtorData): Promise<string> {
   const client = sb();
+  const payload = {
+    name: data.name.trim(),
+    amount: round2(data.amount),
+    source_account_id: data.sourceAccountId,
+    loan_date: data.loanDate,
+    note: data.note?.trim() || null,
+  };
   if (data.id) {
+    const detail = await getManualDebtorDetail(data.id);
+    if (detail && payload.amount < detail.totalPaid - 0.001) {
+      throw new Error("El monto prestado no puede ser menor a los abonos registrados.");
+    }
     const { error } = await client
       .from("manual_debtors")
-      .update({ name: data.name.trim(), amount: round2(data.amount) })
+      .update(payload)
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return data.id;
   }
   const { data: created, error } = await client
     .from("manual_debtors")
-    .insert({ name: data.name.trim(), amount: round2(data.amount), created_by: await getCurrentUserId() })
+    .insert({ ...payload, created_by: await getCurrentUserId() })
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+export interface RegisterManualDebtorPaymentData {
+  debtorId: string;
+  amount: number;
+  paymentDate: string;
+  toAccountId: string;
+  note?: string | null;
+  userId: string | null;
+}
+
+export async function registerManualDebtorPayment(
+  data: RegisterManualDebtorPaymentData,
+): Promise<string> {
+  const detail = await getManualDebtorDetail(data.debtorId);
+  if (!detail) throw new Error("No se encontró el deudor.");
+  const amount = round2(data.amount);
+  if (amount > detail.totalPending + 0.001) {
+    throw new Error("El abono supera el saldo pendiente.");
+  }
+
+  const { data: created, error } = await sb()
+    .from("manual_debtor_payments")
+    .insert({
+      debtor_id: data.debtorId,
+      amount,
+      payment_date: data.paymentDate,
+      to_account_id: data.toAccountId,
+      note: data.note?.trim() || null,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await audit(
+    "debtor_payment",
+    (created?.id as string) ?? data.debtorId,
+    `Abono de deudor · ${detail.debtor.name} · ${amount.toFixed(2)}`,
+  );
   return created.id as string;
 }
 
@@ -1287,7 +1623,7 @@ export async function getSalaryWeekDetailReport(weekId: string) {
   if (!isAdminConfigured()) return null;
   const client = sb();
   const ctx = await loadSalaryRefs();
-  const { data: weekRow } = await client.from("salary_weeks").select("*").eq("id", weekId).maybeSingle();
+  const { data: weekRow } = await client.from("salary_weeks").select("*").eq("id", weekId).eq("status", 1).maybeSingle();
   if (!weekRow) return null;
   const week = mapWeek(weekRow);
   const [dayRes, payRes] = await Promise.all([
@@ -1387,6 +1723,40 @@ export async function saveSalaryWeek(data: SaveSalaryWeekData): Promise<string> 
 
   await audit("week_saved", weekId, data.id ? "Semana actualizada" : "Semana creada");
   return weekId;
+}
+
+export async function deleteSalaryWeek(data: { salaryWeekId: string; note: string; userId: string | null }): Promise<void> {
+  const client = sb();
+  const { data: week, error: weekLoadError } = await client
+    .from("salary_weeks")
+    .select("id, week_start_date, week_end_date, week_status, status")
+    .eq("id", data.salaryWeekId)
+    .maybeSingle();
+
+  if (weekLoadError) throw new Error(weekLoadError.message);
+  if (!week || Number(week.status ?? 0) !== 1) throw new Error("Semana no encontrada");
+  if ((week.week_status as string) === "paid") {
+    throw new Error("La semana ya está pagada y no admite eliminación desde esta tabla.");
+  }
+
+  const [dayResult, paymentResult, receiptResult] = await Promise.all([
+    client.from("salary_day_records").update({ status: 0 }).eq("salary_week_id", data.salaryWeekId).eq("status", 1),
+    client.from("salary_payments").update({ status: 0 }).eq("salary_week_id", data.salaryWeekId).eq("status", 1),
+    client.from("salary_receipts").delete().eq("salary_week_id", data.salaryWeekId),
+  ]);
+
+  if (dayResult.error) throw new Error(dayResult.error.message);
+  if (paymentResult.error) throw new Error(paymentResult.error.message);
+  if (receiptResult.error) throw new Error(receiptResult.error.message);
+
+  const { error } = await client.from("salary_weeks").update({ status: 0 }).eq("id", data.salaryWeekId);
+  if (error) throw new Error(error.message);
+
+  await audit(
+    "week_deleted",
+    data.salaryWeekId,
+    `Semana eliminada: ${week.week_start_date as string} - ${week.week_end_date as string}. Observación: ${data.note.trim()}`,
+  );
 }
 
 export interface SaveSalaryDayRecordData {

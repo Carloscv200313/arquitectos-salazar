@@ -89,6 +89,7 @@ function subtractValues(base: MonthlyValues, ...rows: MonthlyValues[]) {
 function valuesByTag(report: FinanceCaptureReport, labels: string[]) {
   const targets = new Map(labels.map((label) => [label.toLowerCase(), { label, values: zeroValues() }]));
   for (const row of report.rows) {
+    if (row.movement_type !== "expense") continue;
     const tagName = row.concept?.tag?.name?.toLowerCase();
     if (!tagName) continue;
     const target = targets.get(tagName);
@@ -96,6 +97,15 @@ function valuesByTag(report: FinanceCaptureReport, labels: string[]) {
     addValue(target.values, monthKeyFromISO(row.capture_date), Math.abs(row.amount));
   }
   return labels.map((label) => targets.get(label.toLowerCase()) ?? { label, values: zeroValues() });
+}
+
+function valuesByMovementType(report: FinanceCaptureReport, movementType: "income" | "expense") {
+  const values = zeroValues();
+  for (const row of report.rows) {
+    if (row.movement_type !== movementType) continue;
+    addValue(values, monthKeyFromISO(row.capture_date), Math.abs(row.amount));
+  }
+  return values;
 }
 
 function utilityValues(report: FinanceUtilityReport, field: "projectUtility" | "workUtility") {
@@ -184,7 +194,7 @@ function StatementTable({
         </div>
 
         <div className="min-w-0">
-          <Table className="min-w-[900px]">
+          <Table className="min-w-[720px]">
             <TableHeader className="bg-muted/40">
               <TableRow>
                 {MONTHS.map((month) => (
@@ -195,9 +205,6 @@ function StatementTable({
                 {showPercent && (
                   <TableHead className="h-10 px-3 text-right text-xs uppercase text-muted-foreground">%</TableHead>
                 )}
-                <TableHead className="h-10 w-80 px-5 text-left text-xs uppercase text-muted-foreground">
-                  Descripción
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -240,19 +247,6 @@ function StatementTable({
                         {row.hideValues ? null : percent(total, incomeTotal)}
                       </TableCell>
                     )}
-                    <TableCell className="h-10 px-5 py-0 text-xs text-muted-foreground">
-                      {row.description ? (
-                        <span
-                          className="flex h-7 max-w-80 items-center truncate rounded-md bg-brand-muted/35 px-3 text-brand-foreground"
-                          title={row.description}
-                          data-no-table-truncate
-                        >
-                          {row.description}
-                        </span>
-                      ) : row.hideValues ? null : (
-                        <span className="text-muted-foreground/40">-</span>
-                      )}
-                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -277,11 +271,22 @@ export function FinancialStatementsView({
 }) {
   const projectIncome = utilityValues(utilities, "projectUtility");
   const workIncome = utilityValues(utilities, "workUtility");
-  const totalIncome = sumValues(projectIncome, workIncome);
+  const otherIncome = valuesByMovementType(movements, "income");
+  const regularIncome = sumValues(projectIncome, workIncome);
+  const totalIncome = sumValues(regularIncome, otherIncome);
   const workExpenseValues = monthlyAmountValues(workExpenses);
-  const architectCommissionValues = monthlyAmountValues(architectCommissions);
-  const directCosts = sumValues(workExpenseValues, architectCommissionValues);
-  const adminRows = valuesByTag(movements, ADMIN_ROWS);
+  const salaryValues = monthlyAmountValues(architectCommissions);
+  const directCosts = workExpenseValues;
+  const adminRows: StatementRow[] = valuesByTag(movements, ADMIN_ROWS).map((row): StatementRow =>
+    row.label === "Sueldos"
+      ? {
+          ...row,
+          values: sumValues(row.values, salaryValues),
+          description:
+            "Aquí se cruzan los pagos de Proyectos con concepto Pago de..., los pagos del módulo Salario y los movimientos de Obras en Honorario, Honorarios o Mano de obra.",
+        }
+      : row,
+  );
   const financeRows = valuesByTag(movements, FINANCING_ROWS);
   const adminTotal = sumValues(...adminRows.map((row) => row.values));
   const financeTotal = sumValues(...financeRows.map((row) => row.values));
@@ -307,6 +312,12 @@ export function FinancialStatementsView({
       description:
         "Estos ingresos van a venir de la categoría que se va a dar de alta llamada Cuenta de Oficina, más todos los gastos registrados ese mes en las obras. En ese momento aparece aquí el ingreso por obra en el estado de resultados. Se registra un movimiento en la categoría Cuenta de Oficina donde se registran los movimientos de obras como una salida de utilidad. Este movimiento queda registrado en la obra y en la tabla Resumen por categoría.",
     },
+    {
+      label: "Otros ingresos",
+      values: otherIncome,
+      description:
+        "Ingresos registrados directamente en Finanzas > Movimientos. Se acumulan aquí y también en Otros ingresos del estado de resultados.",
+    },
     { label: "Gastos", values: sumValues(directCosts, adminTotal, financeTotal), section: true },
     {
       label: "Costos directos del servicio",
@@ -319,19 +330,20 @@ export function FinancialStatementsView({
       label: "Gastos en Obras",
       values: workExpenseValues,
       description:
-        "Aquí se van a poner todos los gastos que se van sumando de todas las categorías que existen en las obras, menos la salida de la categoría Cuenta de Oficina.",
+        "Aquí se van a poner los gastos de obras, excepto Cuenta de Oficina y las categorías Honorario, Honorarios o Mano de obra, que se cruzan como salario.",
     },
     {
       label: "Comisión a Arquitectos por Proyecto",
-      values: architectCommissionValues,
+      values: zeroValues(),
       description:
-        "Comisión o pago. Aquí entran los pagos semanales que se les dan a los arquitectos del área de Salario.",
+        "Los pagos salariales relacionados con proyectos y obras se consolidan en la fila Sueldos.",
     },
     { label: "Gastos administrativos", values: adminTotal, section: true, mutedBlock: true, hideValues: true },
     ...adminRows.map((row) => ({
       label: row.label,
       values: row.values,
       description:
+        row.description ??
         "Estos campos quedan pendientes de nombre o se ponen dinámicos para que aparezcan cuando se agreguen etiquetas.",
     })),
     { label: "Gasto financiero mensual", values: financeTotal, section: true, mutedBlock: true, hideValues: true },
@@ -346,11 +358,16 @@ export function FinancialStatementsView({
   const resultRows: StatementRow[] = [
     {
       label: "Ingresos totales",
-      values: totalIncome,
+      values: regularIncome,
       description:
         "Los ingresos entran a Cuenta de Oficina; hasta ese momento aparecen en ingresos por obra en el estado de resultados.",
     },
-    { label: "Otros ingresos", values: zeroValues() },
+    {
+      label: "Otros ingresos",
+      values: otherIncome,
+      description:
+        "Ingresos registrados directamente en Finanzas > Movimientos.",
+    },
     { label: "Total de ingresos", values: totalIncome, section: true, strong: true },
     { label: "Costos directos", values: directCosts },
     { label: "Utilidad bruta", values: grossUtility, strong: true },

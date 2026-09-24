@@ -36,6 +36,7 @@ create table if not exists public.finance_movement_captures (
   id                uuid primary key default gen_random_uuid(),
   concept_id        uuid not null references public.finance_movement_concepts(id),
   capture_date      date not null,
+  movement_type     text not null default 'expense' check (movement_type in ('income','expense')),
   amount            numeric(14,2) not null default 0,
   source_account_id uuid not null references public.payment_accounts(id),
   payment_form      text not null check (payment_form in ('transfer','cash','check','deposit')),
@@ -44,6 +45,16 @@ create table if not exists public.finance_movement_captures (
   created_at        timestamptz not null default now(),
   created_by        uuid references auth.users(id)
 );
+
+alter table public.finance_movement_captures
+  add column if not exists movement_type text not null default 'expense';
+
+alter table public.finance_movement_captures
+  drop constraint if exists finance_movement_captures_movement_type_check;
+
+alter table public.finance_movement_captures
+  add constraint finance_movement_captures_movement_type_check
+  check (movement_type in ('income','expense'));
 
 create index if not exists finance_movement_captures_date_idx
   on public.finance_movement_captures(capture_date desc, created_at desc)

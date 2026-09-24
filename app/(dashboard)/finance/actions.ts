@@ -3,10 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
+  deleteFinanceCapture,
   deleteSalaryDayRecord,
   deleteSalaryPayment,
+  deleteSalaryWeek,
   deleteFinanceMovementConcept,
   deleteFinanceMovementTag,
+  registerManualDebtorPayment,
   registerGeneralBalanceAccountMovement,
   registerGeneralBalanceEntry,
   saveFinanceCapture,
@@ -23,14 +26,17 @@ import { registerWorkInternalTransfer } from "@/lib/data/works";
 import {
   generalBalanceAccountMovementSchema,
   generalBalanceEntrySchema,
+  deleteFinanceCaptureSchema,
   financeCaptureSchema,
   financeMovementConceptSchema,
   financeMovementTagSchema,
   manualDebtorSchema,
+  manualDebtorPaymentSchema,
   registerInternalTransferSchema,
   saveSalaryDayRecordSchema,
   saveSalaryPaymentSchema,
   saveSalaryWeekSchema,
+  deleteSalaryWeekSchema,
   settleProviderDebtSchema,
   updateSalaryWeekStatusSchema,
 } from "@/lib/validation";
@@ -75,12 +81,56 @@ export async function saveManualDebtorAction(
       id: d.id || undefined,
       name: d.name,
       amount: d.amount,
+      sourceAccountId: d.sourceAccountId,
+      loanDate: d.loanDate,
+      note: d.note || null,
       userId: currentUserId(),
     });
     revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/deudor-${debtorId}`);
+    revalidatePath("/finance/balance-general");
+    revalidatePath(`/finance/balance-general/${d.sourceAccountId}`);
     return { ok: true, data: { debtorId } };
-  } catch {
-    return { ok: false, error: "No se pudo guardar el deudor." };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar el deudor.",
+    };
+  }
+}
+
+export async function registerManualDebtorPaymentAction(
+  raw: unknown,
+): Promise<ActionResult<{ paymentId: string }>> {
+  const parsed = manualDebtorPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const paymentId = await registerManualDebtorPayment({
+      debtorId: d.debtorId,
+      amount: d.amount,
+      paymentDate: d.paymentDate,
+      toAccountId: d.toAccountId,
+      note: d.note || null,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/deudor-${d.debtorId}`);
+    revalidatePath("/finance/balance-general");
+    revalidatePath(`/finance/balance-general/${d.toAccountId}`);
+    return { ok: true, data: { paymentId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo registrar el abono.",
+    };
   }
 }
 
@@ -325,20 +375,47 @@ export async function saveFinanceCaptureAction(
   try {
     const d = parsed.data;
     const captureId = await saveFinanceCapture({
+      id: d.id || undefined,
       conceptId: d.conceptId,
       captureDate: d.captureDate,
+      movementType: d.movementType,
       amount: d.amount,
       sourceAccountId: d.sourceAccountId,
       paymentForm: d.paymentForm,
       description: d.description?.trim() || null,
+      note: d.note?.trim() || null,
       userId: currentUserId(),
     });
     revalidatePath("/finance/movimientos");
+    revalidatePath("/finance/estados-financieros");
     return { ok: true, data: { captureId } };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo guardar la captura.",
+    };
+  }
+}
+
+export async function deleteFinanceCaptureAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteFinanceCaptureSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa la observación para eliminar la captura.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    await deleteFinanceCapture(parsed.data.id, parsed.data.note);
+    revalidatePath("/finance/movimientos");
+    revalidatePath("/finance/estados-financieros");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar la captura.",
     };
   }
 }
@@ -368,6 +445,34 @@ export async function saveSalaryWeekAction(
     return { ok: true, data: { weekId } };
   } catch {
     return { ok: false, error: "No se pudo guardar la semana salarial." };
+  }
+}
+
+export async function deleteSalaryWeekAction(
+  raw: unknown,
+): Promise<ActionResult> {
+  const parsed = deleteSalaryWeekSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa la observación para eliminar la semana.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    await deleteSalaryWeek({
+      salaryWeekId: parsed.data.salaryWeekId,
+      note: parsed.data.note,
+      userId: currentUserId(),
+    });
+    revalidateSalaryPaths(parsed.data.salaryWeekId);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar la semana.",
+    };
   }
 }
 

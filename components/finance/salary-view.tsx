@@ -23,6 +23,7 @@ import {
 import {
   deleteSalaryDayRecordAction,
   deleteSalaryPaymentAction,
+  deleteSalaryWeekAction,
   saveSalaryDayRecordAction,
   saveSalaryPaymentAction,
   saveSalaryWeekAction,
@@ -34,6 +35,14 @@ import { CHART_COLORS } from "@/components/charts/palette";
 import { DonutChart } from "@/components/charts/charts";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
@@ -2425,13 +2434,39 @@ export function SalaryView({
   projectOptions: SalaryProjectOption[];
   workOptions: SalaryOption[];
 }) {
+  const router = useRouter();
   const [weekSheetOpen, setWeekSheetOpen] = useState(false);
   const [editingWeek, setEditingWeek] = useState<SalaryWeekWithRows | null>(null);
   const [receiptsWeek, setReceiptsWeek] = useState<SalaryWeekWithRows | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SalaryWeekWithRows | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
+  const [isDeletePending, startDeleteTransition] = useTransition();
 
   function openCreateWeek() {
     setEditingWeek(null);
     setWeekSheetOpen(true);
+  }
+
+  function submitDeleteWeek() {
+    if (!deleteTarget) return;
+    setDeleteErrors({});
+
+    startDeleteTransition(async () => {
+      const result = await deleteSalaryWeekAction({
+        salaryWeekId: deleteTarget.id,
+        note: deleteNote,
+      });
+      if (result.ok) {
+        toast.success("Semana eliminada");
+        setDeleteTarget(null);
+        setDeleteNote("");
+        router.refresh();
+      } else {
+        setDeleteErrors(result.fieldErrors ?? {});
+        toast.error(result.error);
+      }
+    });
   }
 
   return (
@@ -2514,7 +2549,7 @@ export function SalaryView({
               <TableHead>Estado</TableHead>
               <TableHead>Empleados</TableHead>
               <TableHead className="text-right">Total pagado</TableHead>
-              <TableHead className="px-5 text-right">Acción</TableHead>
+              <TableHead className="px-5 text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -2556,6 +2591,25 @@ export function SalaryView({
                         Abrir
                         <ChevronRight className="size-4" />
                       </Link>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon-sm"
+                        aria-label={`Eliminar semana del ${formatDate(week.week_start_date)} al ${formatDate(week.week_end_date)}`}
+                        title={
+                          week.status === "paid"
+                            ? "Las semanas pagadas no se pueden eliminar desde esta tabla"
+                            : "Eliminar semana"
+                        }
+                        disabled={week.status === "paid"}
+                        onClick={() => {
+                          setDeleteTarget(week);
+                          setDeleteNote("");
+                          setDeleteErrors({});
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -2572,6 +2626,64 @@ export function SalaryView({
       </Card>
 
       <WeekSheet open={weekSheetOpen} onOpenChange={setWeekSheetOpen} week={editingWeek} />
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (open) return;
+          setDeleteTarget(null);
+          setDeleteNote("");
+          setDeleteErrors({});
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar semana</DialogTitle>
+            <DialogDescription>
+              La semana se quitará de los registros activos junto con sus actividades, pagos y comprobantes.
+              La observación quedará registrada en auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">
+                {formatDate(deleteTarget.week_start_date)} - {formatDate(deleteTarget.week_end_date)}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {deleteTarget.employees.length} empleado{deleteTarget.employees.length === 1 ? "" : "s"} · Total {formatCurrency(deleteTarget.totals.total)}
+              </p>
+            </div>
+          ) : null}
+          <div className="grid gap-2">
+            <Label htmlFor="delete-salary-week-note">Observación</Label>
+            <Textarea
+              id="delete-salary-week-note"
+              value={deleteNote}
+              onChange={(event) => setDeleteNote(event.target.value)}
+              placeholder="Explica por qué eliminas esta semana; quedará en auditoría"
+              rows={3}
+              aria-invalid={!!deleteErrors.note}
+            />
+            {deleteErrors.note ? <p className="text-xs text-destructive">{deleteErrors.note}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteNote("");
+                setDeleteErrors({});
+              }}
+              disabled={isDeletePending}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={submitDeleteWeek} disabled={isDeletePending}>
+              {isDeletePending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SalaryReceiptsSheet
         key={receiptsWeek?.id ?? "salary-receipts"}
         open={!!receiptsWeek}

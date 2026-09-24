@@ -383,10 +383,22 @@ export const updateSalaryWeekStatusSchema = z.object({
   status: salaryWeekStatus,
 });
 
+const salaryWeekDeleteNote = z
+  .string({ message: "Escribe la observación" })
+  .trim()
+  .min(5, "Explica la observación (mín. 5 caracteres)")
+  .max(500, "Máximo 500 caracteres");
+
+export const deleteSalaryWeekSchema = z.object({
+  salaryWeekId: z.string().uuid("Semana inválida"),
+  note: salaryWeekDeleteNote,
+});
+
 export type SaveSalaryWeekInput = z.infer<typeof saveSalaryWeekSchema>;
 export type SaveSalaryDayRecordInput = z.infer<typeof saveSalaryDayRecordSchema>;
 export type SaveSalaryPaymentInput = z.infer<typeof saveSalaryPaymentSchema>;
 export type UpdateSalaryWeekStatusInput = z.infer<typeof updateSalaryWeekStatusSchema>;
+export type DeleteSalaryWeekInput = z.infer<typeof deleteSalaryWeekSchema>;
 
 const workStatus = z.enum(WORK_STATUSES);
 const workCategory = z.string().trim().min(2, "Selecciona una categoría").max(80, "Máximo 80 caracteres");
@@ -517,15 +529,23 @@ export type RegisterWorkOrderPaymentInput = z.infer<
 export const manualDebtorSchema = z.object({
   id: z.string().uuid("Deudor inválido").optional().or(z.literal("")),
   name,
-  amount: z
-    .number({ error: "Ingresa un monto válido" })
-    .finite("Monto inválido")
-    .min(0, "El monto no puede ser negativo")
-    .max(1_000_000_000, "Monto demasiado alto")
-    .refine(hasMaxTwoDecimals, "Máximo 2 decimales"),
+  amount: money,
+  sourceAccountId: z.string().uuid("Selecciona la cuenta de donde se prestó"),
+  loanDate: isoDate,
+  note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
 });
 
 export type ManualDebtorInput = z.infer<typeof manualDebtorSchema>;
+
+export const manualDebtorPaymentSchema = z.object({
+  debtorId: z.string().uuid("Deudor inválido"),
+  paymentDate: isoDate,
+  amount: money,
+  toAccountId: z.string().uuid("Selecciona la cuenta donde entra el pago"),
+  note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+});
+
+export type ManualDebtorPaymentInput = z.infer<typeof manualDebtorPaymentSchema>;
 
 export const generalBalanceEntrySchema = z
   .object({
@@ -566,6 +586,8 @@ export const financeMovementPaymentForms = [
   "deposit",
 ] as const;
 
+const financeMovementTypes = ["income", "expense"] as const;
+
 export const financeMovementTagSchema = z.object({
   id: z.string().uuid("Etiqueta inválida").optional().or(z.literal("")),
   name,
@@ -583,18 +605,49 @@ export type FinanceMovementConceptInput = z.infer<
   typeof financeMovementConceptSchema
 >;
 
-export const financeCaptureSchema = z.object({
-  conceptId: z.string().uuid("Selecciona concepto"),
-  captureDate: isoDate,
-  amount: money,
-  sourceAccountId: z.string().uuid("Selecciona cuenta de origen"),
-  paymentForm: z.enum(financeMovementPaymentForms, {
-    error: "Selecciona forma de pago",
-  }),
-  description: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
-});
+export const auditNote = z
+  .string({ message: "Escribe el motivo" })
+  .trim()
+  .min(5, "Explica el motivo (mín. 5 caracteres)")
+  .max(500, "Máximo 500 caracteres");
+
+const financeCaptureAuditNote = z
+  .string({ message: "Escribe la observación" })
+  .trim()
+  .min(5, "Explica la observación (mín. 5 caracteres)")
+  .max(500, "Máximo 500 caracteres");
+
+export const financeCaptureSchema = z
+  .object({
+    id: z.string().uuid("Captura inválida").optional().or(z.literal("")),
+    conceptId: z.string().uuid("Selecciona concepto"),
+    captureDate: isoDate,
+    movementType: z.enum(financeMovementTypes, {
+      error: "Selecciona tipo de movimiento",
+    }).default("expense"),
+    amount: money,
+    sourceAccountId: z.string().uuid("Selecciona cuenta"),
+    paymentForm: z.enum(financeMovementPaymentForms, {
+      error: "Selecciona forma de pago",
+    }),
+    description: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+    note: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.id) return;
+    const parsedNote = financeCaptureAuditNote.safeParse(data.note);
+    if (parsedNote.success) return;
+    for (const issue of parsedNote.error.issues) {
+      ctx.addIssue({ ...issue, path: ["note"] });
+    }
+  });
 
 export type FinanceCaptureInput = z.infer<typeof financeCaptureSchema>;
+
+export const deleteFinanceCaptureSchema = z.object({
+  id: z.string().uuid("Captura inválida"),
+  note: financeCaptureAuditNote,
+});
 
 export const settleProviderDebtSchema = z.object({
   provider: name,
@@ -606,13 +659,6 @@ export const settleProviderDebtSchema = z.object({
 });
 
 export type SettleProviderDebtInput = z.infer<typeof settleProviderDebtSchema>;
-
-// ── Auditoría: editar / eliminar movimientos (motivo obligatorio) ────────
-export const auditNote = z
-  .string({ message: "Escribe el motivo" })
-  .trim()
-  .min(5, "Explica el motivo (mín. 5 caracteres)")
-  .max(500, "Máximo 500 caracteres");
 
 export const editProjectMovementSchema = z
   .object({

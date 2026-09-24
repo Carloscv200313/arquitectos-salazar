@@ -27,6 +27,7 @@ const ENTITY_OPTIONS: { value: AuditEntityType | "all"; label: string }[] = [
   { value: "all", label: "Todos los módulos" },
   { value: "project_movement", label: "Proyectos" },
   { value: "work_movement", label: "Obras" },
+  { value: "finance_movement", label: "Movimientos financieros" },
   { value: "work_order", label: "Pedidos" },
   { value: "order_payment", label: "Abonos de pedidos" },
   { value: "salary", label: "Salarios" },
@@ -58,8 +59,11 @@ const FIELD_LABELS: Record<string, string> = {
   concept: "Concepto",
   payment_date: "Fecha",
   movement_date: "Fecha",
+  capture_date: "Fecha contable",
   internal_area: "Área interna",
   payment_method_id: "Forma de pago",
+  source_account_id: "Cuenta de origen",
+  payment_form: "Forma de pago",
   movement_type: "Tipo",
   supplier: "Proveedor",
   category: "Categoría",
@@ -80,6 +84,9 @@ const FIELD_ORDER = [
   "payment_method_id",
   "payment_date",
   "movement_date",
+  "capture_date",
+  "source_account_id",
+  "payment_form",
   "receipt",
   "observations",
 ];
@@ -91,11 +98,23 @@ function formatFieldValue(
 ): string {
   if (value === null || value === undefined || value === "") return "—";
   if (key === "amount") return formatCurrency(Number(value));
-  if (key === "payment_date" || key === "movement_date") return formatDate(String(value));
+  if (key === "payment_date" || key === "movement_date" || key === "capture_date") {
+    return formatDate(String(value));
+  }
   if (key === "internal_area") {
     return PROJECT_SLICE_LABELS[value as keyof typeof PROJECT_SLICE_LABELS] ?? String(value);
   }
   if (key === "payment_method_id") return methodNames[String(value)] ?? "Cuenta";
+  if (key === "source_account_id") return methodNames[String(value)] ?? "Cuenta";
+  if (key === "payment_form") {
+    const labels: Record<string, string> = {
+      transfer: "Transferencia",
+      cash: "Efectivo",
+      check: "Cheque",
+      deposit: "Depósito",
+    };
+    return labels[String(value)] ?? String(value);
+  }
   if (key === "movement_type") return value === "income" ? "Ingreso" : "Egreso";
   return String(value);
 }

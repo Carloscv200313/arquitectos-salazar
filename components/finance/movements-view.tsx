@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  CalendarDays,
   ClipboardList,
   Loader2,
   Pencil,
@@ -12,9 +11,12 @@ import {
   Search,
   Tag,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   WalletCards,
 } from "lucide-react";
 import {
+  deleteFinanceCaptureAction,
   deleteFinanceMovementConceptAction,
   deleteFinanceMovementTagAction,
   saveFinanceCaptureAction,
@@ -33,6 +35,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -54,8 +64,10 @@ import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
 import type {
   FinanceCapturePaymentForm,
   FinanceCaptureReport,
+  FinanceCaptureRow,
   FinanceMovementConcept,
   FinanceMovementTag,
+  MovementType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -70,9 +82,18 @@ const PAYMENT_FORM_LABELS: Record<FinanceCapturePaymentForm, string> = {
   deposit: "Depósito",
 };
 
+const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  expense: "Gasto",
+  income: "Ingreso",
+};
+
 function signedCurrency(value: number) {
   if (Math.abs(value) < 0.001) return formatCurrency(0);
   return `${value < 0 ? "-" : ""}${formatCurrency(Math.abs(value))}`;
+}
+
+function captureSignedAmount(row: Pick<FinanceCaptureRow, "amount" | "movement_type">) {
+  return row.movement_type === "income" ? row.amount : -row.amount;
 }
 
 function monthStartISO(date: string) {
@@ -122,19 +143,26 @@ function CaptureSheet({
   open,
   onOpenChange,
   report,
+  capture,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: FinanceCaptureReport;
+  capture?: FinanceCaptureRow | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [conceptId, setConceptId] = useState("");
-  const [captureDate, setCaptureDate] = useState(todayISODate());
-  const [amount, setAmount] = useState("");
-  const [sourceAccountId, setSourceAccountId] = useState("");
-  const [paymentForm, setPaymentForm] = useState<FinanceCapturePaymentForm>("transfer");
-  const [description, setDescription] = useState("");
+  const isEditing = !!capture;
+  const [conceptId, setConceptId] = useState(capture?.concept_id ?? "");
+  const [captureDate, setCaptureDate] = useState(capture?.capture_date ?? todayISODate());
+  const [movementType, setMovementType] = useState<MovementType>(capture?.movement_type ?? "expense");
+  const [amount, setAmount] = useState(capture ? String(capture.amount) : "");
+  const [sourceAccountId, setSourceAccountId] = useState(capture?.source_account_id ?? "");
+  const [paymentForm, setPaymentForm] = useState<FinanceCapturePaymentForm>(
+    capture?.payment_form ?? "transfer",
+  );
+  const [description, setDescription] = useState(capture?.description ?? "");
+  const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const conceptItems = useMemo(
@@ -149,10 +177,12 @@ function CaptureSheet({
   function reset() {
     setConceptId("");
     setCaptureDate(todayISODate());
+    setMovementType("expense");
     setAmount("");
     setSourceAccountId("");
     setPaymentForm("transfer");
     setDescription("");
+    setNote("");
     setErrors({});
   }
 
@@ -160,15 +190,18 @@ function CaptureSheet({
     setErrors({});
     startTransition(async () => {
       const result = await saveFinanceCaptureAction({
+        id: capture?.id ?? "",
         conceptId,
         captureDate,
+        movementType,
         amount: Number(amount),
         sourceAccountId,
         paymentForm,
         description,
+        note: isEditing ? note : "",
       });
       if (result.ok) {
-        toast.success("Captura registrada", {
+        toast.success(isEditing ? "Captura actualizada" : "Captura registrada", {
           description: `${formatCurrency(Number(amount))} · ${captureDate}`,
         });
         reset();
@@ -191,13 +224,41 @@ function CaptureSheet({
     >
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>Nueva Captura</SheetTitle>
+          <SheetTitle>{isEditing ? "Editar Captura" : "Nueva Captura"}</SheetTitle>
           <SheetDescription>
-            Registra una captura contable con concepto, cuenta y forma de pago.
+            {isEditing
+              ? "Actualiza la captura contable seleccionada."
+              : "Registra una captura contable con concepto, cuenta y forma de pago."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="grid gap-4 px-4 pb-4">
+          <div className="grid gap-2">
+            <Label>Tipo de movimiento</Label>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Tipo de movimiento">
+              <Button
+                type="button"
+                variant={movementType === "expense" ? "destructive" : "outline"}
+                onClick={() => setMovementType("expense")}
+                aria-pressed={movementType === "expense"}
+              >
+                <TrendingDown className="size-4" />
+                Gasto
+              </Button>
+              <Button
+                type="button"
+                variant={movementType === "income" ? "default" : "outline"}
+                className={cn(movementType === "income" && "bg-brand text-brand-foreground hover:bg-brand/90")}
+                onClick={() => setMovementType("income")}
+                aria-pressed={movementType === "income"}
+              >
+                <TrendingUp className="size-4" />
+                Ingreso
+              </Button>
+            </div>
+            {errors.movementType && <p className="text-xs text-destructive">{errors.movementType}</p>}
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="capture-concept">Concepto</Label>
             <Select value={conceptId} onValueChange={(value) => setConceptId(value ?? "")} items={conceptItems}>
@@ -242,10 +303,12 @@ function CaptureSheet({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="capture-account">Cuenta de origen</Label>
+              <Label htmlFor="capture-account">
+                {movementType === "income" ? "Cuenta de destino" : "Cuenta de origen"}
+              </Label>
               <Select value={sourceAccountId} onValueChange={(value) => setSourceAccountId(value ?? "")} items={accountItems}>
                 <SelectTrigger id="capture-account" className="w-full" aria-invalid={!!errors.sourceAccountId}>
-                  <SelectValue placeholder="Cuenta origen" />
+                  <SelectValue placeholder={movementType === "income" ? "Cuenta destino" : "Cuenta origen"} />
                 </SelectTrigger>
                 <SelectContent>
                   {report.accounts.map((account) => (
@@ -291,9 +354,24 @@ function CaptureSheet({
             {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
+          {isEditing && (
+            <div className="grid gap-2">
+              <Label htmlFor="capture-note">Observación</Label>
+              <Textarea
+                id="capture-note"
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Explica por qué editas esta captura; quedará en auditoría"
+                rows={3}
+                aria-invalid={!!errors.note}
+              />
+              {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+            </div>
+          )}
+
           <Button onClick={submit} disabled={isPending || report.concepts.length === 0}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            Guardar captura
+            {isEditing ? "Guardar cambios" : "Guardar captura"}
           </Button>
         </div>
       </SheetContent>
@@ -643,7 +721,13 @@ function CatalogsTab({ report }: { report: FinanceCaptureReport }) {
 }
 
 function CapturesTab({ report }: { report: FinanceCaptureReport }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const [editingCapture, setEditingCapture] = useState<FinanceCaptureRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinanceCaptureRow | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
   const currentMonthStart = monthStartISO(todayISODate());
   const currentMonthEnd = monthEndISO(todayISODate());
   const [draftFrom, setDraftFrom] = useState(currentMonthStart);
@@ -685,25 +769,52 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
   );
 
   const filteredTotal = useMemo(
-    () => filteredRows.reduce((sum, row) => sum + row.amount, 0),
+    () => filteredRows.reduce((sum, row) => sum + captureSignedAmount(row), 0),
     [filteredRows],
   );
+
+  function openNewCapture() {
+    setEditingCapture(null);
+    setOpen(true);
+  }
+
+  function openEditCapture(row: FinanceCaptureRow) {
+    setEditingCapture(row);
+    setOpen(true);
+  }
+
+  function submitDelete() {
+    if (!deleteTarget) return;
+    setDeleteErrors({});
+    startTransition(async () => {
+      const result = await deleteFinanceCaptureAction({ id: deleteTarget.id, note: deleteNote });
+      if (result.ok) {
+        toast.success("Captura eliminada");
+        setDeleteTarget(null);
+        setDeleteNote("");
+        router.refresh();
+      } else {
+        if (result.fieldErrors) setDeleteErrors(result.fieldErrors);
+        toast.error(result.error);
+      }
+    });
+  }
 
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
-          label="Total capturado"
-          value={formatCurrency(report.totals.amount)}
-          hint="Acumulado de registros"
+          label="Ingresos"
+          value={formatCurrency(report.totals.incomeAmount)}
+          hint="Capturas registradas como ingreso"
           icon={<WalletCards className="size-5" />}
           accent
         />
         <Metric
-          label="Mes actual"
-          value={formatCurrency(report.totals.currentMonthAmount)}
-          hint="Capturas del mes"
-          icon={<CalendarDays className="size-5" />}
+          label="Gastos"
+          value={formatCurrency(report.totals.expenseAmount)}
+          hint="Capturas registradas como gasto"
+          icon={<TrendingDown className="size-5" />}
         />
         <Metric
           label="Saldo actual"
@@ -725,11 +836,11 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
             <div>
               <h2 className="font-semibold">Registros de Captura</h2>
               <p className="text-sm text-muted-foreground">
-                Capturas contables por concepto, cuenta de origen y forma de pago.
+                Capturas contables por concepto, cuenta y forma de pago.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => setOpen(true)}>
+              <Button onClick={openNewCapture}>
                 <Plus className="size-4" />
                 Nueva Captura
               </Button>
@@ -810,11 +921,13 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
               <TableRow>
                 <TableHead className="w-14 px-5 text-xs uppercase text-muted-foreground">#</TableHead>
                 <TableHead className="min-w-56 text-xs uppercase text-muted-foreground">Concepto</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
                 <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
                 <TableHead className="text-right text-xs uppercase text-muted-foreground">Valor</TableHead>
-                <TableHead className="min-w-44 text-xs uppercase text-muted-foreground">Cuenta de origen</TableHead>
+                <TableHead className="min-w-44 text-xs uppercase text-muted-foreground">Cuenta</TableHead>
                 <TableHead className="min-w-40 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
                 <TableHead className="min-w-72 px-5 text-xs uppercase text-muted-foreground">Nombre / Descripción</TableHead>
+                <TableHead className="w-28 px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -822,31 +935,81 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                 <TableRow key={row.id}>
                   <TableCell className="px-5 text-muted-foreground">{filteredRows.length - index}</TableCell>
                   <TableCell className="font-medium">{row.concept?.name ?? "-"}</TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                        row.movement_type === "income"
+                          ? "bg-brand-muted text-brand-foreground"
+                          : "bg-destructive/10 text-destructive",
+                      )}
+                    >
+                      {MOVEMENT_TYPE_LABELS[row.movement_type]}
+                    </span>
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(row.capture_date)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums text-brand-foreground">
-                    {formatCurrency(row.amount)}
+                  <TableCell
+                    className={cn(
+                      "text-right font-semibold tabular-nums",
+                      row.movement_type === "income" ? "text-brand-foreground" : "text-destructive",
+                    )}
+                  >
+                    {signedCurrency(captureSignedAmount(row))}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{row.account?.name ?? "-"}</TableCell>
                   <TableCell className="text-muted-foreground">{PAYMENT_FORM_LABELS[row.payment_form]}</TableCell>
                   <TableCell className="px-5 text-muted-foreground">{row.description || "-"}</TableCell>
+                  <TableCell className="px-5">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-8"
+                        title="Editar captura"
+                        onClick={() => openEditCapture(row)}
+                      >
+                        <Pencil className="size-4" />
+                        <span className="sr-only">Editar captura</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-8 text-destructive hover:text-destructive"
+                        title="Eliminar captura"
+                        onClick={() => {
+                          setDeleteTarget(row);
+                          setDeleteNote("");
+                          setDeleteErrors({});
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                        <span className="sr-only">Eliminar captura</span>
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {filteredRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     Sin capturas registradas para los filtros.
                   </TableCell>
                 </TableRow>
               )}
               {filteredRows.length > 0 && (
                 <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
-                  <TableCell className="px-5" colSpan={3}>
-                    Total filtrado
+                  <TableCell className="px-5" colSpan={4}>
+                    Total filtrado neto
                   </TableCell>
-                  <TableCell className="text-right tabular-nums text-brand-foreground">
-                    {formatCurrency(filteredTotal)}
+                  <TableCell
+                    className={cn(
+                      "text-right tabular-nums",
+                      filteredTotal >= 0 ? "text-brand-foreground" : "text-destructive",
+                    )}
+                  >
+                    {signedCurrency(filteredTotal)}
                   </TableCell>
-                  <TableCell className="px-5" colSpan={3} />
+                  <TableCell className="px-5" colSpan={4} />
                 </TableRow>
               )}
             </TableBody>
@@ -854,7 +1017,63 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
         </div>
       </Card>
 
-      <CaptureSheet open={open} onOpenChange={setOpen} report={report} />
+      <CaptureSheet
+        key={editingCapture?.id ?? "new-capture"}
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) setEditingCapture(null);
+        }}
+        report={report}
+        capture={editingCapture}
+      />
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) return;
+          setDeleteTarget(null);
+          setDeleteNote("");
+          setDeleteErrors({});
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar captura</DialogTitle>
+            <DialogDescription>
+              Esta captura se quitará de los registros activos y los totales se recalcularán.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{deleteTarget.concept?.name ?? "Sin concepto"}</p>
+              <p className="mt-1 text-muted-foreground">
+                {MOVEMENT_TYPE_LABELS[deleteTarget.movement_type]} · {formatDate(deleteTarget.capture_date)} · {signedCurrency(captureSignedAmount(deleteTarget))}
+              </p>
+            </div>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="delete-capture-note">Observación</Label>
+            <Textarea
+              id="delete-capture-note"
+              value={deleteNote}
+              onChange={(event) => setDeleteNote(event.target.value)}
+              placeholder="Explica por qué eliminas esta captura; quedará en auditoría"
+              rows={3}
+              aria-invalid={!!deleteErrors.note}
+            />
+            {deleteErrors.note && <p className="text-xs text-destructive">{deleteErrors.note}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={submitDelete} disabled={isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -278,9 +278,24 @@ export interface ManualDebtor {
   id: string;
   name: string;
   amount: number;
+  source_account_id: string | null;
+  loan_date: string;
+  note: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
+}
+
+export interface ManualDebtorPayment {
+  id: string;
+  debtor_id: string;
+  payment_date: string;
+  amount: number;
+  to_account_id: string;
+  note: string | null;
+  created_at: string;
+  created_by: string | null;
+  account: PaymentMethod | null;
 }
 
 export interface DebtReportRow {
@@ -289,6 +304,10 @@ export interface DebtReportRow {
   amount: number;
   type: DebtPartyType;
   source: "manual" | "works" | "orders" | "mixed";
+  totalAmount?: number;
+  totalPaid?: number;
+  sourceAccountName?: string | null;
+  loanDate?: string | null;
 }
 
 export type ProviderDebtSourceType = "work_order" | "work_movement";
@@ -315,6 +334,14 @@ export interface ProviderDebtDetail {
   totalPending: number;
   orders: WorkOrderWithRelations[];
   workMovements: WorkMovementProviderDebt[];
+}
+
+export interface ManualDebtorDetail {
+  debtor: ManualDebtor & { account: PaymentMethod | null };
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  payments: ManualDebtorPayment[];
 }
 
 export interface GeneralBalanceEntry {
@@ -414,6 +441,7 @@ export interface FinanceCaptureRow {
   id: string;
   concept_id: string;
   capture_date: string;
+  movement_type: MovementType;
   amount: number;
   source_account_id: string;
   payment_form: FinanceCapturePaymentForm;
@@ -432,9 +460,13 @@ export interface FinanceCaptureReport {
   accounts: PaymentMethod[];
   totals: {
     amount: number;
+    incomeAmount: number;
+    expenseAmount: number;
     count: number;
     currentBalance: number;
     currentMonthAmount: number;
+    currentMonthIncome: number;
+    currentMonthExpense: number;
   };
 }
 
@@ -631,6 +663,7 @@ export type AuditOperation = "create" | "update" | "delete";
 export type AuditEntityType =
   | "project_movement"
   | "work_movement"
+  | "finance_movement"
   | "work_order"
   | "order_payment"
   | "salary";

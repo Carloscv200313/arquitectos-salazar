@@ -491,11 +491,32 @@ create table if not exists public.manual_debtors (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   amount     numeric(14,2) not null default 0,
+  source_account_id uuid references public.payment_accounts(id),
+  loan_date  date not null default current_date,
+  note       text,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   created_by uuid references auth.users(id)
 );
+
+create table if not exists public.manual_debtor_payments (
+  id            uuid primary key default gen_random_uuid(),
+  debtor_id     uuid not null references public.manual_debtors(id),
+  payment_date  date not null default current_date,
+  amount        numeric(14,2) not null default 0,
+  to_account_id uuid not null references public.payment_accounts(id),
+  note          text,
+  status        smallint not null default 1,
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users(id)
+);
+create index if not exists manual_debtor_payments_debtor_idx
+  on public.manual_debtor_payments(debtor_id)
+  where status = 1;
+create index if not exists manual_debtor_payments_account_idx
+  on public.manual_debtor_payments(to_account_id)
+  where status = 1;
 
 create table if not exists public.provider_debt_settlements (
   id              uuid primary key default gen_random_uuid(),
@@ -570,6 +591,7 @@ create table if not exists public.finance_movement_captures (
   id                uuid primary key default gen_random_uuid(),
   concept_id        uuid not null references public.finance_movement_concepts(id),
   capture_date      date not null,
+  movement_type     text not null default 'expense' check (movement_type in ('income','expense')),
   amount            numeric(14,2) not null default 0,
   source_account_id uuid not null references public.payment_accounts(id),
   payment_form      text not null check (payment_form in ('transfer','cash','check','deposit')),
@@ -629,7 +651,7 @@ begin
     'project_payments','internal_transfers','works','work_movements','work_files',
     'work_category_budgets',
     'work_internal_transfers','work_orders','work_order_payments','salary_weeks',
-    'salary_day_records','salary_payments','manual_debtors','provider_debt_settlements','general_balance_entries',
+    'salary_day_records','salary_payments','manual_debtors','manual_debtor_payments','provider_debt_settlements','general_balance_entries',
     'general_balance_account_movements','finance_movement_tags','finance_movement_concepts','finance_movement_captures'
   ] loop
     execute format('alter table public.%I enable row level security;', t);
