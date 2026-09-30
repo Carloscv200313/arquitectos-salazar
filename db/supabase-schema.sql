@@ -498,7 +498,7 @@ create table if not exists public.manual_debtors (
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  created_by uuid references auth.users(id)
+  created_by uuid
 );
 
 create table if not exists public.manual_debtor_payments (
@@ -511,7 +511,7 @@ create table if not exists public.manual_debtor_payments (
   note          text,
   status        smallint not null default 1,
   created_at    timestamptz not null default now(),
-  created_by    uuid references auth.users(id)
+  created_by    uuid
 );
 create index if not exists manual_debtor_payments_debtor_idx
   on public.manual_debtor_payments(debtor_id)

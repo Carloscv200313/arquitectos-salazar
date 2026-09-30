@@ -43,7 +43,7 @@ import type {
 } from "@/lib/types";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
-import { getUtilityReport, listProjects } from "./projects";
+import { deleteProjectMovement, getUtilityReport, listProjects } from "./projects";
 import { getWorksAdministrationUtilityReport, listWorks } from "./works";
 import { listWorkOrders } from "./orders";
 import { writeAudit } from "./audit";
@@ -1403,6 +1403,62 @@ export async function registerManualDebtorPayment(
     `Abono de deudor · ${detail.debtor.name} · ${amount.toFixed(2)}`,
   );
   return created.id as string;
+}
+
+export async function deleteManualDebtorPayment(data: {
+  paymentId: string;
+  note: string;
+}): Promise<{ debtorId: string; projectId: string | null }> {
+  const client = sb();
+  const { data: payment, error } = await client
+    .from("manual_debtor_payments")
+    .select("id, debtor_id, project_payment_id, payment_date, amount, to_account_id, note, status")
+    .eq("id", data.paymentId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!payment) throw new Error("No se encontró el abono activo.");
+
+  const { data: debtor, error: debtorError } = await client
+    .from("manual_debtors")
+    .select("name, project_id")
+    .eq("id", payment.debtor_id as string)
+    .maybeSingle();
+  if (debtorError) throw new Error(debtorError.message);
+
+  if (payment.project_payment_id) {
+    await deleteProjectMovement(payment.project_payment_id as string, data.note);
+  } else {
+    const { error: updateError } = await client
+      .from("manual_debtor_payments")
+      .update({ status: 0 })
+      .eq("id", data.paymentId)
+      .eq("status", 1);
+    if (updateError) throw new Error(updateError.message);
+
+    await writeAudit({
+      entityType: "finance_movement",
+      entityId: data.paymentId,
+      operation: "delete",
+      note: data.note,
+      amount: num(payment.amount),
+      description: `Abono de deudor · ${debtor?.name ?? "Deudor"}`,
+      snapshot: {
+        before: {
+          debtor_id: payment.debtor_id,
+          payment_date: payment.payment_date,
+          amount: num(payment.amount),
+          to_account_id: payment.to_account_id,
+          note: payment.note,
+        },
+      },
+    });
+  }
+
+  return {
+    debtorId: payment.debtor_id as string,
+    projectId: (debtor?.project_id as string | null) ?? null,
+  };
 }
 
 export interface SaveManualProviderDebtData {

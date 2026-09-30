@@ -3,13 +3,25 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarDays, CheckCircle2, HandCoins, Loader2, WalletCards } from "lucide-react";
-import { registerManualDebtorPaymentAction } from "@/app/(dashboard)/finance/actions";
+import { CalendarDays, CheckCircle2, HandCoins, Loader2, Trash2, WalletCards } from "lucide-react";
+import {
+  deleteManualDebtorPaymentAction,
+  registerManualDebtorPaymentAction,
+} from "@/app/(dashboard)/finance/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -211,6 +223,37 @@ export function DebtorDebtDetail({
   accounts: PaymentMethod[];
 }) {
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ManualDebtorDetail["payments"][number] | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeletePending, startDeleteTransition] = useTransition();
+  const router = useRouter();
+
+  function submitDelete() {
+    const note = deleteNote.trim();
+    if (note.length < 3) {
+      setDeleteError("Escribe una observación de al menos 3 caracteres.");
+      return;
+    }
+    if (!deleteTarget) return;
+
+    setDeleteError("");
+    startDeleteTransition(async () => {
+      const result = await deleteManualDebtorPaymentAction({
+        paymentId: deleteTarget.id,
+        note,
+      });
+      if (!result.ok) {
+        setDeleteError(result.error);
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Abono eliminado", { description: "La observación quedó registrada en auditoría." });
+      setDeleteTarget(null);
+      setDeleteNote("");
+      router.refresh();
+    });
+  }
 
   return (
     <>
@@ -277,6 +320,7 @@ export function DebtorDebtDetail({
                   <TableHead>Cuenta destino</TableHead>
                   <TableHead>Nota</TableHead>
                   <TableHead className="px-5 text-right">Monto</TableHead>
+                  <TableHead className="w-14 px-3 text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -290,11 +334,27 @@ export function DebtorDebtDetail({
                     <TableCell className="px-5 text-right font-semibold tabular-nums text-brand-foreground">
                       {formatCurrency(payment.amount)}
                     </TableCell>
+                    <TableCell className="px-3 text-right">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label="Eliminar abono"
+                        title="Eliminar abono"
+                        onClick={() => {
+                          setDeleteTarget(payment);
+                          setDeleteNote("");
+                          setDeleteError("");
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
                 {detail.payments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
                       Sin abonos registrados.
                     </TableCell>
                   </TableRow>
@@ -311,6 +371,56 @@ export function DebtorDebtDetail({
         detail={detail}
         accounts={accounts}
       />
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (open || isDeletePending) return;
+          setDeleteTarget(null);
+          setDeleteNote("");
+          setDeleteError("");
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar abono</DialogTitle>
+            <DialogDescription>
+              {deleteTarget?.project_payment_id
+                ? "Este abono también se eliminará de los movimientos del proyecto. La observación quedará en auditoría."
+                : "El abono se quitará de los registros activos y el saldo se recalculará. La observación quedará en auditoría."}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{formatDate(deleteTarget.payment_date)}</p>
+              <p className="mt-1 text-muted-foreground">
+                {deleteTarget.account?.name ?? "Cuenta"} · {formatCurrency(deleteTarget.amount)}
+              </p>
+            </div>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="delete-debtor-payment-note">Observación</Label>
+            <Textarea
+              id="delete-debtor-payment-note"
+              value={deleteNote}
+              onChange={(event) => setDeleteNote(event.target.value)}
+              placeholder="Explica por qué eliminas este abono"
+              rows={3}
+              aria-invalid={!!deleteError}
+              disabled={isDeletePending}
+            />
+            {deleteError && <p className="text-xs text-destructive">{deleteError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeletePending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={submitDelete} disabled={isDeletePending}>
+              {isDeletePending && <Loader2 className="size-4 animate-spin" />}
+              Eliminar abono
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

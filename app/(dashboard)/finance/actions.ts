@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   deleteFinanceCapture,
+  deleteManualDebtorPayment,
   deleteSalaryDayRecord,
   deleteSalaryPayment,
   deleteSalaryWeek,
@@ -29,6 +30,7 @@ import {
   generalBalanceAccountMovementSchema,
   generalBalanceEntrySchema,
   deleteFinanceCaptureSchema,
+  deleteManualDebtorPaymentSchema,
   financeCaptureSchema,
   financeMovementConceptSchema,
   financeMovementTagSchema,
@@ -134,6 +136,32 @@ export async function registerManualDebtorPaymentAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo registrar el abono.",
+    };
+  }
+}
+
+export async function deleteManualDebtorPaymentAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteManualDebtorPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Escribe una observación válida para eliminar el abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const deleted = await deleteManualDebtorPayment(parsed.data);
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/deudor-${deleted.debtorId}`);
+    revalidatePath("/finance/balance-general");
+    revalidatePath("/auditoria");
+    if (deleted.projectId) revalidatePath(`/projects/${deleted.projectId}`);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar el abono.",
     };
   }
 }

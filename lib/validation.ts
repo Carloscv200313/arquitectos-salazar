@@ -616,6 +616,11 @@ export const manualDebtorPaymentSchema = z.object({
 
 export type ManualDebtorPaymentInput = z.infer<typeof manualDebtorPaymentSchema>;
 
+export const deleteManualDebtorPaymentSchema = z.object({
+  paymentId: z.string().uuid("Abono inválido"),
+  note: z.string().trim().min(3, "Escribe una observación").max(500, "Máximo 500 caracteres"),
+});
+
 export const manualProviderDebtSchema = z.object({
   id: z.string().uuid("Deuda inválida").optional().or(z.literal("")),
   provider: name,

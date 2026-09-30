@@ -12,8 +12,14 @@ create table if not exists public.manual_debtor_payments (
   note          text,
   status        smallint not null default 1,
   created_at    timestamptz not null default now(),
-  created_by    uuid references auth.users(id)
+  created_by    uuid
 );
+
+-- El sistema usa usuarios propios en public.users, no auth.users.
+alter table public.manual_debtors
+  drop constraint if exists manual_debtors_created_by_fkey;
+alter table public.manual_debtor_payments
+  drop constraint if exists manual_debtor_payments_created_by_fkey;
 
 create index if not exists manual_debtor_payments_debtor_idx
   on public.manual_debtor_payments(debtor_id)
