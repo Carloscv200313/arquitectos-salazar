@@ -2104,7 +2104,7 @@ export async function saveSalaryDayRecord(data: SaveSalaryDayRecordData): Promis
   return recordId;
 }
 
-export async function deleteSalaryDayRecord(data: { recordId: string; userId: string | null }): Promise<void> {
+export async function deleteSalaryDayRecord(data: { recordId: string; note: string; userId: string | null }): Promise<void> {
   const client = sb();
   const { data: record } = await client
     .from("salary_day_records")
@@ -2176,7 +2176,7 @@ export async function deleteSalaryDayRecord(data: { recordId: string; userId: st
     }
   }
 
-  await audit("day_record_deleted", data.recordId, "Actividad diaria eliminada");
+  await audit("day_record_deleted", data.recordId, `Actividad diaria eliminada. Observación: ${data.note.trim()}`);
 }
 
 export interface SaveSalaryPaymentData {

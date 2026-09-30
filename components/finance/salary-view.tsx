@@ -12,6 +12,7 @@ import {
   Eye,
   FolderKanban,
   Loader2,
+  Pencil,
   Plus,
   Printer,
   ReceiptText,
@@ -535,6 +536,11 @@ function ActivitySheet({
   const [isDeletePending, startDeleteTransition] = useTransition();
   const [localRecords, setLocalRecords] = useState(records);
   const editableRecords = useMemo(() => visibleDayRecords(localRecords), [localRecords]);
+  const [editingRecord, setEditingRecord] = useState<SalaryDayRecordWithRelations | null>(null);
+  const [detailRecord, setDetailRecord] = useState<SalaryDayRecordWithRelations | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SalaryDayRecordWithRelations | null>(null);
+  const [deleteNote, setDeleteNote] = useState("");
+  const [deleteErrors, setDeleteErrors] = useState<Record<string, string>>({});
   const [activityType, setActivityType] = useState<SalaryActivityType>("project");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [workId, setWorkId] = useState<string | null>(null);
@@ -549,6 +555,20 @@ function ActivitySheet({
     setWorkId(null);
     setTaskTypeId(null);
     setNotes("");
+    setEditingRecord(null);
+    setErrors({});
+  }
+
+  function loadRecord(record: SalaryDayRecordWithRelations) {
+    const nextType = SALARY_ACTIVITY_FORM_TYPES.includes(record.activity_type as never)
+      ? record.activity_type
+      : "project";
+    setEditingRecord(record);
+    setActivityType(nextType);
+    setProjectId(nextType === "project" ? record.project_id : null);
+    setWorkId(nextType === "work" ? record.work_id : null);
+    setTaskTypeId(nextType === "project" ? record.task_type_id : null);
+    setNotes(record.notes ?? "");
     setErrors({});
   }
 
@@ -619,7 +639,7 @@ function ActivitySheet({
     setErrors({});
     startTransition(async () => {
       const result = await saveSalaryDayRecordAction({
-        id: "",
+        id: editingRecord?.id ?? "",
         salaryWeekId: week.id,
         employeeId: employee.id,
         workDate,
@@ -632,11 +652,12 @@ function ActivitySheet({
         status: "recorded",
       });
       if (result.ok) {
-        toast.success("Actividad registrada");
+        toast.success(editingRecord ? "Actividad actualizada" : "Actividad registrada");
         const now = new Date().toISOString();
         const selectedProject = filteredProjectOptions.find((item) => item.id === projectId) ?? null;
         const selectedWork = workOptions.find((item) => item.id === workId) ?? null;
         const selectedTask = taskTypes.find((item) => item.id === taskTypeId) ?? null;
+        const sourceRecord = editingRecord ?? null;
         const nextRecord = {
           id: result.data.recordId,
           salary_week_id: week.id,
@@ -649,9 +670,9 @@ function ActivitySheet({
           task_type_id: activityType === "project" ? taskTypeId : null,
           notes: notes.trim() || null,
           status: "recorded" as const,
-          created_at: now,
+          created_at: sourceRecord?.created_at ?? now,
           updated_at: now,
-          created_by: null,
+          created_by: sourceRecord?.created_by ?? null,
           employee,
           project:
             activityType === "project" && selectedProject
@@ -721,20 +742,26 @@ function ActivitySheet({
     resetDraft();
   }
 
-  function deleteRecord(record: SalaryDayRecordWithRelations) {
-    const label = recordLabel(record);
-    if (!window.confirm(`Se eliminará la actividad "${label}".`)) return;
+  function submitDeleteRecord() {
+    if (!deleteTarget || !week) return;
+    setDeleteErrors({});
 
     startDeleteTransition(async () => {
       const result = await deleteSalaryDayRecordAction({
-        recordId: record.id,
-        salaryWeekId: week?.id,
+        recordId: deleteTarget.id,
+        salaryWeekId: week.id,
+        note: deleteNote,
       });
       if (result.ok) {
         toast.success("Actividad eliminada");
-        setLocalRecords((current) => current.filter((item) => item.id !== record.id));
+        setLocalRecords((current) => current.filter((item) => item.id !== deleteTarget.id));
+        if (editingRecord?.id === deleteTarget.id) resetDraft();
+        setDeleteTarget(null);
+        setDeleteNote("");
+        setDeleteErrors({});
         router.refresh();
       } else {
+        setDeleteErrors(result.fieldErrors ?? {});
         toast.error(result.error);
       }
     });
@@ -765,7 +792,7 @@ function ActivitySheet({
                   <TableHead>Referencia</TableHead>
                   <TableHead>Tarea</TableHead>
                   <TableHead className="px-4 text-right">Estado</TableHead>
-                  <TableHead className="w-[92px] px-4 text-right">Acciones</TableHead>
+                  <TableHead className="w-[132px] px-4 text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -786,24 +813,57 @@ function ActivitySheet({
                       </span>
                     </TableCell>
                     <TableCell className="px-4 text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        disabled={isDeletePending}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteRecord(item);
-                        }}
-                        title="Eliminar actividad"
-                      >
-                        {isDeletePending ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-3.5" />
-                        )}
-                      </Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDetailRecord(item);
+                          }}
+                          title="Ver detalle"
+                        >
+                          <Eye className="size-3.5" />
+                          <span className="sr-only">Ver detalle</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            loadRecord(item);
+                          }}
+                          title="Editar actividad"
+                        >
+                          <Pencil className="size-3.5" />
+                          <span className="sr-only">Editar actividad</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={isDeletePending}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDeleteTarget(item);
+                            setDeleteNote("");
+                            setDeleteErrors({});
+                          }}
+                          title="Eliminar actividad"
+                        >
+                          {isDeletePending && deleteTarget?.id === item.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="size-3.5" />
+                          )}
+                          <span className="sr-only">Eliminar actividad</span>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -837,7 +897,9 @@ function ActivitySheet({
           <div className="grid gap-2">
             <div className="flex items-center justify-between gap-3">
               <Label>Tipo de actividad</Label>
-              <span className="text-xs text-muted-foreground">Solo alta nueva o eliminación</span>
+              <span className="text-xs text-muted-foreground">
+                {editingRecord ? "Editando actividad" : "Alta nueva"}
+              </span>
             </div>
             <Select
               value={activityType}
@@ -903,10 +965,122 @@ function ActivitySheet({
           </div>
           <Button onClick={submit} disabled={isPending}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <ClipboardPen className="size-4" />}
-            Guardar actividad
+            {editingRecord ? "Guardar cambios" : "Guardar actividad"}
           </Button>
+          {editingRecord ? (
+            <Button type="button" variant="outline" onClick={resetDraft} disabled={isPending}>
+              Cancelar edición
+            </Button>
+          ) : null}
         </div>
       </SheetContent>
+      <Dialog open={!!detailRecord} onOpenChange={(nextOpen) => !nextOpen && setDetailRecord(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Detalle de actividad</DialogTitle>
+            <DialogDescription>
+              {employee?.full_name} · {detailRecord ? formatDate(detailRecord.work_date) : "Sin fecha"}
+            </DialogDescription>
+          </DialogHeader>
+          {detailRecord ? (
+            <div className="grid gap-3 text-sm">
+              <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+                <span className="text-xs font-medium text-muted-foreground">Tipo</span>
+                <span className="font-medium">{SALARY_ASSIGNMENT_LABELS[detailRecord.activity_type]}</span>
+              </div>
+              <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+                <span className="text-xs font-medium text-muted-foreground">Referencia</span>
+                <span className="font-medium">{recordLabel(detailRecord)}</span>
+              </div>
+              <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+                <span className="text-xs font-medium text-muted-foreground">Tarea</span>
+                <span className="font-medium">
+                  {detailRecord.activity_type === "project" ? detailRecord.taskType?.name ?? "Sin tarea" : "—"}
+                </span>
+              </div>
+              <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+                <span className="text-xs font-medium text-muted-foreground">Estado</span>
+                <span className="font-medium">{SALARY_RECORD_STATUS_LABELS[detailRecord.status]}</span>
+              </div>
+              <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+                <span className="text-xs font-medium text-muted-foreground">Observación</span>
+                <span className="whitespace-pre-wrap">{detailRecord.notes?.trim() || "Sin observación"}</span>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailRecord(null)}>
+              Cerrar
+            </Button>
+            {detailRecord ? (
+              <Button
+                onClick={() => {
+                  loadRecord(detailRecord);
+                  setDetailRecord(null);
+                }}
+              >
+                <Pencil className="size-4" />
+                Editar
+              </Button>
+            ) : null}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) return;
+          setDeleteTarget(null);
+          setDeleteNote("");
+          setDeleteErrors({});
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar actividad</DialogTitle>
+            <DialogDescription>
+              La actividad se quitará del día y la observación quedará registrada en auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget ? (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{recordLabel(deleteTarget)}</p>
+              <p className="mt-1 text-muted-foreground">
+                {SALARY_ASSIGNMENT_LABELS[deleteTarget.activity_type]} · {deleteTarget.work_date ? formatDate(deleteTarget.work_date) : "Sin fecha"}
+              </p>
+            </div>
+          ) : null}
+          <div className="grid gap-2">
+            <Label htmlFor="delete-salary-day-record-note">Observación</Label>
+            <Textarea
+              id="delete-salary-day-record-note"
+              value={deleteNote}
+              onChange={(event) => setDeleteNote(event.target.value)}
+              placeholder="Explica por qué eliminas esta actividad; quedará en auditoría"
+              rows={3}
+              aria-invalid={!!deleteErrors.note}
+            />
+            {deleteErrors.note ? <p className="text-xs text-destructive">{deleteErrors.note}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteNote("");
+                setDeleteErrors({});
+              }}
+              disabled={isDeletePending}
+            >
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={submitDeleteRecord} disabled={isDeletePending}>
+              {isDeletePending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

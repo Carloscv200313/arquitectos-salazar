@@ -619,14 +619,24 @@ export async function deleteSalaryDayRecordAction(
   const parsed = z.object({
     recordId: z.string().min(1),
     salaryWeekId: z.string().uuid("Semana inválida"),
+    note: z
+      .string({ message: "Escribe la observación" })
+      .trim()
+      .min(5, "Explica la observación (mín. 5 caracteres)")
+      .max(500, "Máximo 500 caracteres"),
   }).safeParse(raw);
   if (!parsed.success) {
-    return { ok: false, error: "Actividad inválida." };
+    return {
+      ok: false,
+      error: "Revisa la observación para eliminar la actividad.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
   }
 
   try {
     await deleteSalaryDayRecord({
       recordId: parsed.data.recordId,
+      note: parsed.data.note,
       userId: currentUserId(),
     });
     revalidateSalaryPaths(parsed.data.salaryWeekId);
