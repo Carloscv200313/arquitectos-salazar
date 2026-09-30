@@ -64,6 +64,7 @@ export default async function ProjectDetailPage({
           projectId={project.id}
           projectName={project.name}
           pending={project.finance.pending}
+          isCreditProject={project.template === "credito"}
           methods={methods}
         />
       </div>

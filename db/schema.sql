@@ -52,16 +52,16 @@ create table if not exists public.projects (
   -- domicilio / dirección de la obra (opcional)
   address            text check (address is null or char_length(trim(address)) between 2 and 200),
   -- distribution template for the internal areas
-  template           text not null default 'diamante' check (template in ('diamante', 'oro', 'especial')),
+  template           text not null default 'diamante' check (template in ('diamante', 'oro', 'especial', 'credito')),
   -- base amount charged to the client
-  project_amount     numeric(14,2) not null check (project_amount > 0),
+  project_amount     numeric(14,2) not null check (project_amount >= 0),
   -- retained for backward compatibility with legacy data; no longer used in UI totals
   office_amount      numeric(14,2) not null default 0 check (office_amount >= 0),
   utility_amount     numeric(14,2) not null default 0 check (utility_amount >= 0),
   -- sum of additional line items (see project_addons)
   addons_total       numeric(14,2) not null default 0 check (addons_total >= 0),
   -- amount the client pays = project_amount + addons_total
-  total_amount       numeric(14,2) not null check (total_amount > 0),
+  total_amount       numeric(14,2) not null check (total_amount >= 0),
   -- internal distribution of project_amount for operational egresos
   proposal_amount    numeric(14,2) not null default 0 check (proposal_amount >= 0),
   modeling_3d_amount numeric(14,2) not null default 0 check (modeling_3d_amount >= 0),
@@ -290,6 +290,41 @@ create trigger trg_finance_manual_debtors_updated_at
   before update on public.finance_manual_debtors
   for each row execute function public.set_updated_at();
 
+-- ── manual_provider_debts (proveedores manuales de Finanzas) ───────────────
+create table if not exists public.manual_provider_debts (
+  id          uuid primary key default gen_random_uuid(),
+  provider    text not null check (char_length(trim(provider)) between 2 and 120),
+  amount      numeric(14,2) not null check (amount >= 0),
+  debt_date   date not null default current_date,
+  note        text,
+  status      smallint not null default 1,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  uuid references auth.users (id) on delete set null
+);
+
+create table if not exists public.manual_provider_debt_payments (
+  id            uuid primary key default gen_random_uuid(),
+  debt_id       uuid not null references public.manual_provider_debts(id),
+  payment_date  date not null default current_date,
+  amount        numeric(14,2) not null check (amount > 0),
+  note          text,
+  status        smallint not null default 1,
+  created_at    timestamptz not null default now(),
+  created_by    uuid references auth.users (id) on delete set null
+);
+
+create index if not exists idx_manual_provider_debts_provider
+  on public.manual_provider_debts (lower(provider))
+  where status = 1;
+create index if not exists idx_manual_provider_debt_payments_debt
+  on public.manual_provider_debt_payments (debt_id)
+  where status = 1;
+
+create trigger trg_manual_provider_debts_updated_at
+  before update on public.manual_provider_debts
+  for each row execute function public.set_updated_at();
+
 -- ── provider_debt_settlements (deudas de proveedores saldadas) ─────────────
 create table if not exists public.provider_debt_settlements (
   id               uuid primary key default gen_random_uuid(),
@@ -492,6 +527,8 @@ alter table public.work_internal_transfers enable row level security;
 alter table public.work_orders      enable row level security;
 alter table public.work_order_payments enable row level security;
 alter table public.finance_manual_debtors enable row level security;
+alter table public.manual_provider_debts enable row level security;
+alter table public.manual_provider_debt_payments enable row level security;
 alter table public.provider_debt_settlements enable row level security;
 alter table public.general_balance_entries enable row level security;
 alter table public.general_balance_account_movements enable row level security;
@@ -619,6 +656,20 @@ create policy "finance_manual_debtors_update" on public.finance_manual_debtors
   for update to authenticated using (true) with check (true);
 create policy "finance_manual_debtors_delete" on public.finance_manual_debtors
   for delete to authenticated using (true);
+
+-- manual_provider_debts
+create policy "manual_provider_debts_select" on public.manual_provider_debts
+  for select to authenticated using (true);
+create policy "manual_provider_debts_insert" on public.manual_provider_debts
+  for insert to authenticated with check (true);
+create policy "manual_provider_debts_update" on public.manual_provider_debts
+  for update to authenticated using (true) with check (true);
+create policy "manual_provider_debt_payments_select" on public.manual_provider_debt_payments
+  for select to authenticated using (true);
+create policy "manual_provider_debt_payments_insert" on public.manual_provider_debt_payments
+  for insert to authenticated with check (true);
+create policy "manual_provider_debt_payments_update" on public.manual_provider_debt_payments
+  for update to authenticated using (true) with check (true);
 
 -- provider_debt_settlements
 create policy "provider_debt_settlements_select" on public.provider_debt_settlements

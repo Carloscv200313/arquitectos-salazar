@@ -27,7 +27,7 @@ export const MARKUP_TOTAL_RATE = Object.values(MARKUP).reduce((a, b) => a + b, 0
 // Los pesos de cada plantilla suman 1 (100% de esa porción).
 export const PROYECTO_RATE = 0.5;
 
-export type ProjectTemplate = "diamante" | "oro" | "especial";
+export type ProjectTemplate = "diamante" | "oro" | "especial" | "credito";
 
 export type SliceWeights = Record<ProjectSliceKey, number>;
 
@@ -40,13 +40,15 @@ export const TEMPLATE_LABELS: Record<ProjectTemplate, string> = {
   diamante: "Diamante",
   oro: "Oro",
   especial: "Especial",
+  credito: "Proyecto a Crédito",
 };
 
 export const PROJECT_TEMPLATES: {
   id: ProjectTemplate;
   label: string;
   description: string;
-  weights: SliceWeights | null; // null = el usuario define (especial)
+  weights: SliceWeights | null; // null = especial o crédito, con tratamiento propio en UI.
+  credit?: boolean;
 }[] = [
   {
     id: "diamante",
@@ -66,6 +68,13 @@ export const PROJECT_TEMPLATES: {
     description: "Define tú mismo el peso de cada área (debe sumar 100%).",
     weights: null,
   },
+  {
+    id: "credito",
+    label: "Proyecto a Crédito",
+    description: "Sin monto base; la deuda del cliente crece con los pagos registrados.",
+    weights: null,
+    credit: true,
+  },
 ];
 
 /** Devuelve los pesos de una plantilla. Para especial usa los provistos. */
@@ -75,6 +84,9 @@ export function resolveTemplateWeights(
 ): SliceWeights {
   if (template === "especial") {
     return custom ?? TEMPLATE_WEIGHTS.diamante;
+  }
+  if (template === "credito") {
+    return TEMPLATE_WEIGHTS.diamante;
   }
   return TEMPLATE_WEIGHTS[template];
 }

@@ -1333,6 +1333,7 @@ function manualDebtor(name: string, amount: number): ManualDebtor {
     name,
     amount,
     source_account_id: null,
+    project_id: null,
     loan_date: ts.slice(0, 10),
     note: null,
     created_at: ts,

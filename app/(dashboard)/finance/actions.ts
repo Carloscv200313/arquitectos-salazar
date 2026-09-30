@@ -10,6 +10,7 @@ import {
   deleteFinanceMovementConcept,
   deleteFinanceMovementTag,
   registerManualDebtorPayment,
+  registerManualProviderDebtPayment,
   registerGeneralBalanceAccountMovement,
   registerGeneralBalanceEntry,
   saveFinanceCapture,
@@ -19,6 +20,7 @@ import {
   saveSalaryPayment,
   saveSalaryWeek,
   saveManualDebtor,
+  saveManualProviderDebt,
   settleProviderDebt,
   updateSalaryWeekStatus,
 } from "@/lib/data/finance";
@@ -32,6 +34,8 @@ import {
   financeMovementTagSchema,
   manualDebtorSchema,
   manualDebtorPaymentSchema,
+  manualProviderDebtPaymentSchema,
+  manualProviderDebtSchema,
   registerInternalTransferSchema,
   saveSalaryDayRecordSchema,
   saveSalaryPaymentSchema,
@@ -130,6 +134,73 @@ export async function registerManualDebtorPaymentAction(
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo registrar el abono.",
+    };
+  }
+}
+
+export async function saveManualProviderDebtAction(
+  raw: unknown,
+): Promise<ActionResult<{ debtId: string }>> {
+  const parsed = manualProviderDebtSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los campos del proveedor.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const debtId = await saveManualProviderDebt({
+      id: d.id || undefined,
+      provider: d.provider,
+      amount: d.amount,
+      debtDate: d.debtDate,
+      note: d.note || null,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/${encodeURIComponent(d.provider)}`);
+    revalidatePath("/finance/balance-general");
+    return { ok: true, data: { debtId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo guardar la deuda del proveedor.",
+    };
+  }
+}
+
+export async function registerManualProviderDebtPaymentAction(
+  raw: unknown,
+): Promise<ActionResult<{ paymentId: string }>> {
+  const parsed = manualProviderDebtPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const d = parsed.data;
+    const result = await registerManualProviderDebtPayment({
+      debtId: d.debtId,
+      amount: d.amount,
+      paymentDate: d.paymentDate,
+      note: d.note || null,
+      userId: currentUserId(),
+    });
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/${encodeURIComponent(result.provider)}`);
+    revalidatePath("/finance/balance-general");
+    return { ok: true, data: { paymentId: result.paymentId } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo registrar el abono del proveedor.",
     };
   }
 }

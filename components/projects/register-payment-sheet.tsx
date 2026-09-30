@@ -48,6 +48,7 @@ export function RegisterPaymentSheet({
   projectId,
   projectName,
   pending,
+  isCreditProject,
   methods,
 }: {
   open: boolean;
@@ -55,6 +56,7 @@ export function RegisterPaymentSheet({
   projectId: string;
   projectName: string;
   pending: number;
+  isCreditProject: boolean;
   methods: PaymentMethod[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -68,7 +70,10 @@ export function RegisterPaymentSheet({
 
   const amountNum = Number(amount);
   const overBalance =
-    movementType === "income" && amountNum > 0 && amountNum > pending + 0.001;
+    !isCreditProject &&
+    movementType === "income" &&
+    amountNum > 0 &&
+    amountNum > pending + 0.001;
 
   function reset() {
     setMovementType("income");
@@ -120,7 +125,9 @@ export function RegisterPaymentSheet({
         <SheetHeader>
           <SheetTitle>Registrar movimiento</SheetTitle>
           <SheetDescription>
-            {projectName} · Por cobrar {formatCurrency(pending)}
+            {isCreditProject
+              ? `${projectName} · Proyecto a crédito`
+              : `${projectName} · Por cobrar ${formatCurrency(pending)}`}
           </SheetDescription>
         </SheetHeader>
 

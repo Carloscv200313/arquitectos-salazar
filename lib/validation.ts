@@ -23,6 +23,13 @@ const money = z
   .max(1_000_000_000, "Monto demasiado alto")
   .refine(hasMaxTwoDecimals, "Máximo 2 decimales");
 
+const nonnegativeMoney = z
+  .number({ error: "Ingresa un monto válido" })
+  .finite("Monto inválido")
+  .min(0, "El monto no puede ser negativo")
+  .max(1_000_000_000, "Monto demasiado alto")
+  .refine(hasMaxTwoDecimals, "Máximo 2 decimales");
+
 const name = z
   .string()
   .trim()
@@ -55,6 +62,7 @@ export const addonSchema = z.object({
 });
 
 const addons = z.array(addonSchema).max(20, "Demasiados adicionales").default([]);
+const distributionMode = z.enum(["percent", "amount"]).optional();
 
 // Template weights for the 4 internal areas (fractions summing to 1).
 export const sliceWeightsSchema = z.object({
@@ -62,6 +70,13 @@ export const sliceWeightsSchema = z.object({
   modeling_3d: z.number().min(0).max(1),
   plans: z.number().min(0).max(1),
   render: z.number().min(0).max(1),
+});
+
+const sliceAmountsSchema = z.object({
+  proposal: nonnegativeMoney,
+  modeling_3d: nonnegativeMoney,
+  plans: nonnegativeMoney,
+  render: nonnegativeMoney,
 });
 
 export const projectResponsiblesSchema = z.object({
@@ -76,6 +91,26 @@ function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number;
   return Math.abs(sum - 1) < 0.005;
 }
 
+function distributionAmountSum(data: {
+  distributionAmounts?: {
+    proposal: number;
+    modeling_3d: number;
+    plans: number;
+    render: number;
+  };
+  distributionAmountTotal?: number;
+}) {
+  if (data.distributionAmounts) {
+    return (
+      data.distributionAmounts.proposal +
+      data.distributionAmounts.modeling_3d +
+      data.distributionAmounts.plans +
+      data.distributionAmounts.render
+    );
+  }
+  return data.distributionAmountTotal;
+}
+
 // ── Create project ────────────────────────────────────────────────
 export const createProjectSchema = z
   .object({
@@ -83,10 +118,13 @@ export const createProjectSchema = z
     address,
     clientId: z.string().uuid().optional().or(z.literal("")),
     clientName: name.optional().or(z.literal("")),
-    template: z.enum(["diamante", "oro", "especial"]).default("diamante"),
+    template: z.enum(["diamante", "oro", "especial", "credito"]).default("diamante"),
     weights: sliceWeightsSchema.optional(),
+    distributionMode,
+    distributionAmounts: sliceAmountsSchema.optional(),
+    distributionAmountTotal: nonnegativeMoney.optional(),
     responsibles: projectResponsiblesSchema,
-    projectAmount: money,
+    projectAmount: nonnegativeMoney,
     addons,
     registerAnticipo: z.boolean().default(false),
     anticipoAmount: z.number().positive().optional(),
@@ -112,12 +150,30 @@ export const createProjectSchema = z
           message: "Los porcentajes deben sumar 100%",
         });
       }
+      const exactAmountTotal = distributionAmountSum(data);
+      if (
+        data.distributionMode === "amount" &&
+        (exactAmountTotal === undefined || exactAmountTotal <= 0)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["weights"],
+          message: "Ingresa al menos un monto para la distribución",
+        });
+      }
+    }
+    if (data.template !== "credito" && data.projectAmount <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["projectAmount"],
+        message: "El monto debe ser mayor a 0",
+      });
     }
     if (data.registerAnticipo) {
       const total = computeBreakdown(data.projectAmount, data.addons ?? []).total;
       if (!data.anticipoAmount || data.anticipoAmount <= 0) {
         ctx.addIssue({ code: "custom", path: ["anticipoAmount"], message: "Ingresa el monto del anticipo" });
-      } else if (data.anticipoAmount > total) {
+      } else if (data.template !== "credito" && data.anticipoAmount > total) {
         ctx.addIssue({ code: "custom", path: ["anticipoAmount"], message: "El anticipo no puede superar el total" });
       }
       if (!data.anticipoConcept || data.anticipoConcept.trim().length < 2) {
@@ -144,7 +200,10 @@ export const updateProjectSchema = z
     clientName: name.optional().or(z.literal("")),
     responsibles: projectResponsiblesSchema,
     weights: sliceWeightsSchema.optional(),
-    projectAmount: money,
+    distributionMode,
+    distributionAmounts: sliceAmountsSchema.optional(),
+    distributionAmountTotal: nonnegativeMoney.optional(),
+    projectAmount: nonnegativeMoney,
     addons,
   })
   .superRefine((data, ctx) => {
@@ -163,6 +222,16 @@ export const updateProjectSchema = z
         path: ["weights"],
         message: "Los porcentajes deben sumar 100%",
       });
+    }
+    if (data.distributionMode === "amount") {
+      const exactAmountTotal = distributionAmountSum(data);
+      if (exactAmountTotal === undefined || exactAmountTotal <= 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["weights"],
+          message: "Ingresa al menos un monto para la distribución",
+        });
+      }
     }
   });
 
@@ -546,6 +615,25 @@ export const manualDebtorPaymentSchema = z.object({
 });
 
 export type ManualDebtorPaymentInput = z.infer<typeof manualDebtorPaymentSchema>;
+
+export const manualProviderDebtSchema = z.object({
+  id: z.string().uuid("Deuda inválida").optional().or(z.literal("")),
+  provider: name,
+  amount: money,
+  debtDate: isoDate,
+  note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+});
+
+export type ManualProviderDebtInput = z.infer<typeof manualProviderDebtSchema>;
+
+export const manualProviderDebtPaymentSchema = z.object({
+  debtId: z.string().uuid("Deuda inválida"),
+  paymentDate: isoDate,
+  amount: money,
+  note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+});
+
+export type ManualProviderDebtPaymentInput = z.infer<typeof manualProviderDebtPaymentSchema>;
 
 export const generalBalanceEntrySchema = z
   .object({

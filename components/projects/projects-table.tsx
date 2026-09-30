@@ -171,6 +171,7 @@ export function ProjectsTable({
           projectId={payTarget.id}
           projectName={payTarget.name}
           pending={payTarget.finance.pending}
+          isCreditProject={payTarget.template === "credito"}
           methods={methods}
         />
       )}

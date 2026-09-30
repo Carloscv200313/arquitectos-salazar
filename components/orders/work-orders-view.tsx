@@ -977,13 +977,13 @@ export function WorkOrdersView({
                     </TableCell>
                     <TableCell className="font-medium">{order.supplier}</TableCell>
                     <TableCell className="text-muted-foreground" title={work.client.name}>
-                      {shortText(work.client.name)}
+                      {work.client.name}
                     </TableCell>
                     <TableCell title={order.material}>
-                      {shortText(order.material)}
+                      {order.material}
                     </TableCell>
                     <TableCell className="text-muted-foreground" title={order.description || undefined}>
-                      {shortText(order.description)}
+                      {order.description || "-"}
                     </TableCell>
                     <TableCell className="text-right font-semibold tabular-nums">
                       {order.amount === null ? "-" : formatCurrency(order.amount)}

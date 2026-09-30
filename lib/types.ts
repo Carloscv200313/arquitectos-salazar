@@ -34,7 +34,7 @@ export interface ProjectAddon {
   created_at: string;
 }
 
-export type ProjectTemplate = "diamante" | "oro" | "especial";
+export type ProjectTemplate = "diamante" | "oro" | "especial" | "credito";
 
 export interface Project {
   id: string;
@@ -279,6 +279,7 @@ export interface ManualDebtor {
   name: string;
   amount: number;
   source_account_id: string | null;
+  project_id: string | null;
   loan_date: string;
   note: string | null;
   created_at: string;
@@ -289,6 +290,7 @@ export interface ManualDebtor {
 export interface ManualDebtorPayment {
   id: string;
   debtor_id: string;
+  project_payment_id: string | null;
   payment_date: string;
   amount: number;
   to_account_id: string;
@@ -310,7 +312,36 @@ export interface DebtReportRow {
   loanDate?: string | null;
 }
 
-export type ProviderDebtSourceType = "work_order" | "work_movement";
+export type ProviderDebtSourceType = "work_order" | "work_movement" | "manual_provider_debt";
+
+export interface ManualProviderDebt {
+  id: string;
+  provider: string;
+  amount: number;
+  debt_date: string;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface ManualProviderDebtPayment {
+  id: string;
+  debt_id: string;
+  payment_date: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface ManualProviderDebtDetail {
+  debt: ManualProviderDebt;
+  totalAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  payments: ManualProviderDebtPayment[];
+}
 
 export interface WorkMovementProviderDebt {
   id: string;
@@ -334,6 +365,7 @@ export interface ProviderDebtDetail {
   totalPending: number;
   orders: WorkOrderWithRelations[];
   workMovements: WorkMovementProviderDebt[];
+  manualDebts: ManualProviderDebtDetail[];
 }
 
 export interface ManualDebtorDetail {

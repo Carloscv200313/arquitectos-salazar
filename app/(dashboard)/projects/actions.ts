@@ -77,6 +77,8 @@ export async function createProjectAction(
       clientName: d.clientName || undefined,
       template: d.template,
       weights: d.weights,
+      distributionAmounts:
+        d.distributionMode === "amount" ? d.distributionAmounts : undefined,
       responsibles: d.responsibles,
       projectAmount: d.projectAmount,
       addons: d.addons,
@@ -115,9 +117,17 @@ export async function updateProjectAction(
       listMovements(d.id),
     ]);
     if (!existing) return { ok: false, error: "Proyecto no encontrado." };
+    const isCreditProject = existing.template === "credito";
+    if (!isCreditProject && d.projectAmount <= 0) {
+      return {
+        ok: false,
+        error: "El monto del proyecto debe ser mayor a cero.",
+        fieldErrors: { projectAmount: "El monto debe ser mayor a 0" },
+      };
+    }
     // The new total (base + addons) cannot be lower than what's already collected.
     const newTotal = computeBreakdown(d.projectAmount, d.addons).total;
-    if (newTotal < existing.finance.income - 0.001) {
+    if (!isCreditProject && newTotal < existing.finance.income - 0.001) {
       return {
         ok: false,
         error: `El total resultante no puede ser menor a lo ya cobrado (${existing.finance.income.toFixed(2)}).`,
@@ -134,7 +144,10 @@ export async function updateProjectAction(
         plans: existing.plans_amount,
         render: existing.render_amount,
       });
-    const newAreaAmounts = computeBreakdown(d.projectAmount, d.addons, weights).project;
+    const newAreaAmounts =
+      d.distributionMode === "amount" && d.distributionAmounts
+        ? d.distributionAmounts
+        : computeBreakdown(d.projectAmount, d.addons, weights).project;
     const paidByArea = payments.reduce<Record<InternalArea, number>>(
       (acc, p) => {
         if (p.movement_type !== "expense" || !p.internal_area) return acc;
@@ -143,9 +156,11 @@ export async function updateProjectAction(
       },
       { proposal: 0, modeling_3d: 0, plans: 0, render: 0 },
     );
-    const offending = (Object.keys(newAreaAmounts) as InternalArea[]).find(
-      (area) => newAreaAmounts[area] < paidByArea[area] - 0.001,
-    );
+    const offending = isCreditProject
+      ? undefined
+      : (Object.keys(newAreaAmounts) as InternalArea[]).find(
+          (area) => newAreaAmounts[area] < paidByArea[area] - 0.001,
+        );
     if (offending) {
       const label = PROJECT_SLICE_LABELS[offending];
       return {
@@ -163,6 +178,8 @@ export async function updateProjectAction(
       clientName: d.clientName || undefined,
       responsibles: d.responsibles,
       weights: d.weights,
+      distributionAmounts:
+        d.distributionMode === "amount" ? d.distributionAmounts : undefined,
       projectAmount: d.projectAmount,
       addons: d.addons,
       userId: currentUserId(),
@@ -193,14 +210,15 @@ export async function registerMovementAction(
       listMovements(d.projectId),
     ]);
     if (!project) return { ok: false, error: "Proyecto no encontrado." };
-    if (d.movementType === "income" && d.amount > project.finance.pending + 0.001) {
+    const isCreditProject = project.template === "credito";
+    if (!isCreditProject && d.movementType === "income" && d.amount > project.finance.pending + 0.001) {
       return {
         ok: false,
         error: `El ingreso supera el saldo pendiente (${project.finance.pending.toFixed(2)}).`,
         fieldErrors: { amount: "Supera el saldo pendiente" },
       };
     }
-    if (d.movementType === "expense" && d.internalArea) {
+    if (!isCreditProject && d.movementType === "expense" && d.internalArea) {
       const areaLabel = PROJECT_SLICE_LABELS[d.internalArea];
       const budget = areaBudget(project, d.internalArea);
       const alreadyPaid = round2(
@@ -266,9 +284,10 @@ export async function editProjectMovementAction(
     if (!project) return { ok: false, error: "Proyecto no encontrado." };
     const current = movements.find((m) => m.id === d.paymentId);
     if (!current) return { ok: false, error: "Movimiento no encontrado." };
+    const isCreditProject = project.template === "credito";
 
     // Ingreso: no puede superar el pendiente (descontando lo que ya aportaba este mismo movimiento).
-    if (d.movementType === "income") {
+    if (!isCreditProject && d.movementType === "income") {
       const wasIncome = current.movement_type === "income" ? current.amount : 0;
       const allowed = round2(project.finance.pending + wasIncome);
       if (d.amount > allowed + 0.001) {
@@ -281,7 +300,7 @@ export async function editProjectMovementAction(
     }
 
     // Egreso por área: el nuevo monto + lo ya pagado en el área (sin este movimiento) ≤ presupuesto.
-    if (d.movementType === "expense" && d.internalArea) {
+    if (!isCreditProject && d.movementType === "expense" && d.internalArea) {
       const areaLabel = PROJECT_SLICE_LABELS[d.internalArea];
       const budget = areaBudget(project, d.internalArea);
       const alreadyPaid = round2(

@@ -16,7 +16,9 @@ import {
   TableCell,
   TableHead,
   TableHeader,
+  TablePagination,
   TableRow,
+  useTablePagination,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { PROJECT_SLICE_LABELS } from "@/lib/constants";
@@ -239,6 +241,7 @@ export function AuditView({
       return true;
     });
   }, [logs, entity, operation, search]);
+  const pagination = useTablePagination(filtered);
 
   return (
     <Card className="p-5">
@@ -300,8 +303,8 @@ export function AuditView({
                 <TableHead className="sticky top-0 z-10 bg-card text-right" />
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {filtered.map((l) => {
+            <TableBody paginate={false}>
+              {pagination.rows.map((l) => {
                 const expandable = !!l.snapshot && (!!l.snapshot.before || !!l.snapshot.after);
                 const open = openId === l.id;
                 return (
@@ -360,6 +363,7 @@ export function AuditView({
           </table>
         </div>
       )}
+      <TablePagination {...pagination} className="px-0 pb-0" />
     </Card>
   );
 }

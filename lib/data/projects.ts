@@ -10,6 +10,7 @@ import {
   round2,
   weightsFromAmounts,
   type Addon,
+  type ProjectDistribution,
 } from "@/lib/calculations";
 import { MARKUP, PROJECT_SLICE_LABELS, resolveTemplateWeights, type SliceWeights } from "@/lib/constants";
 import {
@@ -366,6 +367,7 @@ export interface CreateProjectData {
   clientName?: string;
   template: ProjectTemplate;
   weights?: SliceWeights;
+  distributionAmounts?: ProjectDistribution;
   responsibles: Record<InternalArea, ProjectResponsible>;
   projectAmount: number;
   addons: Addon[];
@@ -378,7 +380,12 @@ export async function createProject(data: CreateProjectData): Promise<string> {
   const userId = await getCurrentUserId();
   const clientId = await findOrCreateClient(data.clientId, data.clientName);
   const weights = resolveTemplateWeights(data.template, data.weights);
-  const b = computeBreakdown(data.projectAmount, data.addons, weights);
+  const projectAmount = data.template === "credito" ? 0 : data.projectAmount;
+  const b = computeBreakdown(projectAmount, data.addons, weights);
+  const projectDistribution =
+    data.template === "especial" && data.distributionAmounts
+      ? data.distributionAmounts
+      : b.project;
 
   const { data: project, error } = await client
     .from("projects")
@@ -392,10 +399,10 @@ export async function createProject(data: CreateProjectData): Promise<string> {
       utility_amount: b.markup.utility,
       addons_total: b.addonsTotal,
       total_amount: b.total,
-      proposal_amount: b.project.proposal,
-      modeling_3d_amount: b.project.modeling_3d,
-      plans_amount: b.project.plans,
-      render_amount: b.project.render,
+      proposal_amount: projectDistribution.proposal,
+      modeling_3d_amount: projectDistribution.modeling_3d,
+      plans_amount: projectDistribution.plans,
+      render_amount: projectDistribution.render,
       proposal_responsible: data.responsibles.proposal,
       modeling_3d_responsible: data.responsibles.modeling_3d,
       plans_responsible: data.responsibles.plans,
@@ -417,17 +424,41 @@ export async function createProject(data: CreateProjectData): Promise<string> {
     );
   }
 
+  if (data.template === "credito") {
+    await ensureCreditProjectDebtor(projectId, data.anticipo?.date);
+  }
+
   if (data.anticipo) {
-    await client.from("project_payments").insert({
-      project_id: projectId,
-      movement_type: "income",
-      concept: data.anticipo.concept.trim(),
-      amount: data.anticipo.amount,
-      payment_date: data.anticipo.date,
-      payment_method_id: data.anticipo.methodId,
-      internal_area: null,
-      receipt_code: await nextProjectReceiptCode(),
-      created_by: userId,
+    const receiptCode = await nextProjectReceiptCode();
+    const concept = data.anticipo.concept.trim();
+    const { data: payment, error: paymentError } = await client
+      .from("project_payments")
+      .insert({
+        project_id: projectId,
+        movement_type: "income",
+        concept,
+        amount: data.anticipo.amount,
+        payment_date: data.anticipo.date,
+        payment_method_id: data.anticipo.methodId,
+        internal_area: null,
+        receipt_code: receiptCode,
+        created_by: userId,
+      })
+      .select("id")
+      .single();
+    if (paymentError) throw new Error(paymentError.message);
+    await syncCreditProjectDebtFromMovement({
+      after: {
+        id: payment.id as string,
+        project_id: projectId,
+        movement_type: "income",
+        amount: data.anticipo.amount,
+        payment_date: data.anticipo.date,
+        payment_method_id: data.anticipo.methodId,
+        internal_area: null,
+        status: 1,
+        concept,
+      },
     });
   }
 
@@ -442,6 +473,7 @@ export interface UpdateProjectData {
   clientName?: string;
   responsibles: Record<InternalArea, ProjectResponsible>;
   weights?: SliceWeights;
+  distributionAmounts?: ProjectDistribution;
   projectAmount: number;
   addons: Addon[];
   userId: string | null;
@@ -451,7 +483,7 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
   const client = sb();
   const { data: existing } = await client
     .from("projects")
-    .select("proposal_amount, modeling_3d_amount, plans_amount, render_amount")
+    .select("template, proposal_amount, modeling_3d_amount, plans_amount, render_amount")
     .eq("id", data.id)
     .maybeSingle();
   if (!existing) throw new Error("Proyecto no encontrado");
@@ -465,7 +497,12 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
       plans: Number(existing.plans_amount),
       render: Number(existing.render_amount),
     });
-  const b = computeBreakdown(data.projectAmount, data.addons, weights);
+  const projectAmount = existing.template === "credito" ? 0 : data.projectAmount;
+  const b = computeBreakdown(projectAmount, data.addons, weights);
+  const projectDistribution =
+    existing.template === "especial" && data.distributionAmounts
+      ? data.distributionAmounts
+      : b.project;
 
   const { error } = await client
     .from("projects")
@@ -478,10 +515,10 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
       utility_amount: b.markup.utility,
       addons_total: b.addonsTotal,
       total_amount: b.total,
-      proposal_amount: b.project.proposal,
-      modeling_3d_amount: b.project.modeling_3d,
-      plans_amount: b.project.plans,
-      render_amount: b.project.render,
+      proposal_amount: projectDistribution.proposal,
+      modeling_3d_amount: projectDistribution.modeling_3d,
+      plans_amount: projectDistribution.plans,
+      render_amount: projectDistribution.render,
       proposal_responsible: data.responsibles.proposal,
       modeling_3d_responsible: data.responsibles.modeling_3d,
       plans_responsible: data.responsibles.plans,
@@ -499,6 +536,10 @@ export async function updateProject(data: UpdateProjectData): Promise<void> {
         amount: a.amount,
       })),
     );
+  }
+
+  if (existing.template === "credito") {
+    await ensureCreditProjectDebtor(data.id);
   }
 }
 
@@ -524,6 +565,203 @@ async function nextProjectReceiptCode(): Promise<string> {
   return formatReceiptCode("proyecto", seq);
 }
 
+type ProjectMovementDebtSnapshot = {
+  id: string;
+  project_id: string;
+  movement_type: "income" | "expense";
+  amount: number;
+  payment_date: string;
+  payment_method_id: string | null;
+  internal_area: InternalArea | null;
+  status: number;
+  concept: string;
+};
+
+type CreditProjectDebtor = {
+  id: string;
+  amount: number;
+};
+
+function toDebtSnapshot(row: Row | null | undefined): ProjectMovementDebtSnapshot | null {
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    project_id: row.project_id as string,
+    movement_type: row.movement_type as "income" | "expense",
+    amount: Number(row.amount),
+    payment_date: row.payment_date as string,
+    payment_method_id: (row.payment_method_id as string) ?? null,
+    internal_area: (row.internal_area as InternalArea) ?? null,
+    status: Number((row.status as number | undefined) ?? 1),
+    concept: (row.concept as string) ?? "",
+  };
+}
+
+function activeCreditExpenseAmount(row: ProjectMovementDebtSnapshot | null): number {
+  if (!row || row.status === 0 || row.movement_type !== "expense" || !row.internal_area) return 0;
+  return Number.isFinite(row.amount) ? row.amount : 0;
+}
+
+function activeCreditIncome(row: ProjectMovementDebtSnapshot | null) {
+  if (!row || row.status === 0 || row.movement_type !== "income") return null;
+  return row;
+}
+
+async function creditProjectInfo(projectId: string): Promise<{
+  projectName: string;
+  clientName: string;
+} | null> {
+  const { data, error } = await sb()
+    .from("projects")
+    .select("name, template, client:clients(name)")
+    .eq("id", projectId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.template !== "credito") return null;
+
+  const rawClient = data.client as Row | Row[] | null;
+  const clientRow = Array.isArray(rawClient) ? rawClient[0] : rawClient;
+  return {
+    projectName: (data.name as string) || "Proyecto",
+    clientName: (clientRow?.name as string) || "Cliente",
+  };
+}
+
+async function ensureCreditProjectDebtor(
+  projectId: string,
+  loanDate?: string | null,
+): Promise<CreditProjectDebtor | null> {
+  const info = await creditProjectInfo(projectId);
+  if (!info) return null;
+
+  const client = sb();
+  const note = `Proyecto a crédito: ${info.projectName}`;
+  const { data: existing, error: existingError } = await client
+    .from("manual_debtors")
+    .select("id, amount")
+    .eq("project_id", projectId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    const { error } = await client
+      .from("manual_debtors")
+      .update({ name: info.clientName, note })
+      .eq("id", existing.id as string);
+    if (error) throw new Error(error.message);
+    return { id: existing.id as string, amount: Number(existing.amount) };
+  }
+
+  const { data: created, error } = await client
+    .from("manual_debtors")
+    .insert({
+      name: info.clientName,
+      amount: 0,
+      source_account_id: null,
+      project_id: projectId,
+      loan_date: loanDate || new Date().toISOString().slice(0, 10),
+      note,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id, amount")
+    .single();
+  if (error) throw new Error(error.message);
+  return { id: created.id as string, amount: Number(created.amount) };
+}
+
+async function adjustCreditProjectPrincipal(
+  projectId: string,
+  delta: number,
+  loanDate?: string | null,
+) {
+  if (Math.abs(delta) < 0.001) return;
+  const debtor = await ensureCreditProjectDebtor(projectId, loanDate);
+  if (!debtor) return;
+
+  const nextAmount = round2(Math.max(debtor.amount + delta, 0));
+  const { error } = await sb()
+    .from("manual_debtors")
+    .update({ amount: nextAmount })
+    .eq("id", debtor.id);
+  if (error) throw new Error(error.message);
+}
+
+async function syncCreditProjectDebtorPayment(
+  before: ProjectMovementDebtSnapshot | null,
+  after: ProjectMovementDebtSnapshot | null,
+) {
+  const oldIncome = activeCreditIncome(before);
+  const newIncome = activeCreditIncome(after);
+  if (!oldIncome && !newIncome) return;
+
+  const debtor = await ensureCreditProjectDebtor(
+    (newIncome ?? oldIncome)!.project_id,
+    newIncome?.payment_date ?? oldIncome?.payment_date,
+  );
+  if (!debtor) return;
+
+  const client = sb();
+  if (!newIncome) {
+    const { error } = await client
+      .from("manual_debtor_payments")
+      .update({ status: 0 })
+      .eq("project_payment_id", oldIncome!.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  if (!newIncome.payment_method_id) return;
+  const payload = {
+    debtor_id: debtor.id,
+    payment_date: newIncome.payment_date,
+    amount: round2(newIncome.amount),
+    to_account_id: newIncome.payment_method_id,
+    note: `Abono registrado en proyecto a crédito: ${newIncome.concept.trim() || "Ingreso"}`,
+    status: 1,
+  };
+  const { data: existing, error: existingError } = await client
+    .from("manual_debtor_payments")
+    .select("id")
+    .eq("project_payment_id", newIncome.id)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  if (existing) {
+    const { error } = await client
+      .from("manual_debtor_payments")
+      .update(payload)
+      .eq("id", existing.id as string);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await client.from("manual_debtor_payments").insert({
+    ...payload,
+    project_payment_id: newIncome.id,
+    created_by: await getCurrentUserId(),
+  });
+  if (error) throw new Error(error.message);
+}
+
+async function syncCreditProjectDebtFromMovement({
+  before,
+  after,
+}: {
+  before?: ProjectMovementDebtSnapshot | null;
+  after?: ProjectMovementDebtSnapshot | null;
+}) {
+  const projectId = after?.project_id ?? before?.project_id;
+  if (!projectId) return;
+
+  const principalDelta = round2(
+    activeCreditExpenseAmount(after ?? null) - activeCreditExpenseAmount(before ?? null),
+  );
+  await adjustCreditProjectPrincipal(projectId, principalDelta, after?.payment_date ?? before?.payment_date);
+  await syncCreditProjectDebtorPayment(before ?? null, after ?? null);
+}
+
 export async function registerMovement(
   data: RegisterPaymentData,
 ): Promise<{ id: string; receiptCode: string | null }> {
@@ -544,6 +782,19 @@ export async function registerMovement(
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  await syncCreditProjectDebtFromMovement({
+    after: {
+      id: row.id as string,
+      project_id: data.projectId,
+      movement_type: data.movementType,
+      amount: data.amount,
+      payment_date: data.paymentDate,
+      payment_method_id: data.paymentMethodId,
+      internal_area: data.internalArea ?? null,
+      status: 1,
+      concept: data.concept.trim(),
+    },
+  });
   await writeAudit({
     entityType: "project_movement",
     entityId: row.id as string,
@@ -592,6 +843,11 @@ export async function updateProjectMovement(
   };
   const { error } = await sb().from("project_payments").update(update).eq("id", id);
   if (error) throw new Error(error.message);
+  const after = await projectMovementSnapshot(id);
+  await syncCreditProjectDebtFromMovement({
+    before: toDebtSnapshot(before as Row),
+    after: toDebtSnapshot(after as Row),
+  });
 
   const projectName = (before.project as { name?: string } | null)?.name ?? "";
   await writeAudit({
@@ -622,6 +878,10 @@ export async function deleteProjectMovement(id: string, note: string): Promise<v
   }
   const { error } = await sb().from("project_payments").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
+  await syncCreditProjectDebtFromMovement({
+    before: toDebtSnapshot(before as Row),
+    after: null,
+  });
 
   const projectName = (before.project as { name?: string } | null)?.name ?? "";
   await writeAudit({
@@ -725,4 +985,9 @@ export async function deleteProject(id: string): Promise<void> {
   // Soft delete (status = 0).
   const { error } = await sb().from("projects").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
+  const { error: debtorError } = await sb()
+    .from("manual_debtors")
+    .update({ status: 0 })
+    .eq("project_id", id);
+  if (debtorError) throw new Error(debtorError.message);
 }

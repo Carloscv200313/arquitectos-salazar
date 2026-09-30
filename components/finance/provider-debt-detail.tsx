@@ -3,8 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { BadgeDollarSign, Boxes, CheckCircle2, HandCoins, Loader2 } from "lucide-react";
-import { settleProviderDebtAction } from "@/app/(dashboard)/finance/actions";
+import {
+  BadgeDollarSign,
+  Boxes,
+  CheckCircle2,
+  HandCoins,
+  Loader2,
+} from "lucide-react";
+import {
+  registerManualProviderDebtPaymentAction,
+  settleProviderDebtAction,
+} from "@/app/(dashboard)/finance/actions";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +35,9 @@ import type { ProviderDebtDetail } from "@/lib/types";
 
 type SettleTarget =
   | { sourceType: "work_order"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
-  | { sourceType: "work_movement"; sourceId: string; provider: string; title: string; subtitle: string; pending: number };
+  | { sourceType: "work_movement"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
+  | { sourceType: "manual_provider_debt"; sourceId: string; provider: string; title: string; subtitle: string; pending: number };
+
 
 function pendingTone(pending: number, total: number) {
   if (total <= 0.001 || pending <= 0.001) return "text-muted-foreground";
@@ -109,14 +120,22 @@ function SettleProviderDebtSheet({
   function submit() {
     setErrors({});
     startTransition(async () => {
-      const result = await settleProviderDebtAction({
-        provider: target.provider,
-        sourceType: target.sourceType,
-        sourceId: target.sourceId,
-        amount: Number(amount),
-        settlementDate,
-        note,
-      });
+      const result =
+        target.sourceType === "manual_provider_debt"
+          ? await registerManualProviderDebtPaymentAction({
+              debtId: target.sourceId,
+              amount: Number(amount),
+              paymentDate: settlementDate,
+              note,
+            })
+          : await settleProviderDebtAction({
+              provider: target.provider,
+              sourceType: target.sourceType,
+              sourceId: target.sourceId,
+              amount: Number(amount),
+              settlementDate,
+              note,
+            });
       if (result.ok) {
         toast.success("Deuda saldada", {
           description: `${formatCurrency(Number(amount))} · ${target.provider}`,
@@ -158,9 +177,11 @@ function SettleProviderDebtSheet({
               type="date"
               value={settlementDate}
               onChange={(e) => setSettlementDate(e.target.value)}
-              aria-invalid={!!errors.settlementDate}
+              aria-invalid={!!(errors.settlementDate || errors.paymentDate)}
             />
-            {errors.settlementDate && <p className="text-xs text-destructive">{errors.settlementDate}</p>}
+            {(errors.settlementDate || errors.paymentDate) && (
+              <p className="text-xs text-destructive">{errors.settlementDate || errors.paymentDate}</p>
+            )}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="settle-provider-amount">Monto a saldar</Label>
@@ -200,16 +221,21 @@ export function ProviderDebtDetail({
   detail: ProviderDebtDetail;
 }) {
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
-  const pendingRowsCount = detail.orders.length + detail.workMovements.length;
+  const pendingRowsCount = detail.orders.length + detail.workMovements.length + detail.manualDebts.length;
   const debtRows = [
     ...detail.orders.map((order) => ({ kind: "order" as const, order })),
     ...detail.workMovements.map((movement) => ({ kind: "movement" as const, movement })),
+    ...detail.manualDebts.map((manual) => ({ kind: "manual" as const, manual })),
   ].sort((a, b) => {
-    const aPending = a.kind === "order" ? a.order.pending : a.movement.pending;
-    const bPending = b.kind === "order" ? b.order.pending : b.movement.pending;
+    const aPending =
+      a.kind === "order" ? a.order.pending : a.kind === "movement" ? a.movement.pending : a.manual.totalPending;
+    const bPending =
+      b.kind === "order" ? b.order.pending : b.kind === "movement" ? b.movement.pending : b.manual.totalPending;
     if (Math.abs(bPending - aPending) > 0.001) return bPending - aPending;
-    const aDate = a.kind === "order" ? a.order.order_date : a.movement.movementDate;
-    const bDate = b.kind === "order" ? b.order.order_date : b.movement.movementDate;
+    const aDate =
+      a.kind === "order" ? a.order.order_date : a.kind === "movement" ? a.movement.movementDate : a.manual.debt.debt_date;
+    const bDate =
+      b.kind === "order" ? b.order.order_date : b.kind === "movement" ? b.movement.movementDate : b.manual.debt.debt_date;
     return bDate.localeCompare(aDate);
   });
 
@@ -232,9 +258,11 @@ export function ProviderDebtDetail({
             tone="success"
           />
           <Stat
-            label="Registros con saldo"
-            value={String(pendingRowsCount)}
-            hint="Registros pendientes"
+            label="Prestado"
+            value={formatCurrency(detail.totalAmount)}
+            hint={`${pendingRowsCount} registro${pendingRowsCount === 1 ? "" : "s"} pendiente${
+              pendingRowsCount === 1 ? "" : "s"
+            }`}
             icon={<BadgeDollarSign className="size-5" />}
           />
         </div>
@@ -318,31 +346,87 @@ export function ProviderDebtDetail({
                     );
                   }
 
-                  const { movement } = row;
+                  if (row.kind === "movement") {
+                    const { movement } = row;
+                    return (
+                      <TableRow key={`movement-${movement.id}`}>
+                        <TableCell className="px-5">
+                          <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                            Obra
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-5">
+                          <div className="font-medium">{movement.workName}</div>
+                          <div className="text-xs text-muted-foreground">{movement.clientName}</div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(movement.movementDate)}</TableCell>
+                        <TableCell className="max-w-sm">
+                          <div className="line-clamp-2">{movement.concept}</div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{movement.category || "-"}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">
+                          {formatCurrency(movement.amount)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
+                          {formatCurrency(movement.settled)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums text-destructive">
+                          {formatCurrency(movement.pending)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-destructive">
+                            Por pagar
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-5 text-right">
+                          <Button
+                            size="sm"
+                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={movement.pending <= 0.001}
+                            onClick={() =>
+                              setSettleTarget({
+                                sourceType: "work_movement",
+                                sourceId: movement.id,
+                                provider: detail.provider,
+                                title: movement.concept,
+                                subtitle: `${movement.workName} · ${movement.category || "Egreso de obra"}`,
+                                pending: movement.pending,
+                              })
+                            }
+                          >
+                            <CheckCircle2 className="size-4" />
+                            Saldar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  const { manual } = row;
                   return (
-                    <TableRow key={`movement-${movement.id}`}>
+                    <TableRow key={`manual-${manual.debt.id}`}>
                       <TableCell className="px-5">
-                        <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                          Obra
+                        <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                          Manual
                         </span>
                       </TableCell>
                       <TableCell className="px-5">
-                        <div className="font-medium">{movement.workName}</div>
-                        <div className="text-xs text-muted-foreground">{movement.clientName}</div>
+                        <div className="font-medium">Administrativo</div>
+                        <div className="text-xs text-muted-foreground">Deuda manual</div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{formatDate(movement.movementDate)}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatDate(manual.debt.debt_date)}</TableCell>
                       <TableCell className="max-w-sm">
-                        <div className="line-clamp-2">{movement.concept}</div>
+                        <div className="line-clamp-2">{manual.debt.note || "Gasto manual de proveedor"}</div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{movement.category || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">Manual</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">
-                        {formatCurrency(movement.amount)}
+                        {formatCurrency(manual.totalAmount)}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
-                        {formatCurrency(movement.settled)}
+                        {formatCurrency(manual.totalPaid)}
                       </TableCell>
                       <TableCell className="text-right font-semibold tabular-nums text-destructive">
-                        {formatCurrency(movement.pending)}
+                        {formatCurrency(manual.totalPending)}
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-destructive">
@@ -353,15 +437,15 @@ export function ProviderDebtDetail({
                         <Button
                           size="sm"
                           className="bg-brand text-brand-foreground hover:bg-brand/90"
-                          disabled={movement.pending <= 0.001}
+                          disabled={manual.totalPending <= 0.001}
                           onClick={() =>
                             setSettleTarget({
-                              sourceType: "work_movement",
-                              sourceId: movement.id,
+                              sourceType: "manual_provider_debt",
+                              sourceId: manual.debt.id,
                               provider: detail.provider,
-                              title: movement.concept,
-                              subtitle: `${movement.workName} · ${movement.category || "Egreso de obra"}`,
-                              pending: movement.pending,
+                              title: manual.debt.note || "Gasto manual de proveedor",
+                              subtitle: `${detail.provider} · deuda manual`,
+                              pending: manual.totalPending,
                             })
                           }
                         >

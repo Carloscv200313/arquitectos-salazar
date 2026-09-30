@@ -807,7 +807,7 @@ function ActivitySheet({
                     </TableCell>
                   </TableRow>
                 ))}
-                <TableRow className="bg-brand/5">
+                <TableRow pinned className="bg-brand/5">
                   <TableCell className="px-4">
                     <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", activityTone(activityType))}>
                       {SALARY_ASSIGNMENT_LABELS[activityType]}
@@ -1681,7 +1681,7 @@ function EmployeeDetailSheet({
                       </TableCell>
                     </TableRow>
                   ) : null}
-                  <TableRow className="bg-brand/10 hover:bg-brand/10">
+                  <TableRow pinned className="bg-brand/10 hover:bg-brand/10">
                     <TableCell colSpan={4} className="px-4 font-medium">
                       Total Caja
                     </TableCell>
@@ -1690,7 +1690,7 @@ function EmployeeDetailSheet({
                     </TableCell>
                     <TableCell />
                   </TableRow>
-                  <TableRow className="bg-brand/10 hover:bg-brand/10">
+                  <TableRow pinned className="bg-brand/10 hover:bg-brand/10">
                     <TableCell colSpan={4} className="px-4 font-medium">
                       Total Cuenta de Rosa
                     </TableCell>

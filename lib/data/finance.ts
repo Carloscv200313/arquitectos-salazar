@@ -25,6 +25,9 @@ import type {
   ManualDebtor,
   ManualDebtorDetail,
   ManualDebtorPayment,
+  ManualProviderDebt,
+  ManualProviderDebtDetail,
+  ManualProviderDebtPayment,
   MovementType,
   PaymentMethod,
   ProviderDebtDetail,
@@ -194,6 +197,7 @@ function mapManualDebtor(row: Row): ManualDebtor & { account: PaymentMethod | nu
     name: row.name as string,
     amount: num(row.amount),
     source_account_id: (row.source_account_id as string) ?? null,
+    project_id: (row.project_id as string) ?? null,
     loan_date: (row.loan_date as string) ?? (row.created_at as string)?.slice(0, 10) ?? "",
     note: (row.note as string) ?? null,
     created_at: row.created_at as string,
@@ -207,6 +211,7 @@ function mapManualDebtorPayment(row: Row): ManualDebtorPayment {
   return {
     id: row.id as string,
     debtor_id: row.debtor_id as string,
+    project_payment_id: (row.project_payment_id as string) ?? null,
     payment_date: row.payment_date as string,
     amount: num(row.amount),
     to_account_id: row.to_account_id as string,
@@ -214,6 +219,31 @@ function mapManualDebtorPayment(row: Row): ManualDebtorPayment {
     created_at: row.created_at as string,
     created_by: (row.created_by as string) ?? null,
     account: mapPaymentAccount(row.account as Row | null),
+  };
+}
+
+function mapManualProviderDebt(row: Row): ManualProviderDebt {
+  return {
+    id: row.id as string,
+    provider: row.provider as string,
+    amount: num(row.amount),
+    debt_date: (row.debt_date as string) ?? (row.created_at as string)?.slice(0, 10) ?? "",
+    note: (row.note as string) ?? null,
+    created_at: row.created_at as string,
+    updated_at: (row.updated_at as string) ?? (row.created_at as string),
+    created_by: (row.created_by as string) ?? null,
+  };
+}
+
+function mapManualProviderDebtPayment(row: Row): ManualProviderDebtPayment {
+  return {
+    id: row.id as string,
+    debt_id: row.debt_id as string,
+    payment_date: row.payment_date as string,
+    amount: num(row.amount),
+    note: (row.note as string) ?? null,
+    created_at: row.created_at as string,
+    created_by: (row.created_by as string) ?? null,
   };
 }
 
@@ -339,6 +369,55 @@ export async function getManualDebtorDetail(id: string): Promise<ManualDebtorDet
   return details.find((detail) => detail.debtor.id === id) ?? null;
 }
 
+export async function getManualProviderDebtDetails(): Promise<ManualProviderDebtDetail[]> {
+  if (!isAdminConfigured()) return [];
+  const client = sb();
+  const [debtRes, paymentRes] = await Promise.all([
+    client
+      .from("manual_provider_debts")
+      .select("*")
+      .eq("status", 1)
+      .order("provider", { ascending: true }),
+    client
+      .from("manual_provider_debt_payments")
+      .select("*")
+      .eq("status", 1)
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (debtRes.error) throw new Error(debtRes.error.message);
+  if (paymentRes.error) throw new Error(paymentRes.error.message);
+
+  const paymentsByDebt = new Map<string, ManualProviderDebtPayment[]>();
+  for (const payment of ((paymentRes.data ?? []) as unknown as Row[]).map(mapManualProviderDebtPayment)) {
+    const list = paymentsByDebt.get(payment.debt_id) ?? [];
+    list.push(payment);
+    paymentsByDebt.set(payment.debt_id, list);
+  }
+
+  return ((debtRes.data ?? []) as unknown as Row[])
+    .map(mapManualProviderDebt)
+    .map((debt) => {
+      const payments = paymentsByDebt.get(debt.id) ?? [];
+      const totalPaid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+      const totalAmount = round2(debt.amount);
+      return {
+        debt,
+        totalAmount,
+        totalPaid,
+        totalPending: round2(Math.max(totalAmount - totalPaid, 0)),
+        payments,
+      };
+    })
+    .sort((a, b) => b.totalPending - a.totalPending || a.debt.provider.localeCompare(b.debt.provider, "es"));
+}
+
+export async function getManualProviderDebtDetail(id: string): Promise<ManualProviderDebtDetail | null> {
+  const details = await getManualProviderDebtDetails();
+  return details.find((detail) => detail.debt.id === id) ?? null;
+}
+
 export async function getDebtReport(): Promise<DebtReportRow[]> {
   if (!isAdminConfigured()) return [];
   const [providerDetails, debtorDetails] = await Promise.all([
@@ -354,7 +433,7 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
     source: "manual",
     totalAmount: detail.totalAmount,
     totalPaid: detail.totalPaid,
-    sourceAccountName: detail.debtor.account?.name ?? null,
+    sourceAccountName: detail.debtor.project_id ? "Proyecto a crédito" : (detail.debtor.account?.name ?? null),
     loanDate: detail.debtor.loan_date,
   }));
   const providers: DebtReportRow[] = providerDetails.map((detail) => ({
@@ -362,11 +441,19 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
     name: detail.provider,
     amount: detail.totalPending,
     type: "provider",
-    source: detail.orders.length > 0 && detail.workMovements.length > 0
+    source:
+      Number(detail.orders.length > 0) +
+        Number(detail.workMovements.length > 0) +
+        Number(detail.manualDebts.length > 0) >
+      1
       ? "mixed"
-      : detail.workMovements.length > 0
-        ? "works"
-        : "orders",
+      : detail.manualDebts.length > 0
+        ? "manual"
+        : detail.workMovements.length > 0
+          ? "works"
+          : "orders",
+    totalAmount: detail.totalAmount,
+    totalPaid: detail.totalPaid,
   }));
   return [...debtors, ...providers];
 }
@@ -374,7 +461,11 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
 export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const groups = new Map<string, ProviderDebtDetail>();
-  const [works, settledBySource] = await Promise.all([listWorks(), getProviderDebtSettlements()]);
+  const [works, settledBySource, manualDebts] = await Promise.all([
+    listWorks(),
+    getProviderDebtSettlements(),
+    getManualProviderDebtDetails(),
+  ]);
 
   for (const work of works) {
     const orders = await listWorkOrders(work.id);
@@ -390,6 +481,7 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         totalPending: 0,
         orders: [],
         workMovements: [],
+        manualDebts: [],
       };
       current.totalAmount = round2(current.totalAmount + (order.amount ?? 0));
       current.totalPaid = round2(current.totalPaid + order.paid + settled);
@@ -409,12 +501,32 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
       totalPending: 0,
       orders: [],
       workMovements: [],
+      manualDebts: [],
     };
     current.totalAmount = round2(current.totalAmount + movement.amount);
     current.totalPaid = round2(current.totalPaid + movement.settled);
     current.totalPending = round2(current.totalPending + movement.pending);
     current.workMovements.push(movement);
     groups.set(supplier, current);
+  }
+
+  for (const manualDebt of manualDebts) {
+    if (manualDebt.totalPending <= 0.001) continue;
+    const provider = manualDebt.debt.provider.trim() || "Proveedor";
+    const current = groups.get(provider) ?? {
+      provider,
+      totalAmount: 0,
+      totalPaid: 0,
+      totalPending: 0,
+      orders: [],
+      workMovements: [],
+      manualDebts: [],
+    };
+    current.totalAmount = round2(current.totalAmount + manualDebt.totalAmount);
+    current.totalPaid = round2(current.totalPaid + manualDebt.totalPaid);
+    current.totalPending = round2(current.totalPending + manualDebt.totalPending);
+    current.manualDebts.push(manualDebt);
+    groups.set(provider, current);
   }
 
   return [...groups.values()]
@@ -429,6 +541,11 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         const byPending = b.pending - a.pending;
         if (Math.abs(byPending) > 0.001) return byPending;
         return b.movementDate.localeCompare(a.movementDate);
+      }),
+      manualDebts: group.manualDebts.sort((a, b) => {
+        const byPending = b.totalPending - a.totalPending;
+        if (Math.abs(byPending) > 0.001) return byPending;
+        return b.debt.debt_date.localeCompare(a.debt.debt_date);
       }),
     }))
     .sort((a, b) => b.totalPending - a.totalPending);
@@ -1286,6 +1403,84 @@ export async function registerManualDebtorPayment(
     `Abono de deudor · ${detail.debtor.name} · ${amount.toFixed(2)}`,
   );
   return created.id as string;
+}
+
+export interface SaveManualProviderDebtData {
+  id?: string;
+  provider: string;
+  amount: number;
+  debtDate: string;
+  note?: string | null;
+  userId: string | null;
+}
+
+export async function saveManualProviderDebt(data: SaveManualProviderDebtData): Promise<string> {
+  const client = sb();
+  const payload = {
+    provider: data.provider.trim(),
+    amount: round2(data.amount),
+    debt_date: data.debtDate,
+    note: data.note?.trim() || null,
+  };
+  if (data.id) {
+    const detail = await getManualProviderDebtDetail(data.id);
+    if (detail && payload.amount < detail.totalPaid - 0.001) {
+      throw new Error("El monto de la deuda no puede ser menor a los abonos registrados.");
+    }
+    const { error } = await client
+      .from("manual_provider_debts")
+      .update(payload)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+
+  const { data: created, error } = await client
+    .from("manual_provider_debts")
+    .insert({ ...payload, created_by: await getCurrentUserId() })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+export interface RegisterManualProviderDebtPaymentData {
+  debtId: string;
+  amount: number;
+  paymentDate: string;
+  note?: string | null;
+  userId: string | null;
+}
+
+export async function registerManualProviderDebtPayment(
+  data: RegisterManualProviderDebtPaymentData,
+): Promise<{ paymentId: string; provider: string }> {
+  const detail = await getManualProviderDebtDetail(data.debtId);
+  if (!detail) throw new Error("No se encontró la deuda del proveedor.");
+  const amount = round2(data.amount);
+  if (amount > detail.totalPending + 0.001) {
+    throw new Error("El abono supera el saldo pendiente.");
+  }
+
+  const { data: created, error } = await sb()
+    .from("manual_provider_debt_payments")
+    .insert({
+      debt_id: data.debtId,
+      amount,
+      payment_date: data.paymentDate,
+      note: data.note?.trim() || null,
+      created_by: await getCurrentUserId(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await audit(
+    "provider_payment",
+    (created?.id as string) ?? data.debtId,
+    `Abono de proveedor · ${detail.debt.provider} · ${amount.toFixed(2)}`,
+  );
+  return { paymentId: created.id as string, provider: detail.debt.provider };
 }
 
 export interface SettleProviderDebtData {

@@ -4,7 +4,6 @@ import {
   MARKUP_LABELS,
   MARKUP_TOTAL_RATE,
   PROYECTO_RATE,
-  PROJECT_MARKUP_LABEL,
   PROJECT_SLICE_LABELS,
   TEMPLATE_LABELS,
 } from "@/lib/constants";
@@ -54,12 +53,14 @@ function AreaRow({
   pct,
   total,
   paid,
+  creditMode,
 }: {
   label: string;
   responsible: string;
   pct: number;
   total: number;
   paid: number;
+  creditMode?: boolean;
 }) {
   const safePaid = Math.min(round2(paid), total);
   const progress = total > 0 ? Math.min(round2((safePaid / total) * 100), 100) : 0;
@@ -72,22 +73,26 @@ function AreaRow({
           <p className="text-xs font-medium text-brand-foreground">{responsible}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3 tabular-nums">
-          <span className="text-xs text-muted-foreground">{formatPercent(pct * 100)}</span>
-          <span className="text-right font-semibold">{formatCurrency(total)}</span>
+          {!creditMode && <span className="text-xs text-muted-foreground">{formatPercent(pct * 100)}</span>}
+          <span className="text-right font-semibold">{creditMode ? "Libre" : formatCurrency(total)}</span>
         </div>
       </div>
 
       <div className="mt-3">
         <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-          <span className="text-muted-foreground">Pagado {formatCurrency(safePaid)}</span>
-          <span className="font-medium text-brand-foreground">{progress.toFixed(0)}%</span>
+          <span className="text-muted-foreground">
+            {creditMode ? "Registrado" : "Pagado"} {formatCurrency(creditMode ? paid : safePaid)}
+          </span>
+          {!creditMode && <span className="font-medium text-brand-foreground">{progress.toFixed(0)}%</span>}
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-brand transition-[width]"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        {!creditMode && (
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-brand transition-[width]"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -100,12 +105,33 @@ export function ProjectDistributionCard({
   project: ProjectWithFinance;
   payments: PaymentWithMethod[];
 }) {
+  const isCreditProject = project.template === "credito";
   const portion = round2(
     project.proposal_amount +
       project.modeling_3d_amount +
       project.plans_amount +
       project.render_amount,
   );
+  const recommendedPortion = round2(project.project_amount * PROYECTO_RATE);
+  const usesFlexibleAmounts =
+    !isCreditProject && Math.abs(portion - recommendedPortion) > 0.01;
+  const distributionProjectShare =
+    project.project_amount > 0 ? portion / project.project_amount : PROYECTO_RATE;
+  const recommendedUtility = round2(project.office_amount + project.utility_amount);
+  const estimatedUtility = usesFlexibleAmounts
+    ? round2(project.project_amount - portion)
+    : recommendedUtility;
+  const utilityProjectShare =
+    project.project_amount > 0 ? estimatedUtility / project.project_amount : MARKUP_TOTAL_RATE;
+  const utilityVsRecommended =
+    recommendedUtility > 0
+      ? (Math.max(estimatedUtility, 0) / recommendedUtility) * 100
+      : 0;
+  const utilityNote = usesFlexibleAmounts
+    ? estimatedUtility >= 0
+      ? `Con esta distribución queda ${formatPercent(utilityProjectShare * 100)} del proyecto como utilidad (${formatPercent(utilityVsRecommended)} de la utilidad recomendada).`
+      : `La distribución supera el monto del proyecto por ${formatCurrency(Math.abs(estimatedUtility))}; no queda utilidad disponible.`
+    : "Este gasto es para utilidad y gasto de oficina. Proyecto 50%, es una referencia interna y no se suma al total a cobrar.";
   const pctOf = (amount: number) => (portion > 0 ? amount / portion : 0);
 
   const paidByArea = payments.reduce<Record<InternalArea, number>>(
@@ -128,7 +154,9 @@ export function ProjectDistributionCard({
         <div>
           <h2 className="text-sm font-semibold">Resumen del proyecto</h2>
           <p className="text-xs text-muted-foreground">
-            Total a cobrar {formatCurrency(project.total_amount)}
+            {isCreditProject
+              ? "Proyecto a crédito; los movimientos alimentan la deuda del cliente."
+              : `Total a cobrar ${formatCurrency(project.total_amount)}`}
           </p>
         </div>
         <Badge variant="secondary" className="shrink-0">
@@ -143,46 +171,71 @@ export function ProjectDistributionCard({
               Composición del total
             </p>
             <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line label="Monto del proyecto" amount={project.project_amount} strong />
+              {isCreditProject ? (
+                <div className="py-2 text-sm">
+                  <p className="font-medium">Proyecto a crédito</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Sin monto base. Cada egreso se suma al deudor del cliente y
+                    cada ingreso se registra como abono.
+                  </p>
+                </div>
+              ) : (
+                <Line label="Monto del proyecto" amount={project.project_amount} strong />
+              )}
               {project.addons.map((a) => (
                 <Line key={a.id} label={a.concept} amount={a.amount} muted />
               ))}
             </div>
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-muted/35 px-4 py-3 text-sm">
-              <span className="font-semibold">Total a cobrar</span>
-              <span className="font-semibold tabular-nums text-brand-foreground">
-                {formatCurrency(project.total_amount)}
-              </span>
-            </div>
+            {!isCreditProject && (
+              <div className="mt-3 flex items-center justify-between rounded-xl bg-muted/35 px-4 py-3 text-sm">
+                <span className="font-semibold">Total a cobrar</span>
+                <span className="font-semibold tabular-nums text-brand-foreground">
+                  {formatCurrency(project.total_amount)}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Referencia interna
-            </p>
-            <div className="rounded-xl border bg-muted/20 px-4 py-3">
-              <Line
-                label={MARKUP_LABELS.utility}
-                pct={MARKUP_TOTAL_RATE}
-                amount={round2(project.office_amount + project.utility_amount)}
-                muted
-              />
+          {!isCreditProject && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Referencia interna
+              </p>
+              <div className="rounded-xl border bg-muted/20 px-4 py-3">
+                <Line
+                  label={usesFlexibleAmounts ? "Utilidad estimada" : MARKUP_LABELS.utility}
+                  pct={usesFlexibleAmounts ? utilityProjectShare : MARKUP_TOTAL_RATE}
+                  amount={estimatedUtility}
+                  muted
+                />
+                {usesFlexibleAmounts && (
+                  <Line
+                    label="Utilidad recomendada"
+                    pct={MARKUP_TOTAL_RATE}
+                    amount={recommendedUtility}
+                    muted
+                  />
+                )}
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {utilityNote}
+              </p>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Este gasto es para utilidad y gasto de oficina. {PROJECT_MARKUP_LABEL} 50%, es una
-              referencia interna y no se suma al total a cobrar.
-            </p>
-          </div>
+          )}
         </section>
 
         <section>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Distribución del proyecto
+              {isCreditProject ? "Áreas de registro" : "Distribución del proyecto"}
             </p>
-            <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
-              {Math.round(PROYECTO_RATE * 100)}% · {formatCurrency(portion)}
-            </span>
+            {!isCreditProject && (
+              <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                {usesFlexibleAmounts
+                  ? `${formatPercent(distributionProjectShare * 100)} · ${formatCurrency(portion)}`
+                  : `${Math.round(PROYECTO_RATE * 100)}% · ${formatCurrency(portion)}`}
+              </span>
+            )}
           </div>
           <div className="rounded-xl border bg-muted/20 px-4 py-3">
             <AreaRow
@@ -191,6 +244,7 @@ export function ProjectDistributionCard({
               pct={pctOf(project.proposal_amount)}
               total={project.proposal_amount}
               paid={paidByArea.proposal}
+              creditMode={isCreditProject}
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.modeling_3d}
@@ -198,6 +252,7 @@ export function ProjectDistributionCard({
               pct={pctOf(project.modeling_3d_amount)}
               total={project.modeling_3d_amount}
               paid={paidByArea.modeling_3d}
+              creditMode={isCreditProject}
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.plans}
@@ -205,6 +260,7 @@ export function ProjectDistributionCard({
               pct={pctOf(project.plans_amount)}
               total={project.plans_amount}
               paid={paidByArea.plans}
+              creditMode={isCreditProject}
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.render}
@@ -212,6 +268,7 @@ export function ProjectDistributionCard({
               pct={pctOf(project.render_amount)}
               total={project.render_amount}
               paid={paidByArea.render}
+              creditMode={isCreditProject}
             />
           </div>
         </section>

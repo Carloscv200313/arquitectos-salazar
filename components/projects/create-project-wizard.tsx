@@ -11,6 +11,7 @@ import {
   Trash2,
   Gem,
   Crown,
+  CreditCard,
   SlidersHorizontal,
   Check,
   ArrowLeft,
@@ -32,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatPercent, todayISODate } from "@/lib/format";
-import { computeBreakdown } from "@/lib/calculations";
+import { computeBreakdown, round2, type ProjectDistribution } from "@/lib/calculations";
 import {
   PROJECT_RESPONSIBLES,
   RESPONSIBLE_OPTIONS,
@@ -50,6 +51,7 @@ import { DistributionPreview } from "./distribution-preview";
 import { createProjectAction } from "@/app/(dashboard)/projects/actions";
 
 type ClientMode = "existing" | "new";
+type DistributionInputMode = "percent" | "amount";
 interface AddonRow {
   id: string;
   concept: string;
@@ -61,6 +63,7 @@ const TEMPLATE_ICONS: Record<ProjectTemplate, LucideIcon> = {
   diamante: Gem,
   oro: Crown,
   especial: SlidersHorizontal,
+  credito: CreditCard,
 };
 
 const SLICE_KEYS = Object.keys(PROJECT_SLICE_LABELS) as ProjectSliceKey[];
@@ -126,6 +129,31 @@ function newAddon(): AddonRow {
   return { id: crypto.randomUUID(), concept: "", amount: "" };
 }
 
+function normalizeAmountWeights(inputs: WeightInputs, fallback: SliceWeights): SliceWeights {
+  const values = SLICE_KEYS.map((key) => Math.max(Number(inputs[key]) || 0, 0));
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return fallback;
+  return SLICE_KEYS.reduce((acc, key, index) => {
+    acc[key] = values[index] / total;
+    return acc;
+  }, {} as SliceWeights);
+}
+
+function amountInputsToDistribution(inputs: WeightInputs): ProjectDistribution {
+  return SLICE_KEYS.reduce((acc, key) => {
+    const value = Number(inputs[key]) || 0;
+    acc[key] = round2(Math.max(value, 0));
+    return acc;
+  }, {} as ProjectDistribution);
+}
+
+function weightsToInputs(weights: SliceWeights): WeightInputs {
+  return SLICE_KEYS.reduce((acc, key) => {
+    acc[key] = String(round2(weights[key] * 100));
+    return acc;
+  }, {} as WeightInputs);
+}
+
 export function CreateProjectWizard({
   clients,
   methods,
@@ -139,11 +167,18 @@ export function CreateProjectWizard({
   const [step, setStep] = useState(0);
 
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
+  const [distributionMode, setDistributionMode] = useState<DistributionInputMode>("percent");
   const [weightInputs, setWeightInputs] = useState<WeightInputs>({
     proposal: "20",
     modeling_3d: "30",
     plans: "35",
     render: "15",
+  });
+  const [amountInputs, setAmountInputs] = useState<WeightInputs>({
+    proposal: "",
+    modeling_3d: "",
+    plans: "",
+    render: "",
   });
 
   const [name, setName] = useState("");
@@ -165,7 +200,8 @@ export function CreateProjectWizard({
   const [anticipoMethodId, setAnticipoMethodId] = useState("");
   const [anticipoDate, setAnticipoDate] = useState(todayISODate());
 
-  const base = Number(projectAmount);
+  const isCreditProject = template === "credito";
+  const base = isCreditProject ? 0 : Number(projectAmount);
   const parsedAddons = addons.map((a) => ({
     concept: a.concept,
     amount: Number(a.amount) || 0,
@@ -173,17 +209,40 @@ export function CreateProjectWizard({
 
   // Resolve weights for preview/submit
   const especialSum = SLICE_KEYS.reduce((s, k) => s + (Number(weightInputs[k]) || 0), 0);
+  const amountDistribution = useMemo(
+    () => amountInputsToDistribution(amountInputs),
+    [amountInputs],
+  );
+  const exactProjectDistribution =
+    template === "especial" && distributionMode === "amount"
+      ? amountDistribution
+      : undefined;
+  const especialAmountTotal = round2(
+    SLICE_KEYS.reduce((s, k) => s + amountDistribution[k], 0),
+  );
+  const amountModeWeights = useMemo(
+    () => normalizeAmountWeights(amountInputs, TEMPLATE_WEIGHTS.diamante),
+    [amountInputs],
+  );
   const weights: SliceWeights = useMemo(() => {
     if (template === "especial") {
+      if (distributionMode === "amount") {
+        return amountModeWeights;
+      }
       const out = {} as SliceWeights;
       SLICE_KEYS.forEach((k) => (out[k] = (Number(weightInputs[k]) || 0) / 100));
       return out;
     }
+    if (template === "credito") return TEMPLATE_WEIGHTS.diamante;
     if (template === "oro" || template === "diamante") return TEMPLATE_WEIGHTS[template];
     return TEMPLATE_WEIGHTS.diamante;
-  }, [template, weightInputs]);
+  }, [amountModeWeights, distributionMode, template, weightInputs]);
 
-  const especialValid = template !== "especial" || Math.abs(especialSum - 100) < 0.5;
+  const especialValid =
+    template !== "especial" ||
+    (distributionMode === "amount"
+      ? especialAmountTotal > 0
+      : Math.abs(especialSum - 100) < 0.5);
 
   const selectedClientName =
     clientMode === "existing"
@@ -196,6 +255,27 @@ export function CreateProjectWizard({
   function removeAddon(id: string) {
     setAddons((prev) => prev.filter((a) => a.id !== id));
   }
+  function changeDistributionMode(next: DistributionInputMode) {
+    if (next === distributionMode) return;
+    if (next === "amount") {
+      const currentWeights: SliceWeights = {
+        proposal: (Number(weightInputs.proposal) || 0) / 100,
+        modeling_3d: (Number(weightInputs.modeling_3d) || 0) / 100,
+        plans: (Number(weightInputs.plans) || 0) / 100,
+        render: (Number(weightInputs.render) || 0) / 100,
+      };
+      const amountPreview = computeBreakdown(base || 0, [], currentWeights).project;
+      setAmountInputs(
+        SLICE_KEYS.reduce((acc, key) => {
+          acc[key] = amountPreview[key] > 0 ? String(amountPreview[key]) : "";
+          return acc;
+        }, {} as WeightInputs),
+      );
+    } else if (especialAmountTotal > 0) {
+      setWeightInputs(weightsToInputs(amountModeWeights));
+    }
+    setDistributionMode(next);
+  }
 
   function submit() {
     setErrors({});
@@ -207,8 +287,17 @@ export function CreateProjectWizard({
         clientName: clientMode === "new" ? clientName.trim() : "",
         template: template ?? "diamante",
         weights: template === "especial" ? weights : undefined,
+        distributionMode: template === "especial" ? distributionMode : undefined,
+        distributionAmounts:
+          template === "especial" && distributionMode === "amount"
+            ? amountDistribution
+            : undefined,
+        distributionAmountTotal:
+          template === "especial" && distributionMode === "amount"
+            ? especialAmountTotal
+            : undefined,
         responsibles,
-        projectAmount: Number(projectAmount),
+        projectAmount: isCreditProject ? 0 : Number(projectAmount),
         addons: parsedAddons
           .filter((a) => a.amount > 0)
           .map((a) => ({ concept: a.concept.trim(), amount: a.amount })),
@@ -335,67 +424,131 @@ export function CreateProjectWizard({
                   <FieldError>{errors.clientId || errors.clientName}</FieldError>
                 </div>
 
-                <div className="grid gap-1.5">
-                  <Label htmlFor="base">Monto del proyecto</Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      $
-                    </span>
-                    <MoneyInput
-                      id="base"
-                      value={projectAmount}
-                      onValueChange={setProjectAmount}
-                      placeholder="0.00"
-                      className="pl-7 text-base font-medium"
-                      aria-invalid={!!errors.projectAmount}
-                    />
+                {!isCreditProject && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="base">Monto del proyecto</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <MoneyInput
+                        id="base"
+                        value={projectAmount}
+                        onValueChange={setProjectAmount}
+                        placeholder="0.00"
+                        className="pl-7 text-base font-medium"
+                        aria-invalid={!!errors.projectAmount}
+                      />
+                    </div>
+                    <FieldError>{errors.projectAmount}</FieldError>
                   </div>
-                  <FieldError>{errors.projectAmount}</FieldError>
-                </div>
+                )}
               </div>
             </Card>
 
             {/* Especial: pesos */}
             {template === "especial" && (
               <Card className="gap-0 py-0">
-                <div className="border-b px-5 py-4">
-                  <h2 className="text-sm font-semibold">Distribución personalizada</h2>
-                  <p className="text-xs text-muted-foreground">
-                    Define el peso de cada área. Deben sumar 100%.
-                  </p>
+                <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold">Distribución personalizada</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Define el 100% de la distribución por porcentaje o por monto.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 rounded-lg border bg-muted/30 p-1 text-xs font-medium">
+                    <button
+                      type="button"
+                      onClick={() => changeDistributionMode("percent")}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 transition-colors",
+                        distributionMode === "percent"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-pressed={distributionMode === "percent"}
+                    >
+                      Porcentaje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => changeDistributionMode("amount")}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 transition-colors",
+                        distributionMode === "amount"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      aria-pressed={distributionMode === "amount"}
+                    >
+                      Monto
+                    </button>
+                  </div>
                 </div>
                 <div className="grid gap-3 p-5 sm:grid-cols-2">
                   {SLICE_KEYS.map((k) => (
                     <div key={k} className="grid gap-1.5">
                       <Label htmlFor={`w-${k}`}>{PROJECT_SLICE_LABELS[k]}</Label>
                       <div className="relative">
-                        <Input
-                          id={`w-${k}`}
-                          type="number"
-                          inputMode="decimal"
-                          min="0"
-                          max="100"
-                          step="0.5"
-                          value={weightInputs[k]}
-                          onChange={(e) =>
-                            setWeightInputs((p) => ({ ...p, [k]: e.target.value }))
-                          }
-                          className="pr-7"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                          %
-                        </span>
+                        {distributionMode === "amount" && (
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                            $
+                          </span>
+                        )}
+                        {distributionMode === "amount" ? (
+                          <MoneyInput
+                            id={`w-${k}`}
+                            value={amountInputs[k]}
+                            onValueChange={(value) =>
+                              setAmountInputs((p) => ({ ...p, [k]: value }))
+                            }
+                            placeholder="0.00"
+                            className="pl-7"
+                          />
+                        ) : (
+                          <>
+                            <Input
+                              id={`w-${k}`}
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={weightInputs[k]}
+                              onChange={(e) =>
+                                setWeightInputs((p) => ({ ...p, [k]: e.target.value }))
+                              }
+                              className="pr-7"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                              %
+                            </span>
+                          </>
+                        )}
                       </div>
+                      {distributionMode === "amount" && especialAmountTotal > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {formatPercent(amountModeWeights[k] * 100)} del total de montos
+                        </p>
+                      )}
                     </div>
                   ))}
                   <div
                     className={cn(
                       "sm:col-span-2 flex items-center justify-between rounded-lg px-3 py-2 text-sm",
-                      especialValid ? "bg-brand-muted/50 text-brand-foreground" : "bg-destructive/10 text-destructive",
+                      especialValid
+                        ? "bg-brand-muted/50 text-brand-foreground"
+                        : "bg-destructive/10 text-destructive",
                     )}
                   >
                     <span className="font-medium">Suma</span>
-                    <span className="tabular-nums font-semibold">{especialSum.toFixed(1)}% / 100%</span>
+                    <span className="tabular-nums font-semibold">
+                      {distributionMode === "amount"
+                        ? especialAmountTotal > 0
+                          ? formatCurrency(especialAmountTotal)
+                          : "Ingresa montos"
+                        : `${especialSum.toFixed(1)}% / 100%`}
+                    </span>
                   </div>
                   <FieldError>{errors.weights}</FieldError>
                 </div>
@@ -547,7 +700,13 @@ export function CreateProjectWizard({
                 <p className="text-xs text-muted-foreground">Cálculo automático del total.</p>
               </div>
               <div className="p-5">
-                <DistributionPreview base={base} addons={parsedAddons} weights={weights} />
+                <DistributionPreview
+                  base={base}
+                  addons={parsedAddons}
+                  weights={weights}
+                  projectDistribution={exactProjectDistribution}
+                  creditMode={isCreditProject}
+                />
               </div>
               <div className="flex gap-2 border-t p-5">
                 <Button variant="ghost" onClick={() => setStep(0)} className="flex-1">
@@ -563,7 +722,9 @@ export function CreateProjectWizard({
               </div>
               {!especialValid && (
                 <p className="px-5 pb-4 text-xs text-destructive">
-                  Los porcentajes de la plantilla especial deben sumar 100%.
+                  {distributionMode === "amount"
+                    ? "Ingresa al menos un monto para la distribución."
+                    : "Los porcentajes de la plantilla especial deben sumar 100%."}
                 </p>
               )}
             </Card>
@@ -575,7 +736,9 @@ export function CreateProjectWizard({
         <StepResponsibles
           base={base}
           weights={weights}
+          projectDistribution={exactProjectDistribution}
           responsibles={responsibles}
+          creditMode={isCreditProject}
           error={errors.responsibles}
           onChange={(area, value) =>
             setResponsibles((prev) => ({ ...prev, [area]: value }))
@@ -593,7 +756,9 @@ export function CreateProjectWizard({
           base={base}
           addons={parsedAddons}
           weights={weights}
+          projectDistribution={exactProjectDistribution}
           responsibles={responsibles}
+          creditMode={isCreditProject}
           registerAnticipo={registerAnticipo}
           anticipoAmount={Number(anticipoAmount) || 0}
           isPending={isPending}
@@ -649,7 +814,9 @@ function Stepper({ step }: { step: number }) {
 function StepResponsibles({
   base,
   weights,
+  projectDistribution,
   responsibles,
+  creditMode,
   error,
   onChange,
   onBack,
@@ -657,7 +824,9 @@ function StepResponsibles({
 }: {
   base: number;
   weights: SliceWeights;
+  projectDistribution?: ProjectDistribution;
   responsibles: Record<InternalArea, ProjectResponsible>;
+  creditMode: boolean;
   error?: string;
   onChange: (area: InternalArea, value: ProjectResponsible) => void;
   onBack: () => void;
@@ -665,10 +834,10 @@ function StepResponsibles({
 }) {
   const breakdown = computeBreakdown(base || 0, [], weights);
   const areaAmounts: Record<InternalArea, number> = {
-    proposal: breakdown.project.proposal,
-    modeling_3d: breakdown.project.modeling_3d,
-    plans: breakdown.project.plans,
-    render: breakdown.project.render,
+    proposal: projectDistribution?.proposal ?? breakdown.project.proposal,
+    modeling_3d: projectDistribution?.modeling_3d ?? breakdown.project.modeling_3d,
+    plans: projectDistribution?.plans ?? breakdown.project.plans,
+    render: projectDistribution?.render ?? breakdown.project.render,
   };
   const employeeTotals = buildEmployeeTotals(responsibles, areaAmounts);
   const internalTotal =
@@ -683,7 +852,9 @@ function StepResponsibles({
         <div className="border-b px-5 py-4">
           <h2 className="text-sm font-semibold">Responsables internos</h2>
           <p className="text-xs text-muted-foreground">
-            Asigna cada trabajo y revisa cuánto corresponde pagar según la distribución.
+            {creditMode
+              ? "Asigna cada trabajo para identificar los pagos que se registren después."
+              : "Asigna cada trabajo y revisa cuánto corresponde pagar según la distribución."}
           </p>
         </div>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
@@ -700,7 +871,9 @@ function StepResponsibles({
                 <div>
                   <p className="text-sm font-semibold">{PROJECT_SLICE_LABELS[area]}</p>
                   <p className="text-xs text-muted-foreground">
-                    {formatPercent(weights[area] * 100)} de la distribución interna
+                    {creditMode
+                      ? "Proyecto a crédito"
+                      : `${formatPercent(weights[area] * 100)} de la distribución interna`}
                   </p>
                 </div>
                 <span
@@ -710,7 +883,7 @@ function StepResponsibles({
                     AREA_TONE[area].text,
                   )}
                 >
-                  {formatCurrency(areaAmounts[area])}
+                  {creditMode ? "Por movimiento" : formatCurrency(areaAmounts[area])}
                 </span>
               </div>
               <div className="grid gap-1.5">
@@ -760,15 +933,15 @@ function StepResponsibles({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Pago interno
+                  {creditMode ? "Registro libre" : "Pago interno"}
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-brand-foreground">
-                  {formatCurrency(internalTotal)}
+                  {creditMode ? "Sin monto fijo" : formatCurrency(internalTotal)}
                 </p>
               </div>
               <div className="text-right text-xs text-muted-foreground">
                 <p>{employeeTotals.length} responsables</p>
-                <p>{Math.round(PROYECTO_RATE * 100)}% del monto base</p>
+                <p>{creditMode ? "Se registra por movimiento" : `${Math.round(PROYECTO_RATE * 100)}% del monto base`}</p>
               </div>
             </div>
           </div>
@@ -794,23 +967,23 @@ function StepResponsibles({
                     index === 0 ? "text-brand-foreground" : "text-foreground",
                   )}
                 >
-                  {formatCurrency(row.amount)}
+                  {creditMode ? "Por movimiento" : formatCurrency(row.amount)}
                 </span>
               </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {row.assignedAreas.map((area) => (
-                    <span
-                      key={`${row.person}-${area}`}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
-                        AREA_TONE[area].border,
-                        "bg-muted/30",
-                      )}
-                    >
-                      <span>{PROJECT_SLICE_LABELS[area]}</span>
-                    </span>
-                  ))}
-                </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {row.assignedAreas.map((area) => (
+                  <span
+                    key={`${row.person}-${area}`}
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium",
+                      AREA_TONE[area].border,
+                      "bg-muted/30",
+                    )}
+                  >
+                    <span>{PROJECT_SLICE_LABELS[area]}</span>
+                  </span>
+                ))}
+              </div>
               </div>
             ))}
         </div>
@@ -833,7 +1006,7 @@ function StepTemplate({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {PROJECT_TEMPLATES.map((tpl) => {
           const Icon = TEMPLATE_ICONS[tpl.id];
           const active = template === tpl.id;
@@ -869,7 +1042,11 @@ function StepTemplate({
                 <p className="mt-0.5 text-sm text-muted-foreground">{tpl.description}</p>
               </div>
               <div className="mt-1 space-y-1 border-t pt-3">
-                {tpl.weights ? (
+                {tpl.credit ? (
+                  <p className="text-xs text-muted-foreground">
+                    Cada egreso aumenta la deuda del cliente.
+                  </p>
+                ) : tpl.weights ? (
                   SLICE_KEYS.map((k) => (
                     <div key={k} className="flex justify-between text-xs">
                       <span className="text-muted-foreground">{PROJECT_SLICE_LABELS[k]}</span>
@@ -884,9 +1061,11 @@ function StepTemplate({
                   </p>
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Reparten el {Math.round(PROYECTO_RATE * 100)}% del monto (porción Proyecto).
-              </p>
+              {!tpl.credit && (
+                <p className="text-[11px] text-muted-foreground">
+                  Reparten el {Math.round(PROYECTO_RATE * 100)}% del monto (porción Proyecto).
+                </p>
+              )}
             </button>
           );
         })}
@@ -912,7 +1091,9 @@ function StepConfirm({
   base,
   addons,
   weights,
+  projectDistribution,
   responsibles,
+  creditMode,
   registerAnticipo,
   anticipoAmount,
   isPending,
@@ -925,7 +1106,9 @@ function StepConfirm({
   base: number;
   addons: { concept: string; amount: number }[];
   weights: SliceWeights;
+  projectDistribution?: ProjectDistribution;
   responsibles: Record<InternalArea, ProjectResponsible>;
+  creditMode: boolean;
   registerAnticipo: boolean;
   anticipoAmount: number;
   isPending: boolean;
@@ -934,10 +1117,10 @@ function StepConfirm({
 }) {
   const breakdown = computeBreakdown(base || 0, [], weights);
   const areaAmounts: Record<InternalArea, number> = {
-    proposal: breakdown.project.proposal,
-    modeling_3d: breakdown.project.modeling_3d,
-    plans: breakdown.project.plans,
-    render: breakdown.project.render,
+    proposal: projectDistribution?.proposal ?? breakdown.project.proposal,
+    modeling_3d: projectDistribution?.modeling_3d ?? breakdown.project.modeling_3d,
+    plans: projectDistribution?.plans ?? breakdown.project.plans,
+    render: projectDistribution?.render ?? breakdown.project.render,
   };
   const employeeTotals = buildEmployeeTotals(responsibles, areaAmounts);
 
@@ -954,7 +1137,10 @@ function StepConfirm({
           <ReviewRow label="Plantilla" value={TEMPLATE_LABELS[template]} />
           <ReviewRow label="Nombre" value={name || "—"} />
           <ReviewRow label="Cliente" value={clientName} />
-          <ReviewRow label="Monto del proyecto" value={formatCurrency(base)} />
+          <ReviewRow
+            label="Monto del proyecto"
+            value={creditMode ? "Sin monto inicial" : formatCurrency(base)}
+          />
           {addons.length > 0 && (
             <ReviewRow
               label="Adicionales"
@@ -971,16 +1157,20 @@ function StepConfirm({
             <div>
               <h3 className="text-sm font-semibold">Responsables</h3>
               <p className="text-xs text-muted-foreground">
-                Distribución final del pago interno por trabajador.
+                {creditMode
+                  ? "Se usarán para clasificar los pagos que se registren."
+                  : "Distribucion final del pago interno por trabajador."}
               </p>
             </div>
             <span className="rounded-full bg-brand-muted/28 px-3 py-1 text-xs font-semibold text-brand-foreground">
-              {formatCurrency(
-                areaAmounts.proposal +
-                  areaAmounts.modeling_3d +
-                  areaAmounts.plans +
-                  areaAmounts.render,
-              )}
+              {creditMode
+                ? "Sin monto inicial"
+                : formatCurrency(
+                    areaAmounts.proposal +
+                      areaAmounts.modeling_3d +
+                      areaAmounts.plans +
+                      areaAmounts.render,
+                  )}
             </span>
           </div>
           <div className="grid gap-3">
@@ -1006,7 +1196,7 @@ function StepConfirm({
                       index === 0 ? "text-brand-foreground" : "text-foreground",
                     )}
                   >
-                    {formatCurrency(row.amount)}
+                    {creditMode ? "Por movimiento" : formatCurrency(row.amount)}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1020,7 +1210,9 @@ function StepConfirm({
                       )}
                     >
                       <span>{PROJECT_SLICE_LABELS[area]}</span>
-                      <span className="text-muted-foreground">{formatCurrency(areaAmounts[area])}</span>
+                      <span className="text-muted-foreground">
+                        {creditMode ? "Por movimiento" : formatCurrency(areaAmounts[area])}
+                      </span>
                     </span>
                   ))}
                 </div>
@@ -1036,7 +1228,13 @@ function StepConfirm({
             <h2 className="text-sm font-semibold">Resumen</h2>
           </div>
           <div className="p-5">
-            <DistributionPreview base={base} addons={addons} weights={weights} />
+            <DistributionPreview
+              base={base}
+              addons={addons}
+              weights={weights}
+              projectDistribution={projectDistribution}
+              creditMode={creditMode}
+            />
           </div>
           <div className="flex gap-2 border-t p-5">
             <Button variant="ghost" onClick={onBack} disabled={isPending} className="flex-1">

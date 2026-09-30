@@ -997,7 +997,7 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                 </TableRow>
               )}
               {filteredRows.length > 0 && (
-                <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
+                <TableRow pinned className="bg-muted/30 font-semibold hover:bg-muted/30">
                   <TableCell className="px-5" colSpan={4}>
                     Total filtrado neto
                   </TableCell>

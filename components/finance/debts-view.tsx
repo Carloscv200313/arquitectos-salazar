@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   registerManualDebtorPaymentAction,
+  saveManualProviderDebtAction,
   saveManualDebtorAction,
 } from "@/app/(dashboard)/finance/actions";
 import { Button } from "@/components/ui/button";
@@ -124,6 +125,7 @@ function DebtTableCard({
   onPay,
   onInspect,
   debtorDetails,
+  providerDetails,
 }: {
   title: string;
   description: string;
@@ -135,6 +137,7 @@ function DebtTableCard({
   onPay?: (row: DebtReportRow) => void;
   onInspect?: (row: DebtReportRow) => void;
   debtorDetails?: Map<string, ManualDebtorDetail>;
+  providerDetails?: Map<string, ProviderDebtDetail>;
 }) {
   const isDebtor = type === "debtor";
   return (
@@ -153,7 +156,7 @@ function DebtTableCard({
                 onClick={onCreate}
               >
                 <Plus className="size-4" />
-                Nuevo deudor
+                {isDebtor ? "Nuevo deudor" : "Nuevo proveedor"}
               </Button>
             )}
             <div
@@ -202,7 +205,9 @@ function DebtTableCard({
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {detail?.debtor.account?.name ?? row.sourceAccountName ?? "Sin cuenta"}
+                      {detail?.debtor.project_id
+                        ? "Proyecto a crédito"
+                        : (detail?.debtor.account?.name ?? row.sourceAccountName ?? "Sin cuenta")}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {formatCurrency(row.totalAmount ?? detail?.totalAmount ?? row.amount)}
@@ -234,7 +239,7 @@ function DebtTableCard({
                             <span className="sr-only">Registrar abono</span>
                           </Button>
                         )}
-                        {onEdit && (
+                        {onEdit && !detail?.debtor.project_id && (
                           <Button variant="outline" size="icon" className="size-8" onClick={() => onEdit(row)} title="Editar deudor">
                             <Pencil className="size-4" />
                             <span className="sr-only">Editar deudor</span>
@@ -252,7 +257,7 @@ function DebtTableCard({
                   </TableCell>
                 </TableRow>
               )}
-              <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
+              <TableRow pinned className="bg-muted/30 font-semibold hover:bg-muted/30">
                 <TableCell className="px-5" colSpan={4}>Total pendiente</TableCell>
                 <TableCell className="text-right tabular-nums text-brand-foreground">
                   {formatCurrency(total)}
@@ -266,7 +271,10 @@ function DebtTableCard({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="min-w-56 px-5">Nombre</TableHead>
-                <TableHead className="px-5 text-right">Monto</TableHead>
+                <TableHead className="min-w-40">Origen</TableHead>
+                <TableHead className="text-right">Prestado</TableHead>
+                <TableHead className="text-right">Abonado</TableHead>
+                <TableHead className="text-right">Pendiente</TableHead>
                 {(onEdit || onInspect) && (
                   <TableHead className="w-14 px-5 text-right">
                     <span className="sr-only">Acciones</span>
@@ -275,48 +283,66 @@ function DebtTableCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="px-5">
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-muted text-xs font-semibold text-brand-foreground">
-                        {row.name.slice(0, 1).toUpperCase()}
-                      </span>
-                      <div>
-                        <div className="font-medium">{row.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {row.source === "works"
-                            ? "Calculado desde Obras"
-                            : row.source === "mixed"
-                              ? "Pedidos y Obras"
-                              : "Calculado desde Pedidos"}
+              {rows.map((row) => {
+                const detail = providerDetails?.get(row.name);
+                const sourceLabel =
+                  row.source === "manual"
+                    ? "Registro manual"
+                    : row.source === "works"
+                      ? "Calculado desde Obras"
+                      : row.source === "mixed"
+                        ? "Pedidos, Obras o manual"
+                        : "Calculado desde Pedidos";
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="px-5">
+                      <div className="flex items-center gap-3">
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-muted text-xs font-semibold text-brand-foreground">
+                          {row.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <div>
+                          <div className="font-medium">{row.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {detail
+                              ? `${detail.orders.length + detail.workMovements.length + detail.manualDebts.length} registro${
+                                  detail.orders.length + detail.workMovements.length + detail.manualDebts.length === 1 ? "" : "s"
+                                }`
+                              : sourceLabel}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className={cn("px-5 text-right font-semibold tabular-nums", amountTone(row.amount))}>
-                    {signedCurrency(row.amount)}
-                  </TableCell>
-                  {onInspect && (
-                    <TableCell className="px-5 text-right">
-                      <Button variant="outline" size="icon" className="size-8" onClick={() => onInspect(row)} title="Ver detalle">
-                        <Eye className="size-4" />
-                        <span className="sr-only">Ver detalle</span>
-                      </Button>
                     </TableCell>
-                  )}
-                </TableRow>
-              ))}
+                    <TableCell className="text-muted-foreground">{sourceLabel}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {formatCurrency(row.totalAmount ?? detail?.totalAmount ?? row.amount)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums text-brand-foreground">
+                      {formatCurrency(row.totalPaid ?? detail?.totalPaid ?? 0)}
+                    </TableCell>
+                    <TableCell className={cn("text-right font-semibold tabular-nums", amountTone(row.amount))}>
+                      {signedCurrency(row.amount)}
+                    </TableCell>
+                    {onInspect && (
+                      <TableCell className="px-5 text-right">
+                        <Button variant="outline" size="icon" className="size-8" onClick={() => onInspect(row)} title="Ver detalle">
+                          <Eye className="size-4" />
+                          <span className="sr-only">Ver detalle</span>
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={onInspect ? 3 : 2} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={onInspect ? 6 : 5} className="h-24 text-center text-muted-foreground">
                     Sin registros para la búsqueda.
                   </TableCell>
                 </TableRow>
               )}
-              <TableRow className="bg-muted/30 font-semibold hover:bg-muted/30">
-                <TableCell className="px-5">Total</TableCell>
-                <TableCell className="px-5 text-right tabular-nums text-destructive">
+              <TableRow pinned className="bg-muted/30 font-semibold hover:bg-muted/30">
+                <TableCell className="px-5" colSpan={4}>Total pendiente</TableCell>
+                <TableCell className="text-right tabular-nums text-destructive">
                   {signedCurrency(total)}
                 </TableCell>
                 {onInspect && <TableCell className="px-5" />}
@@ -624,6 +650,122 @@ function DebtorPaymentSheet({
   );
 }
 
+function ManualProviderDebtSheet({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [provider, setProvider] = useState("");
+  const [amount, setAmount] = useState("");
+  const [debtDate, setDebtDate] = useState(todayISODate());
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function reset() {
+    setProvider("");
+    setAmount("");
+    setDebtDate(todayISODate());
+    setNote("");
+    setErrors({});
+  }
+
+  function submit() {
+    setErrors({});
+    startTransition(async () => {
+      const result = await saveManualProviderDebtAction({
+        provider,
+        amount: Number(amount),
+        debtDate,
+        note,
+      });
+      if (result.ok) {
+        toast.success("Deuda de proveedor agregada", {
+          description: `${provider} · ${formatCurrency(Number(amount))}`,
+        });
+        reset();
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Nueva deuda de proveedor</SheetTitle>
+          <SheetDescription>
+            Registra manualmente un gasto a crédito para un proveedor.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="grid gap-4 px-4 pb-4">
+          <div className="grid gap-2">
+            <Label htmlFor="provider-debt-name">Proveedor</Label>
+            <Input
+              id="provider-debt-name"
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              placeholder="Nombre del proveedor"
+              aria-invalid={!!errors.provider}
+            />
+            {errors.provider && <p className="text-xs text-destructive">{errors.provider}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-debt-amount">Monto</Label>
+            <MoneyInput
+              id="provider-debt-amount"
+              value={amount}
+              onValueChange={setAmount}
+              placeholder="0.00"
+              aria-invalid={!!errors.amount}
+            />
+            {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-debt-date">Fecha</Label>
+            <Input
+              id="provider-debt-date"
+              type="date"
+              value={debtDate}
+              onChange={(event) => setDebtDate(event.target.value)}
+              aria-invalid={!!errors.debtDate}
+            />
+            {errors.debtDate && <p className="text-xs text-destructive">{errors.debtDate}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-debt-note">Nota</Label>
+            <Input
+              id="provider-debt-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Ej. Llave de agua para oficina"
+              aria-invalid={!!errors.note}
+            />
+            {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+          </div>
+          <Button onClick={submit} disabled={isPending} className="bg-brand text-brand-foreground hover:bg-brand/90">
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            Agregar deuda
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function DebtsView({
   rows,
   providerDetails,
@@ -638,9 +780,11 @@ export function DebtsView({
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [providerSheetOpen, setProviderSheetOpen] = useState(false);
   const [editingDebtor, setEditingDebtor] = useState<ManualDebtorDetail | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<ManualDebtorDetail | null>(null);
   const debtorDetailsById = new Map(debtorDetails.map((detail) => [detail.debtor.id, detail]));
+  const providerDetailsByName = new Map(providerDetails.map((detail) => [detail.provider, detail]));
 
   const debtors = rows.filter((row) => row.type === "debtor");
   const providers = rows.filter((row) => row.type === "provider");
@@ -725,15 +869,17 @@ export function DebtsView({
           />
           <DebtTableCard
             title="Proveedores"
-            description="Calculado desde pedidos pendientes por proveedor."
+            description="Pedidos, obras y deudas manuales pendientes por proveedor."
             rows={filteredProviders}
             total={filteredProvidersTotal}
             type="provider"
+            onCreate={() => setProviderSheetOpen(true)}
             onInspect={(row) => {
               const detail = providerDetails.find((item) => item.provider === row.name) ?? null;
               if (!detail) return;
               router.push(`/finance/deudas/${encodeURIComponent(detail.provider)}`);
             }}
+            providerDetails={providerDetailsByName}
           />
         </div>
       </div>
@@ -745,6 +891,12 @@ export function DebtsView({
           onOpenChange={setSheetOpen}
           debtor={editingDebtor}
           accounts={accounts}
+        />
+      )}
+      {providerSheetOpen && (
+        <ManualProviderDebtSheet
+          open={providerSheetOpen}
+          onOpenChange={setProviderSheetOpen}
         />
       )}
       {paymentTarget && (

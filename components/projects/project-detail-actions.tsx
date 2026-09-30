@@ -12,11 +12,13 @@ export function ProjectDetailActions({
   projectId,
   projectName,
   pending,
+  isCreditProject,
   methods,
 }: {
   projectId: string;
   projectName: string;
   pending: number;
+  isCreditProject: boolean;
   methods: PaymentMethod[];
 }) {
   const [payOpen, setPayOpen] = useState(false);
@@ -50,6 +52,7 @@ export function ProjectDetailActions({
         projectId={projectId}
         projectName={projectName}
         pending={pending}
+        isCreditProject={isCreditProject}
         methods={methods}
       />
       <DeleteProjectDialog

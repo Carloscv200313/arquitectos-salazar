@@ -254,7 +254,7 @@ create table if not exists public.projects (
   client_id              uuid not null references public.clients(id),
   name                   text not null,
   template               text not null default 'diamante'
-                         check (template in ('diamante','oro','especial')),
+                         check (template in ('diamante','oro','especial','credito')),
   project_amount         numeric(14,2) not null default 0,
   office_amount          numeric(14,2) not null default 0,
   utility_amount         numeric(14,2) not null default 0,
@@ -492,6 +492,7 @@ create table if not exists public.manual_debtors (
   name       text not null,
   amount     numeric(14,2) not null default 0,
   source_account_id uuid references public.payment_accounts(id),
+  project_id uuid references public.projects(id),
   loan_date  date not null default current_date,
   note       text,
   status     smallint not null default 1,
@@ -506,6 +507,7 @@ create table if not exists public.manual_debtor_payments (
   payment_date  date not null default current_date,
   amount        numeric(14,2) not null default 0,
   to_account_id uuid not null references public.payment_accounts(id),
+  project_payment_id uuid references public.project_payments(id),
   note          text,
   status        smallint not null default 1,
   created_at    timestamptz not null default now(),
@@ -514,8 +516,43 @@ create table if not exists public.manual_debtor_payments (
 create index if not exists manual_debtor_payments_debtor_idx
   on public.manual_debtor_payments(debtor_id)
   where status = 1;
+create index if not exists manual_debtors_project_idx
+  on public.manual_debtors(project_id)
+  where status = 1;
 create index if not exists manual_debtor_payments_account_idx
   on public.manual_debtor_payments(to_account_id)
+  where status = 1;
+create unique index if not exists manual_debtor_payments_project_payment_idx
+  on public.manual_debtor_payments(project_payment_id)
+  where project_payment_id is not null;
+
+create table if not exists public.manual_provider_debts (
+  id         uuid primary key default gen_random_uuid(),
+  provider   text not null,
+  amount     numeric(14,2) not null default 0,
+  debt_date  date not null default current_date,
+  note       text,
+  status     smallint not null default 1,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id)
+);
+
+create table if not exists public.manual_provider_debt_payments (
+  id           uuid primary key default gen_random_uuid(),
+  debt_id      uuid not null references public.manual_provider_debts(id),
+  payment_date date not null default current_date,
+  amount       numeric(14,2) not null default 0,
+  note         text,
+  status       smallint not null default 1,
+  created_at   timestamptz not null default now(),
+  created_by   uuid references auth.users(id)
+);
+create index if not exists manual_provider_debts_provider_idx
+  on public.manual_provider_debts(lower(provider))
+  where status = 1;
+create index if not exists manual_provider_debt_payments_debt_idx
+  on public.manual_provider_debt_payments(debt_id)
   where status = 1;
 
 create table if not exists public.provider_debt_settlements (
@@ -619,7 +656,7 @@ begin
   foreach t in array array[
     'roles','profiles','app_users','employees','payment_accounts','task_types',
     'system_settings','help_items','clients','projects','works','work_categories','work_files','work_category_budgets','work_orders',
-    'salary_weeks','salary_day_records','manual_debtors','provider_debt_settlements'
+    'salary_weeks','salary_day_records','manual_debtors','manual_provider_debts','provider_debt_settlements'
   ] loop
     execute format('drop trigger if exists set_updated_at on public.%I;', t);
     execute format(
@@ -651,7 +688,7 @@ begin
     'project_payments','internal_transfers','works','work_movements','work_files',
     'work_category_budgets',
     'work_internal_transfers','work_orders','work_order_payments','salary_weeks',
-    'salary_day_records','salary_payments','manual_debtors','manual_debtor_payments','provider_debt_settlements','general_balance_entries',
+    'salary_day_records','salary_payments','manual_debtors','manual_debtor_payments','manual_provider_debts','manual_provider_debt_payments','provider_debt_settlements','general_balance_entries',
     'general_balance_account_movements','finance_movement_tags','finance_movement_concepts','finance_movement_captures'
   ] loop
     execute format('alter table public.%I enable row level security;', t);

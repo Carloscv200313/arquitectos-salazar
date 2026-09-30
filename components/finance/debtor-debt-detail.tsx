@@ -233,7 +233,7 @@ export function DebtorDebtDetail({
           <Stat
             label="Prestado"
             value={formatCurrency(detail.totalAmount)}
-            hint={detail.debtor.account?.name ?? "Cuenta sin especificar"}
+            hint={detail.debtor.project_id ? "Proyecto a crédito" : (detail.debtor.account?.name ?? "Cuenta sin especificar")}
             icon={<CalendarDays className="size-5" />}
           />
         </div>
@@ -243,7 +243,8 @@ export function DebtorDebtDetail({
             <div>
               <h2 className="font-semibold">Datos del préstamo</h2>
               <p className="text-sm text-muted-foreground">
-                Salida desde {detail.debtor.account?.name ?? "cuenta sin especificar"} el{" "}
+                Salida desde{" "}
+                {detail.debtor.project_id ? "proyecto a crédito" : (detail.debtor.account?.name ?? "cuenta sin especificar")} el{" "}
                 {formatDate(detail.debtor.loan_date)}.
               </p>
               {detail.debtor.note && (
