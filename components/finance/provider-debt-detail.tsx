@@ -9,9 +9,11 @@ import {
   CheckCircle2,
   HandCoins,
   Loader2,
+  Plus,
 } from "lucide-react";
 import {
   registerManualProviderDebtPaymentAction,
+  saveManualProviderDebtAction,
   settleProviderDebtAction,
 } from "@/app/(dashboard)/finance/actions";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
@@ -215,12 +217,129 @@ function SettleProviderDebtSheet({
   );
 }
 
+function ManualProviderDebtSheet({
+  open,
+  onOpenChange,
+  provider,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  provider: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [amount, setAmount] = useState("");
+  const [debtDate, setDebtDate] = useState(todayISODate());
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  function reset() {
+    setAmount("");
+    setDebtDate(todayISODate());
+    setNote("");
+    setErrors({});
+  }
+
+  function submit() {
+    setErrors({});
+    startTransition(async () => {
+      const result = await saveManualProviderDebtAction({
+        provider,
+        amount: Number(amount),
+        debtDate,
+        note,
+      });
+      if (result.ok) {
+        toast.success("Deuda de proveedor agregada", {
+          description: `${provider} · ${formatCurrency(Number(amount))}`,
+        });
+        reset();
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        onOpenChange(next);
+      }}
+    >
+      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Nueva deuda de proveedor</SheetTitle>
+          <SheetDescription>
+            Registra manualmente un gasto a crédito para {provider}.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="grid gap-4 px-4 pb-4">
+          <div className="grid gap-2">
+            <Label htmlFor="provider-detail-debt-name">Proveedor</Label>
+            <Input
+              id="provider-detail-debt-name"
+              value={provider}
+              readOnly
+              className="bg-muted/50 text-muted-foreground"
+              aria-invalid={!!errors.provider}
+            />
+            {errors.provider && <p className="text-xs text-destructive">{errors.provider}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-detail-debt-amount">Monto</Label>
+            <MoneyInput
+              id="provider-detail-debt-amount"
+              value={amount}
+              onValueChange={setAmount}
+              placeholder="0.00"
+              aria-invalid={!!errors.amount}
+            />
+            {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-detail-debt-date">Fecha</Label>
+            <Input
+              id="provider-detail-debt-date"
+              type="date"
+              value={debtDate}
+              onChange={(event) => setDebtDate(event.target.value)}
+              aria-invalid={!!errors.debtDate}
+            />
+            {errors.debtDate && <p className="text-xs text-destructive">{errors.debtDate}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-detail-debt-note">Nota</Label>
+            <Input
+              id="provider-detail-debt-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Ej. Compra administrativa a crédito"
+              aria-invalid={!!errors.note}
+            />
+            {errors.note && <p className="text-xs text-destructive">{errors.note}</p>}
+          </div>
+          <Button onClick={submit} disabled={isPending} className="bg-brand text-brand-foreground hover:bg-brand/90">
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            Agregar deuda
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function ProviderDebtDetail({
   detail,
 }: {
   detail: ProviderDebtDetail;
 }) {
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
+  const [manualDebtOpen, setManualDebtOpen] = useState(false);
   const pendingRowsCount = detail.orders.length + detail.workMovements.length + detail.manualDebts.length;
   const debtRows = [
     ...detail.orders.map((order) => ({ kind: "order" as const, order })),
@@ -268,11 +387,21 @@ export function ProviderDebtDetail({
         </div>
 
         <Card className="gap-0 overflow-hidden p-0">
-          <div className="border-b px-5 py-4">
-            <h2 className="font-semibold">Deudas del proveedor</h2>
-            <p className="text-sm text-muted-foreground">
-              Pedidos y egresos de obra pendientes por saldar.
-            </p>
+          <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold">Deudas del proveedor</h2>
+              <p className="text-sm text-muted-foreground">
+                Pedidos, egresos de obra y deudas manuales pendientes por saldar.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="bg-brand text-brand-foreground hover:bg-brand/90"
+              onClick={() => setManualDebtOpen(true)}
+            >
+              <Plus className="size-4" />
+              Nueva deuda
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <Table>
@@ -477,6 +606,11 @@ export function ProviderDebtDetail({
           target={settleTarget}
         />
       )}
+      <ManualProviderDebtSheet
+        open={manualDebtOpen}
+        onOpenChange={setManualDebtOpen}
+        provider={detail.provider}
+      />
     </>
   );
 }
