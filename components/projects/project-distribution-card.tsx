@@ -9,8 +9,14 @@ import {
 } from "@/lib/constants";
 import { round2 } from "@/lib/calculations";
 import { formatCurrency, formatPercent } from "@/lib/format";
+import { resolveResponsibleToEmployeeName } from "@/lib/project-responsibles";
 import { cn } from "@/lib/utils";
-import type { InternalArea, PaymentWithMethod, ProjectWithFinance } from "@/lib/types";
+import type {
+  Employee,
+  InternalArea,
+  PaymentWithMethod,
+  ProjectWithFinance,
+} from "@/lib/types";
 
 function Line({
   label,
@@ -101,9 +107,11 @@ function AreaRow({
 export function ProjectDistributionCard({
   project,
   payments,
+  employees,
 }: {
   project: ProjectWithFinance;
   payments: PaymentWithMethod[];
+  employees: Employee[];
 }) {
   const isCreditProject = project.template === "credito";
   const portion = round2(
@@ -240,7 +248,10 @@ export function ProjectDistributionCard({
           <div className="rounded-xl border bg-muted/20 px-4 py-3">
             <AreaRow
               label={PROJECT_SLICE_LABELS.proposal}
-              responsible={project.proposal_responsible}
+              responsible={resolveResponsibleToEmployeeName(
+                project.proposal_responsible,
+                employees,
+              )}
               pct={pctOf(project.proposal_amount)}
               total={project.proposal_amount}
               paid={paidByArea.proposal}
@@ -248,7 +259,10 @@ export function ProjectDistributionCard({
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.modeling_3d}
-              responsible={project.modeling_3d_responsible}
+              responsible={resolveResponsibleToEmployeeName(
+                project.modeling_3d_responsible,
+                employees,
+              )}
               pct={pctOf(project.modeling_3d_amount)}
               total={project.modeling_3d_amount}
               paid={paidByArea.modeling_3d}
@@ -256,7 +270,10 @@ export function ProjectDistributionCard({
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.plans}
-              responsible={project.plans_responsible}
+              responsible={resolveResponsibleToEmployeeName(
+                project.plans_responsible,
+                employees,
+              )}
               pct={pctOf(project.plans_amount)}
               total={project.plans_amount}
               paid={paidByArea.plans}
@@ -264,7 +281,10 @@ export function ProjectDistributionCard({
             />
             <AreaRow
               label={PROJECT_SLICE_LABELS.render}
-              responsible={project.render_responsible}
+              responsible={resolveResponsibleToEmployeeName(
+                project.render_responsible,
+                employees,
+              )}
               pct={pctOf(project.render_amount)}
               total={project.render_amount}
               paid={paidByArea.render}

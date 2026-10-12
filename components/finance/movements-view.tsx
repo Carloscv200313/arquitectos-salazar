@@ -166,7 +166,10 @@ function CaptureSheet({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const conceptItems = useMemo(
-    () => report.concepts.map((concept) => ({ value: concept.id, label: concept.name })),
+    () =>
+      report.concepts
+        .filter((concept) => !concept.id.startsWith("automatic-concept:"))
+        .map((concept) => ({ value: concept.id, label: concept.name })),
     [report.concepts],
   );
   const accountItems = useMemo(
@@ -266,11 +269,13 @@ function CaptureSheet({
                 <SelectValue placeholder="Seleccionar concepto" />
               </SelectTrigger>
               <SelectContent>
-                {report.concepts.map((concept) => (
-                  <SelectItem key={concept.id} value={concept.id}>
-                    {concept.name}
-                  </SelectItem>
-                ))}
+                {report.concepts
+                  .filter((concept) => !concept.id.startsWith("automatic-concept:"))
+                  .map((concept) => (
+                    <SelectItem key={concept.id} value={concept.id}>
+                      {concept.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             {errors.conceptId && <p className="text-xs text-destructive">{errors.conceptId}</p>}
@@ -806,14 +811,14 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
         <Metric
           label="Ingresos"
           value={formatCurrency(report.totals.incomeAmount)}
-          hint="Capturas registradas como ingreso"
+          hint="Movimientos registrados como ingreso"
           icon={<WalletCards className="size-5" />}
           accent
         />
         <Metric
           label="Gastos"
           value={formatCurrency(report.totals.expenseAmount)}
-          hint="Capturas registradas como gasto"
+          hint="Movimientos registrados como gasto"
           icon={<TrendingDown className="size-5" />}
         />
         <Metric
@@ -825,7 +830,7 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
         <Metric
           label="Registros"
           value={String(report.totals.count)}
-          hint="Capturas activas"
+          hint="Movimientos activos"
           icon={<Tag className="size-5" />}
         />
       </div>
@@ -834,9 +839,9 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
         <div className="border-b px-5 py-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="font-semibold">Registros de Captura</h2>
+              <h2 className="font-semibold">Registros de movimientos</h2>
               <p className="text-sm text-muted-foreground">
-                Capturas contables por concepto, cuenta y forma de pago.
+                Capturas y registros consolidados de Proyectos, Obras y Salario.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -922,6 +927,7 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                 <TableHead className="w-14 px-5 text-xs uppercase text-muted-foreground">#</TableHead>
                 <TableHead className="min-w-56 text-xs uppercase text-muted-foreground">Concepto</TableHead>
                 <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                <TableHead className="min-w-32 text-xs uppercase text-muted-foreground">Origen</TableHead>
                 <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
                 <TableHead className="text-right text-xs uppercase text-muted-foreground">Valor</TableHead>
                 <TableHead className="min-w-44 text-xs uppercase text-muted-foreground">Cuenta</TableHead>
@@ -947,6 +953,11 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                       {MOVEMENT_TYPE_LABELS[row.movement_type]}
                     </span>
                   </TableCell>
+                  <TableCell>
+                    <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                      {row.origin_label}
+                    </span>
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(row.capture_date)}</TableCell>
                   <TableCell
                     className={cn(
@@ -960,45 +971,49 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                   <TableCell className="text-muted-foreground">{PAYMENT_FORM_LABELS[row.payment_form]}</TableCell>
                   <TableCell className="px-5 text-muted-foreground">{row.description || "-"}</TableCell>
                   <TableCell className="px-5">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8"
-                        title="Editar captura"
-                        onClick={() => openEditCapture(row)}
-                      >
-                        <Pencil className="size-4" />
-                        <span className="sr-only">Editar captura</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8 text-destructive hover:text-destructive"
-                        title="Eliminar captura"
-                        onClick={() => {
-                          setDeleteTarget(row);
-                          setDeleteNote("");
-                          setDeleteErrors({});
-                        }}
-                      >
-                        <Trash2 className="size-4" />
-                        <span className="sr-only">Eliminar captura</span>
-                      </Button>
-                    </div>
+                    {row.is_editable ? (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-8"
+                          title="Editar captura"
+                          onClick={() => openEditCapture(row)}
+                        >
+                          <Pencil className="size-4" />
+                          <span className="sr-only">Editar captura</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="size-8 text-destructive hover:text-destructive"
+                          title="Eliminar captura"
+                          onClick={() => {
+                            setDeleteTarget(row);
+                            setDeleteNote("");
+                            setDeleteErrors({});
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                          <span className="sr-only">Eliminar captura</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <p className="text-right text-xs text-muted-foreground">Solo lectura</p>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
               {filteredRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                    Sin capturas registradas para los filtros.
+                  <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                    Sin movimientos registrados para los filtros.
                   </TableCell>
                 </TableRow>
               )}
               {filteredRows.length > 0 && (
                 <TableRow pinned className="bg-muted/30 font-semibold hover:bg-muted/30">
-                  <TableCell className="px-5" colSpan={4}>
+                  <TableCell className="px-5" colSpan={5}>
                     Total filtrado neto
                   </TableCell>
                   <TableCell
@@ -1079,6 +1094,11 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
 }
 
 export function MovementsView({ report }: { report: FinanceCaptureReport }) {
+  const manualCatalogReport = {
+    ...report,
+    concepts: report.concepts.filter((concept) => !concept.id.startsWith("automatic-concept:")),
+    tags: report.tags.filter((tag) => !tag.id.startsWith("automatic-tag:")),
+  };
   return (
     <Tabs defaultValue="registrar" className="gap-5">
       <TabsList variant="line" className="flex w-full flex-wrap justify-start gap-2">
@@ -1095,7 +1115,7 @@ export function MovementsView({ report }: { report: FinanceCaptureReport }) {
         <CapturesTab report={report} />
       </TabsContent>
       <TabsContent value="catalogos">
-        <CatalogsTab report={report} />
+        <CatalogsTab report={manualCatalogReport} />
       </TabsContent>
     </Tabs>
   );

@@ -4,12 +4,7 @@
 export type PaymentStatus = "pending" | "partial" | "paid";
 export type MovementType = "income" | "expense";
 export type InternalArea = "proposal" | "modeling_3d" | "plans" | "render";
-export type ProjectResponsible =
-  | "Alejandra"
-  | "Juanfer"
-  | "Juan Jose"
-  | "Esmeralda"
-  | "Sin asignar";
+export type ProjectResponsible = string;
 
 export interface Client {
   id: string;
@@ -483,6 +478,9 @@ export interface FinanceCaptureRow {
   created_by: string | null;
   concept: FinanceMovementConcept | null;
   account: PaymentMethod | null;
+  origin: "manual" | "project" | "work" | "salary";
+  origin_label: string;
+  is_editable: boolean;
 }
 
 export interface FinanceCaptureReport {

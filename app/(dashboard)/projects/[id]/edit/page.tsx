@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getProject, listClients, listMovements } from "@/lib/data/projects";
+import { listEmployees } from "@/lib/data/finance";
 import { round2 } from "@/lib/calculations";
 import { EditProjectForm } from "@/components/projects/edit-project-form";
 import type { InternalArea } from "@/lib/types";
@@ -14,10 +15,11 @@ export default async function EditProjectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [project, clients, payments] = await Promise.all([
+  const [project, clients, payments, employees] = await Promise.all([
     getProject(id),
     listClients(),
     listMovements(id),
+    listEmployees(),
   ]);
   if (!project) notFound();
 
@@ -41,7 +43,12 @@ export default async function EditProjectPage({
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">Editar proyecto</h1>
       </div>
-      <EditProjectForm project={project} clients={clients} paidByArea={paidByArea} />
+      <EditProjectForm
+        project={project}
+        clients={clients}
+        paidByArea={paidByArea}
+        employees={employees}
+      />
     </div>
   );
 }

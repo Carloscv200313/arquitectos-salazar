@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { listClients, listPaymentMethods } from "@/lib/data/projects";
+import { listEmployees } from "@/lib/data/finance";
 import { CreateProjectWizard } from "@/components/projects/create-project-wizard";
 
 export const metadata = { title: "Nuevo proyecto" };
 
 export default async function NewProjectPage() {
-  const [clients, methods] = await Promise.all([
+  const [clients, methods, employees] = await Promise.all([
     listClients(),
     listPaymentMethods(),
+    listEmployees(),
   ]);
 
   return (
@@ -26,7 +28,7 @@ export default async function NewProjectPage() {
         </p>
       </div>
 
-      <CreateProjectWizard clients={clients} methods={methods} />
+      <CreateProjectWizard clients={clients} methods={methods} employees={employees} />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { computeBreakdown, hasMaxTwoDecimals } from "./calculations";
 import {
   EMPLOYEE_DEFAULT_WORK_TYPES,
   PROJECT_DISTRIBUTION,
-  RESPONSIBLE_OPTIONS,
   SALARY_ACTIVITY_TYPES,
   SALARY_PAYMENT_STATUSES,
   SALARY_PAYMENT_TYPES,
@@ -80,10 +79,10 @@ const sliceAmountsSchema = z.object({
 });
 
 export const projectResponsiblesSchema = z.object({
-  proposal: z.enum(RESPONSIBLE_OPTIONS),
-  modeling_3d: z.enum(RESPONSIBLE_OPTIONS),
-  plans: z.enum(RESPONSIBLE_OPTIONS),
-  render: z.enum(RESPONSIBLE_OPTIONS),
+  proposal: name,
+  modeling_3d: name,
+  plans: name,
+  render: name,
 });
 
 function weightsSumOk(w: { proposal: number; modeling_3d: number; plans: number; render: number }) {

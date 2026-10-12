@@ -6,6 +6,7 @@ import { getSalaryWeekDetailReport } from "@/lib/data/finance";
 import { getProjectsInternalAreaPaid, listProjects } from "@/lib/data/projects";
 import { listWorks } from "@/lib/data/works";
 import { formatDate } from "@/lib/format";
+import { buildProjectSalaryAssignments } from "@/lib/project-responsibles";
 
 export async function generateMetadata({
   params,
@@ -37,6 +38,7 @@ export default async function SalaryWeekPage({
   if (!report) notFound();
 
   const backHref = `/finance/salario?year=${report.week.year}&month=${report.week.month}`;
+  const employees = report.week.employees.map((row) => row.employee);
 
   return (
     <div className="flex flex-col gap-6">
@@ -80,12 +82,7 @@ export default async function SalaryWeekPage({
             Planos: areaPaid[project.id]?.plans ?? 0,
             Render: areaPaid[project.id]?.render ?? 0,
           },
-          assignments: [
-            { employeeName: project.proposal_responsible, taskName: "Propuesta" },
-            { employeeName: project.modeling_3d_responsible, taskName: "Modelado 3D" },
-            { employeeName: project.plans_responsible, taskName: "Planos" },
-            { employeeName: project.render_responsible, taskName: "Render" },
-          ],
+          assignments: buildProjectSalaryAssignments(project, employees),
         }))}
         workOptions={works.map((work) => ({
           id: work.id,

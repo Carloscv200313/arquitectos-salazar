@@ -9,6 +9,8 @@ import { SalaryView } from "@/components/finance/salary-view";
 import { UtilitiesView } from "@/components/finance/utilities-view";
 import {
   getDebtReport,
+  getAdministrativeSalaryMonthlyReport,
+  getConsolidatedFinanceMovementReport,
   getFinanceCaptureReport,
   getFinanceUtilityReport,
   getGeneralBalanceReport,
@@ -25,6 +27,7 @@ import {
   listWorks,
 } from "@/lib/data/works";
 import { FINANCE_MODULES } from "@/lib/finance-modules";
+import { buildProjectSalaryAssignments } from "@/lib/project-responsibles";
 
 export async function generateStaticParams() {
   return FINANCE_MODULES.map((item) => ({ module: item.slug }));
@@ -54,13 +57,14 @@ export default async function FinanceModulePage({
   const Icon = item.icon;
   const [balance, movements, statements, debts, utilities, internalTransferData, salaryData] = await Promise.all([
     item.slug === "balance-general" ? getGeneralBalanceReport() : Promise.resolve(null),
-    item.slug === "movimientos" ? getFinanceCaptureReport() : Promise.resolve(null),
+    item.slug === "movimientos" ? getConsolidatedFinanceMovementReport() : Promise.resolve(null),
     item.slug === "estados-financieros"
       ? Promise.all([
           getFinanceCaptureReport(),
           getFinanceUtilityReport(),
           getWorkExpenseMonthlyReport(),
           getProjectArchitectCommissionMonthlyReport(),
+          getAdministrativeSalaryMonthlyReport(),
         ])
       : Promise.resolve(null),
     item.slug === "deudas"
@@ -116,6 +120,7 @@ export default async function FinanceModulePage({
           utilities={statements[1]}
           workExpenses={statements[2]}
           architectCommissions={statements[3]}
+          administrativeSalaries={statements[4]}
         />
       ) : debts ? (
         <DebtsView
@@ -151,12 +156,7 @@ export default async function FinanceModulePage({
               Planos: salaryData[3][project.id]?.plans ?? 0,
               Render: salaryData[3][project.id]?.render ?? 0,
             },
-            assignments: [
-              { employeeName: project.proposal_responsible, taskName: "Propuesta" },
-              { employeeName: project.modeling_3d_responsible, taskName: "Modelado 3D" },
-              { employeeName: project.plans_responsible, taskName: "Planos" },
-              { employeeName: project.render_responsible, taskName: "Render" },
-            ],
+            assignments: buildProjectSalaryAssignments(project, salaryData[0].employees),
           }))}
           workOptions={salaryData[2].map((work) => ({
             id: work.id,

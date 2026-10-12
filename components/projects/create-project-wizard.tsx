@@ -35,18 +35,27 @@ import { cn } from "@/lib/utils";
 import { formatCurrency, formatPercent, todayISODate } from "@/lib/format";
 import { computeBreakdown, round2, type ProjectDistribution } from "@/lib/calculations";
 import {
-  PROJECT_RESPONSIBLES,
-  RESPONSIBLE_OPTIONS,
   PROJECT_TEMPLATES,
   PROJECT_SLICE_LABELS,
   TEMPLATE_LABELS,
   TEMPLATE_WEIGHTS,
   PROYECTO_RATE,
+  UNASSIGNED_RESPONSIBLE,
   type ProjectTemplate,
   type ProjectSliceKey,
   type SliceWeights,
 } from "@/lib/constants";
-import type { Client, InternalArea, PaymentMethod, ProjectResponsible } from "@/lib/types";
+import {
+  getDefaultProjectResponsibles,
+  getResponsibleOptions,
+} from "@/lib/project-responsibles";
+import type {
+  Client,
+  Employee,
+  InternalArea,
+  PaymentMethod,
+  ProjectResponsible,
+} from "@/lib/types";
 import { DistributionPreview } from "./distribution-preview";
 import { createProjectAction } from "@/app/(dashboard)/projects/actions";
 
@@ -68,13 +77,6 @@ const TEMPLATE_ICONS: Record<ProjectTemplate, LucideIcon> = {
 
 const SLICE_KEYS = Object.keys(PROJECT_SLICE_LABELS) as ProjectSliceKey[];
 const STEPS = ["Plantilla", "Datos", "Responsables", "Confirmar"];
-
-const DEFAULT_RESPONSIBLES: Record<InternalArea, ProjectResponsible> = {
-  proposal: "Alejandra",
-  modeling_3d: "Esmeralda",
-  plans: "Alejandra",
-  render: "Esmeralda",
-};
 
 const AREA_TONE: Record<
   InternalArea,
@@ -110,14 +112,21 @@ function buildEmployeeTotals(
   responsibles: Record<InternalArea, ProjectResponsible>,
   areaAmounts: Record<InternalArea, number>,
 ) {
-  return PROJECT_RESPONSIBLES.map((person) => {
-    const assignedAreas = SLICE_KEYS.filter((area) => responsibles[area] === person);
-    return {
-      person,
-      assignedAreas,
-      amount: assignedAreas.reduce((sum, area) => sum + areaAmounts[area], 0),
-    };
-  }).filter((row) => row.assignedAreas.length > 0);
+  const rows = new Map<
+    string,
+    { person: string; assignedAreas: InternalArea[]; amount: number }
+  >();
+
+  for (const area of SLICE_KEYS) {
+    const person = responsibles[area]?.trim();
+    if (!person || person === UNASSIGNED_RESPONSIBLE) continue;
+    const current = rows.get(person) ?? { person, assignedAreas: [], amount: 0 };
+    current.assignedAreas.push(area);
+    current.amount = round2(current.amount + areaAmounts[area]);
+    rows.set(person, current);
+  }
+
+  return [...rows.values()];
 }
 
 function FieldError({ children }: { children?: string }) {
@@ -157,14 +166,20 @@ function weightsToInputs(weights: SliceWeights): WeightInputs {
 export function CreateProjectWizard({
   clients,
   methods,
+  employees,
 }: {
   clients: Client[];
   methods: PaymentMethod[];
+  employees: Employee[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [step, setStep] = useState(0);
+  const responsibleOptions = useMemo(
+    () => getResponsibleOptions(employees),
+    [employees],
+  );
 
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [distributionMode, setDistributionMode] = useState<DistributionInputMode>("percent");
@@ -190,9 +205,9 @@ export function CreateProjectWizard({
   const [clientName, setClientName] = useState("");
   const [projectAmount, setProjectAmount] = useState("");
   const [addons, setAddons] = useState<AddonRow[]>([]);
-  const [responsibles, setResponsibles] = useState<Record<InternalArea, ProjectResponsible>>(
-    DEFAULT_RESPONSIBLES,
-  );
+  const [responsibles, setResponsibles] = useState<
+    Record<InternalArea, ProjectResponsible>
+  >(() => getDefaultProjectResponsibles(employees));
 
   const [registerAnticipo, setRegisterAnticipo] = useState(false);
   const [anticipoAmount, setAnticipoAmount] = useState("");
@@ -738,6 +753,7 @@ export function CreateProjectWizard({
           weights={weights}
           projectDistribution={exactProjectDistribution}
           responsibles={responsibles}
+          responsibleOptions={responsibleOptions}
           creditMode={isCreditProject}
           error={errors.responsibles}
           onChange={(area, value) =>
@@ -816,6 +832,7 @@ function StepResponsibles({
   weights,
   projectDistribution,
   responsibles,
+  responsibleOptions,
   creditMode,
   error,
   onChange,
@@ -826,6 +843,7 @@ function StepResponsibles({
   weights: SliceWeights;
   projectDistribution?: ProjectDistribution;
   responsibles: Record<InternalArea, ProjectResponsible>;
+  responsibleOptions: ProjectResponsible[];
   creditMode: boolean;
   error?: string;
   onChange: (area: InternalArea, value: ProjectResponsible) => void;
@@ -891,13 +909,13 @@ function StepResponsibles({
                 <Select
                   value={responsibles[area]}
                   onValueChange={(value) => value && onChange(area, value as ProjectResponsible)}
-                  items={RESPONSIBLE_OPTIONS.map((person) => ({ label: person, value: person }))}
+                  items={responsibleOptions.map((person) => ({ label: person, value: person }))}
                 >
                   <SelectTrigger className="w-full bg-background/80">
                     <SelectValue placeholder="Selecciona responsable" />
                   </SelectTrigger>
                   <SelectContent>
-                    {RESPONSIBLE_OPTIONS.map((person) => (
+                    {responsibleOptions.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

@@ -263,11 +263,13 @@ export function FinancialStatementsView({
   utilities,
   workExpenses,
   architectCommissions,
+  administrativeSalaries,
 }: {
   movements: FinanceCaptureReport;
   utilities: FinanceUtilityReport;
   workExpenses: Array<{ month: string; amount: number }>;
   architectCommissions: Array<{ month: string; amount: number }>;
+  administrativeSalaries: Array<{ month: string; amount: number }>;
 }) {
   const projectIncome = utilityValues(utilities, "projectUtility");
   const workIncome = utilityValues(utilities, "workUtility");
@@ -275,15 +277,16 @@ export function FinancialStatementsView({
   const regularIncome = sumValues(projectIncome, workIncome);
   const totalIncome = sumValues(regularIncome, otherIncome);
   const workExpenseValues = monthlyAmountValues(workExpenses);
-  const salaryValues = monthlyAmountValues(architectCommissions);
-  const directCosts = workExpenseValues;
+  const architectCommissionValues = monthlyAmountValues(architectCommissions);
+  const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries);
+  const directCosts = sumValues(workExpenseValues, architectCommissionValues);
   const adminRows: StatementRow[] = valuesByTag(movements, ADMIN_ROWS).map((row): StatementRow =>
     row.label === "Sueldos"
       ? {
           ...row,
-          values: sumValues(row.values, salaryValues),
+          values: sumValues(row.values, administrativeSalaryValues),
           description:
-            "Aquí se cruzan los pagos de Proyectos con concepto Pago de..., los pagos del módulo Salario y los movimientos de Obras en Honorario, Honorarios o Mano de obra.",
+            "Aquí se cruzan los pagos por semana registrados en Salario y las capturas manuales vinculadas a la etiqueta Sueldos. No incluye pagos por proyecto ni mano de obra de Obras.",
         }
       : row,
   );
@@ -330,13 +333,13 @@ export function FinancialStatementsView({
       label: "Gastos en Obras",
       values: workExpenseValues,
       description:
-        "Aquí se van a poner los gastos de obras, excepto Cuenta de Oficina y las categorías Honorario, Honorarios o Mano de obra, que se cruzan como salario.",
+        "Aquí se suman los gastos directos registrados dentro de las obras, incluidas las categorías Honorario, Honorarios y Mano de obra. Solo se excluye Cuenta de Oficina.",
     },
     {
       label: "Comisión a Arquitectos por Proyecto",
-      values: zeroValues(),
+      values: architectCommissionValues,
       description:
-        "Los pagos salariales relacionados con proyectos y obras se consolidan en la fila Sueldos.",
+        "Pagos a arquitectos vinculados a un proyecto, registrados desde Proyectos con concepto Pago de... o desde Salario como Pago proyecto.",
     },
     { label: "Gastos administrativos", values: adminTotal, section: true, mutedBlock: true, hideValues: true },
     ...adminRows.map((row) => ({

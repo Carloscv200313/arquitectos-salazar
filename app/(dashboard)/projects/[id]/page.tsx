@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, User, CalendarDays, MapPin } from "lucide-react";
 import { getProject, listMovements, listPaymentMethods } from "@/lib/data/projects";
+import { listEmployees } from "@/lib/data/finance";
 import { StatusBadge } from "@/components/projects/status-badge";
 import { FinanceOverview } from "@/components/projects/finance-overview";
 import { ProjectDistributionCard } from "@/components/projects/project-distribution-card";
@@ -25,10 +26,11 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [project, payments, methods] = await Promise.all([
+  const [project, payments, methods, employees] = await Promise.all([
     getProject(id),
     listMovements(id),
     listPaymentMethods(),
+    listEmployees(),
   ]);
   if (!project) notFound();
 
@@ -71,7 +73,7 @@ export default async function ProjectDetailPage({
 
       <FinanceOverview finance={project.finance} />
 
-      <ProjectDistributionCard project={project} payments={payments} />
+      <ProjectDistributionCard project={project} payments={payments} employees={employees} />
       <PaymentHistory payments={payments} projectId={project.id} methods={methods} />
     </div>
   );

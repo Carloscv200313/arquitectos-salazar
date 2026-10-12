@@ -113,12 +113,6 @@ function normalizedFinanceCategory(value: unknown) {
     .toLowerCase();
 }
 
-const WORK_SALARY_CATEGORIES = new Set(["honorario", "honorarios", "mano de obra"]);
-
-function isWorkSalaryCategory(value: unknown) {
-  return WORK_SALARY_CATEGORIES.has(normalizedFinanceCategory(value));
-}
-
 async function audit(action: string, recordId: string, description: string) {
   await sb().from("audit_logs").insert({
     user_id: await getCurrentUserId(),
@@ -133,13 +127,21 @@ async function audit(action: string, recordId: string, description: string) {
 
 async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
-  const [pp, wm, it, wt, debtorRows, debtorPayments] = await Promise.all([
+  const [pp, wm, it, wt, debtorRows, debtorPayments, captures, salaryPayments] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
     listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
     client.from("manual_debtor_payments").select("to_account_id, amount").eq("status", 1),
+    client
+      .from("finance_movement_captures")
+      .select("source_account_id, movement_type, amount")
+      .eq("status", 1),
+    client
+      .from("salary_payments")
+      .select("payment_method_id, payment_type, amount")
+      .eq("status", 1),
   ]);
 
   const balances = new Map<string, number>();
@@ -164,6 +166,16 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   }
   for (const payment of debtorPayments.data ?? []) {
     add((payment.to_account_id as string) ?? null, num(payment.amount));
+  }
+  for (const capture of captures.data ?? []) {
+    add(
+      (capture.source_account_id as string) ?? null,
+      (capture.movement_type as string) === "income" ? num(capture.amount) : -num(capture.amount),
+    );
+  }
+  for (const payment of salaryPayments.data ?? []) {
+    if (payment.payment_type === "project" || payment.payment_type === "work") continue;
+    add((payment.payment_method_id as string) ?? null, -num(payment.amount));
   }
   return balances;
 }
@@ -950,7 +962,7 @@ export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: stri
   const byMonth = new Map<string, number>();
   for (const row of rows) {
     const category = normalizedFinanceCategory(row.category);
-    if (category === "cuenta de oficina" || isWorkSalaryCategory(row.category)) continue;
+    if (category === "cuenta de oficina") continue;
     const date = String(row.movement_date ?? "");
     const month = date.slice(0, 7);
     if (!month) continue;
@@ -964,7 +976,7 @@ export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: stri
 export async function getProjectArchitectCommissionMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
   if (!isAdminConfigured()) return [];
   const client = sb();
-  const [salaryRes, projectPaymentRes, workMovementRows] = await Promise.all([
+  const [salaryRes, projectPaymentRes] = await Promise.all([
     client
       .from("salary_payments")
       .select("payment_date, amount")
@@ -976,10 +988,6 @@ export async function getProjectArchitectCommissionMonthlyReport(): Promise<Arra
       .eq("status", 1)
       .eq("movement_type", "expense")
       .not("internal_area", "is", null),
-    listWorkMovementRows({
-      select: "movement_date, amount, category",
-      movementType: "expense",
-    }),
   ]);
   if (salaryRes.error) throw new Error(salaryRes.error.message);
   if (projectPaymentRes.error) throw new Error(projectPaymentRes.error.message);
@@ -997,9 +1005,23 @@ export async function getProjectArchitectCommissionMonthlyReport(): Promise<Arra
     if (!month) continue;
     byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
   }
-  for (const row of workMovementRows) {
-    if (!isWorkSalaryCategory(row.category)) continue;
-    const month = String(row.movement_date ?? "").slice(0, 7);
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount: round2(amount) }));
+}
+
+export async function getAdministrativeSalaryMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
+  if (!isAdminConfigured()) return [];
+  const { data, error } = await sb()
+    .from("salary_payments")
+    .select("payment_date, amount")
+    .eq("status", 1)
+    .eq("payment_type", "week");
+  if (error) throw new Error(error.message);
+
+  const byMonth = new Map<string, number>();
+  for (const row of data ?? []) {
+    const month = String(row.payment_date ?? "").slice(0, 7);
     if (!month) continue;
     byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
   }
@@ -1053,6 +1075,9 @@ function mapFinanceCapture(r: Row, balanceAfter: number): FinanceCaptureRow {
           created_at: (account.created_at as string) ?? "",
         }
       : null,
+    origin: "manual",
+    origin_label: "Captura manual",
+    is_editable: true,
   };
 }
 
@@ -1123,6 +1148,261 @@ export async function getFinanceCaptureReport(): Promise<FinanceCaptureReport> {
     concepts: ((conceptRes.data ?? []) as Row[]).map(mapFinanceMovementConcept),
     tags: ((tagRes.data ?? []) as Row[]).map(mapFinanceMovementTag),
     accounts,
+    totals: {
+      amount: round2(rows.reduce((sum, row) => sum + row.amount, 0)),
+      incomeAmount,
+      expenseAmount,
+      count: rows.length,
+      currentBalance: runningBalance,
+      currentMonthAmount: round2(currentMonthRows.reduce((sum, row) => sum + row.amount, 0)),
+      currentMonthIncome,
+      currentMonthExpense,
+    },
+  };
+}
+
+function inferredCapturePaymentForm(account: PaymentMethod | null): FinanceCapturePaymentForm {
+  const name = normalizedFinanceCategory(account?.name);
+  if (name.includes("caja") || name.includes("efectivo")) return "cash";
+  return "transfer";
+}
+
+function automaticMovementId(scope: string, id: unknown) {
+  return `automatic:${scope}:${String(id ?? "")}`;
+}
+
+export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCaptureReport> {
+  const manualReport = await getFinanceCaptureReport();
+  if (!isAdminConfigured()) return manualReport;
+
+  const client = sb();
+  const [projectPayments, workMovements, salaryPayments, projects, works, employees] = await Promise.all([
+    client
+      .from("project_payments")
+      .select("id,project_id,movement_type,concept,amount,payment_date,payment_method_id,created_at,created_by")
+      .eq("status", 1),
+    listWorkMovementRows({
+      select:
+        "id,work_id,movement_type,concept,supplier,category,amount,movement_date,payment_method_id,observations,created_at,created_by",
+    }),
+    client
+      .from("salary_payments")
+      .select(
+        "id,employee_id,payment_type,concept,amount,payment_date,payment_method_id,project_id,work_id,created_at,created_by",
+      )
+      .eq("status", 1),
+    client.from("projects").select("id,name").eq("status", 1),
+    client.from("works").select("id,name").eq("status", 1),
+    client.from("employees").select("id,full_name").eq("status", 1),
+  ]);
+  if (projectPayments.error) throw new Error(projectPayments.error.message);
+  if (salaryPayments.error) throw new Error(salaryPayments.error.message);
+  if (projects.error) throw new Error(projects.error.message);
+  if (works.error) throw new Error(works.error.message);
+  if (employees.error) throw new Error(employees.error.message);
+
+  const accountsById = new Map(manualReport.accounts.map((account) => [account.id, account]));
+  const projectNames = new Map((projects.data ?? []).map((row) => [row.id as string, row.name as string]));
+  const workNames = new Map((works.data ?? []).map((row) => [row.id as string, row.name as string]));
+  const employeeNames = new Map((employees.data ?? []).map((row) => [row.id as string, row.full_name as string]));
+  const concepts = [...manualReport.concepts];
+  const tags = [...manualReport.tags];
+
+  function ensureTag(name: string): FinanceMovementTag {
+    const normalized = normalizedFinanceCategory(name);
+    const existing = tags.find((tag) => normalizedFinanceCategory(tag.name) === normalized);
+    if (existing) return existing;
+    const tag: FinanceMovementTag = {
+      id: `automatic-tag:${encodeURIComponent(normalized)}`,
+      name,
+      created_at: "",
+      created_by: null,
+    };
+    tags.push(tag);
+    return tag;
+  }
+
+  function ensureConcept(name: string, tagName: string): FinanceMovementConcept {
+    const normalized = normalizedFinanceCategory(name);
+    const existing = concepts.find((concept) => normalizedFinanceCategory(concept.name) === normalized);
+    if (existing) return existing;
+    const tag = ensureTag(tagName);
+    const concept: FinanceMovementConcept = {
+      id: `automatic-concept:${encodeURIComponent(normalized)}`,
+      name,
+      tag_id: tag.id,
+      created_at: "",
+      created_by: null,
+      tag,
+    };
+    concepts.push(concept);
+    return concept;
+  }
+
+  function automaticRow(data: {
+    scope: "project" | "work" | "salary";
+    id: unknown;
+    conceptName: string;
+    tagName: string;
+    date: unknown;
+    movementType?: MovementType;
+    amount: unknown;
+    accountId: unknown;
+    description: string;
+    createdAt: unknown;
+    createdBy: unknown;
+    originLabel: string;
+  }): FinanceCaptureRow {
+    const concept = ensureConcept(data.conceptName, data.tagName);
+    const accountId = String(data.accountId ?? "");
+    const account = accountsById.get(accountId) ?? null;
+    return {
+      id: automaticMovementId(data.scope, data.id),
+      concept_id: concept.id,
+      capture_date: String(data.date ?? ""),
+      movement_type: data.movementType ?? "expense",
+      amount: Math.abs(num(data.amount)),
+      source_account_id: accountId,
+      payment_form: inferredCapturePaymentForm(account),
+      description: data.description,
+      balance_after: 0,
+      created_at: String(data.createdAt ?? ""),
+      created_by: (data.createdBy as string) ?? null,
+      concept,
+      account,
+      origin: data.scope,
+      origin_label: data.originLabel,
+      is_editable: false,
+    };
+  }
+
+  const automaticRows: FinanceCaptureRow[] = [];
+  for (const row of projectPayments.data ?? []) {
+    const conceptName = String(row.concept ?? "Movimiento de proyecto");
+    if (normalizedFinanceCategory(conceptName).startsWith("pago salarial:")) continue;
+    const movementType = (row.movement_type as MovementType) ?? "expense";
+    const isArchitectPayment =
+      movementType === "expense" && normalizedFinanceCategory(conceptName).startsWith("pago de ");
+    automaticRows.push(
+      automaticRow({
+        scope: "project",
+        id: row.id,
+        conceptName,
+        tagName:
+          movementType === "income"
+            ? "Ingresos por proyectos"
+            : isArchitectPayment
+              ? "Comisión a Arquitectos por Proyecto"
+              : "Proyectos",
+        date: row.payment_date,
+        movementType,
+        amount: row.amount,
+        accountId: row.payment_method_id,
+        description: `Proyecto: ${projectNames.get(row.project_id as string) ?? "Sin nombre"}`,
+        createdAt: row.created_at,
+        createdBy: row.created_by,
+        originLabel: "Proyecto",
+      }),
+    );
+  }
+
+  for (const row of workMovements) {
+    const observations = String(row.observations ?? "");
+    if (normalizedFinanceCategory(observations).startsWith("generado desde salarios")) continue;
+    const movementType = (row.movement_type as MovementType) ?? "expense";
+    automaticRows.push(
+      automaticRow({
+        scope: "work",
+        id: row.id,
+        conceptName: String(row.concept ?? "Movimiento de obra"),
+        tagName: String(row.category ?? "Gastos en Obras"),
+        date: row.movement_date,
+        movementType,
+        amount: row.amount,
+        accountId: row.payment_method_id,
+        description: `Obra: ${workNames.get(row.work_id as string) ?? "Sin nombre"} · ${String(row.supplier ?? "Sin proveedor")}`,
+        createdAt: row.created_at,
+        createdBy: row.created_by,
+        originLabel: "Obra",
+      }),
+    );
+  }
+
+  for (const row of salaryPayments.data ?? []) {
+    const paymentType = String(row.payment_type ?? "week");
+    const employee = employeeNames.get(row.employee_id as string) ?? "Empleado";
+    const reference =
+      paymentType === "project"
+        ? projectNames.get(row.project_id as string)
+        : paymentType === "work"
+          ? workNames.get(row.work_id as string)
+          : null;
+    const conceptName =
+      paymentType === "project"
+        ? "Comisión a Arquitectos por Proyecto"
+        : paymentType === "work"
+          ? String(row.concept ?? "Pago de obra")
+          : "Sueldos";
+    automaticRows.push(
+      automaticRow({
+        scope: "salary",
+        id: row.id,
+        conceptName,
+        tagName:
+          paymentType === "project"
+            ? "Comisión a Arquitectos por Proyecto"
+            : paymentType === "work"
+              ? "Gastos en Obras"
+              : "Sueldos",
+        date: row.payment_date,
+        amount: row.amount,
+        accountId: row.payment_method_id,
+        description: [employee, String(row.concept ?? "Pago salarial"), reference].filter(Boolean).join(" · "),
+        createdAt: row.created_at,
+        createdBy: row.created_by,
+        originLabel: "Salario",
+      }),
+    );
+  }
+
+  const chronological = [...manualReport.rows, ...automaticRows].sort((a, b) => {
+    const byDate = a.capture_date.localeCompare(b.capture_date);
+    if (byDate !== 0) return byDate;
+    return a.created_at.localeCompare(b.created_at);
+  });
+  let runningBalance = 0;
+  for (const row of chronological) {
+    runningBalance = round2(
+      runningBalance + (row.movement_type === "income" ? row.amount : -row.amount),
+    );
+    row.balance_after = runningBalance;
+  }
+  const rows = chronological.reverse();
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthRows = rows.filter((row) => row.capture_date.startsWith(currentMonth));
+  const incomeAmount = round2(
+    rows.filter((row) => row.movement_type === "income").reduce((sum, row) => sum + row.amount, 0),
+  );
+  const expenseAmount = round2(
+    rows.filter((row) => row.movement_type === "expense").reduce((sum, row) => sum + row.amount, 0),
+  );
+  const currentMonthIncome = round2(
+    currentMonthRows
+      .filter((row) => row.movement_type === "income")
+      .reduce((sum, row) => sum + row.amount, 0),
+  );
+  const currentMonthExpense = round2(
+    currentMonthRows
+      .filter((row) => row.movement_type === "expense")
+      .reduce((sum, row) => sum + row.amount, 0),
+  );
+
+  return {
+    rows,
+    concepts: concepts.sort((a, b) => a.name.localeCompare(b.name)),
+    tags: tags.sort((a, b) => a.name.localeCompare(b.name)),
+    accounts: manualReport.accounts,
     totals: {
       amount: round2(rows.reduce((sum, row) => sum + row.amount, 0)),
       incomeAmount,

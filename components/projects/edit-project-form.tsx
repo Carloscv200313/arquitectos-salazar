@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, UserPlus, Users, Plus, Trash2 } from "lucide-react";
@@ -19,12 +19,21 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import {
-  RESPONSIBLE_OPTIONS,
   PROJECT_SLICE_LABELS,
   PROYECTO_RATE,
   type SliceWeights,
 } from "@/lib/constants";
-import type { Client, InternalArea, ProjectResponsible, ProjectWithFinance } from "@/lib/types";
+import {
+  getResponsibleOptions,
+  resolveProjectResponsiblesForEmployees,
+} from "@/lib/project-responsibles";
+import type {
+  Client,
+  Employee,
+  InternalArea,
+  ProjectResponsible,
+  ProjectWithFinance,
+} from "@/lib/types";
 import {
   weightsFromAmounts,
   computeBreakdown,
@@ -83,14 +92,39 @@ export function EditProjectForm({
   project,
   clients,
   paidByArea,
+  employees,
 }: {
   project: ProjectWithFinance;
   clients: Client[];
   paidByArea: Record<InternalArea, number>;
+  employees: Employee[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const projectResponsibleValues = useMemo(
+    () =>
+      resolveProjectResponsiblesForEmployees(
+        {
+          proposal: project.proposal_responsible,
+          modeling_3d: project.modeling_3d_responsible,
+          plans: project.plans_responsible,
+          render: project.render_responsible,
+        },
+        employees,
+      ),
+    [employees, project],
+  );
+  const responsibleOptions = useMemo(
+    () => {
+      const options = getResponsibleOptions(employees);
+      for (const value of Object.values(projectResponsibleValues)) {
+        if (!options.includes(value)) options.push(value);
+      }
+      return options;
+    },
+    [employees, projectResponsibleValues],
+  );
 
   const [name, setName] = useState(project.name);
   const [address, setAddress] = useState(project.address ?? "");
@@ -98,12 +132,9 @@ export function EditProjectForm({
   const [clientId, setClientId] = useState(project.client_id);
   const [clientName, setClientName] = useState("");
   const [projectAmount, setProjectAmount] = useState(String(project.project_amount));
-  const [responsibles, setResponsibles] = useState<Record<InternalArea, ProjectResponsible>>({
-    proposal: project.proposal_responsible,
-    modeling_3d: project.modeling_3d_responsible,
-    plans: project.plans_responsible,
-    render: project.render_responsible,
-  });
+  const [responsibles, setResponsibles] = useState<
+    Record<InternalArea, ProjectResponsible>
+  >(() => projectResponsibleValues);
   const [addons, setAddons] = useState<AddonRow[]>(
     project.addons.map((a) => ({
       id: a.id,
@@ -381,7 +412,7 @@ export function EditProjectForm({
                           [area]: value as ProjectResponsible,
                         }))
                       }
-                      items={RESPONSIBLE_OPTIONS.map((person) => ({
+                      items={responsibleOptions.map((person) => ({
                         label: person,
                         value: person,
                       }))}
@@ -390,7 +421,7 @@ export function EditProjectForm({
                         <SelectValue placeholder="Selecciona responsable" />
                       </SelectTrigger>
                       <SelectContent>
-                        {RESPONSIBLE_OPTIONS.map((person) => (
+                        {responsibleOptions.map((person) => (
                           <SelectItem key={person} value={person}>
                             {person}
                           </SelectItem>

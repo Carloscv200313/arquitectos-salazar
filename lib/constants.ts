@@ -116,7 +116,7 @@ export const PROJECT_RESPONSIBLES = [
 // Valor para áreas sin responsable asignado.
 export const UNASSIGNED_RESPONSIBLE = "Sin asignar";
 
-// Opciones de los selectores: personas + "Sin asignar".
+// Opciones heredadas de respaldo. Los formularios usan empleados activos de configuración.
 export const RESPONSIBLE_OPTIONS = [
   ...PROJECT_RESPONSIBLES,
   UNASSIGNED_RESPONSIBLE,
