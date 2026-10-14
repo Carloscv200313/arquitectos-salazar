@@ -17,7 +17,7 @@ import {
   getManualDebtorDetails,
   getProjectArchitectCommissionMonthlyReport,
   getProviderDebtDetails,
-  getWorkExpenseMonthlyReport,
+  getWorkFinancialMonthlyReport,
   getSalaryReport,
 } from "@/lib/data/finance";
 import { getProjectsInternalAreaPaid, listPaymentMethods, listProjects } from "@/lib/data/projects";
@@ -62,7 +62,7 @@ export default async function FinanceModulePage({
       ? Promise.all([
           getFinanceCaptureReport(),
           getFinanceUtilityReport(),
-          getWorkExpenseMonthlyReport(),
+          getWorkFinancialMonthlyReport(),
           getProjectArchitectCommissionMonthlyReport(),
           getAdministrativeSalaryMonthlyReport(),
         ])
@@ -118,7 +118,8 @@ export default async function FinanceModulePage({
         <FinancialStatementsView
           movements={statements[0]}
           utilities={statements[1]}
-          workExpenses={statements[2]}
+          workIncome={statements[2].income}
+          workExpenses={statements[2].expenses}
           architectCommissions={statements[3]}
           administrativeSalaries={statements[4]}
         />

@@ -131,7 +131,7 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
   const [pp, wm, it, wt, debtorRows, debtorPayments, captures, salaryPayments] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
-    listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
+    listWorkMovementRows({ select: "payment_method_id, movement_type, category, amount" }),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
@@ -153,8 +153,15 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   };
   for (const p of pp.data ?? [])
     add(p.payment_method_id as string, (p.movement_type as string) === "income" ? num(p.amount) : -num(p.amount));
-  for (const m of wm)
+  for (const m of wm) {
+    if (
+      (m.movement_type as string) === "expense" &&
+      normalizedFinanceCategory(m.category) === "cuenta de oficina"
+    ) {
+      continue;
+    }
     add(m.payment_method_id as string, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount));
+  }
   for (const t of it.data ?? []) {
     add(t.from_payment_method_id as string, -num(t.amount));
     add(t.to_payment_method_id as string, num(t.amount));
@@ -1006,24 +1013,42 @@ export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
   return { rows, projectTotal, workTotal, total: round2(projectTotal + workTotal) };
 }
 
-export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
-  if (!isAdminConfigured()) return [];
+export interface WorkFinancialMonthlyReport {
+  income: Array<{ month: string; amount: number }>;
+  expenses: Array<{ month: string; amount: number }>;
+}
+
+export async function getWorkFinancialMonthlyReport(): Promise<WorkFinancialMonthlyReport> {
+  if (!isAdminConfigured()) return { income: [], expenses: [] };
   const rows = await listWorkMovementRows({
     select: "movement_date, category, amount",
     movementType: "expense",
   });
-  const byMonth = new Map<string, number>();
+  const incomeByMonth = new Map<string, number>();
+  const expensesByMonth = new Map<string, number>();
   for (const row of rows) {
     const category = normalizedFinanceCategory(row.category);
-    if (category === "cuenta de oficina") continue;
     const date = String(row.movement_date ?? "");
     const month = date.slice(0, 7);
     if (!month) continue;
-    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(num(row.amount))));
+    const amount = Math.abs(num(row.amount));
+    incomeByMonth.set(month, round2((incomeByMonth.get(month) ?? 0) + amount));
+    if (category !== "cuenta de oficina") {
+      expensesByMonth.set(month, round2((expensesByMonth.get(month) ?? 0) + amount));
+    }
   }
-  return [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, amount]) => ({ month, amount: round2(amount) }));
+  const monthlyRows = (values: Map<string, number>) =>
+    [...values.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({ month, amount: round2(amount) }));
+  return {
+    income: monthlyRows(incomeByMonth),
+    expenses: monthlyRows(expensesByMonth),
+  };
+}
+
+export async function getWorkExpenseMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {
+  return (await getWorkFinancialMonthlyReport()).expenses;
 }
 
 export async function getProjectArchitectCommissionMonthlyReport(): Promise<Array<{ month: string; amount: number }>> {

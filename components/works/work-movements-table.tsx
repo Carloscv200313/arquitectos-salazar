@@ -408,7 +408,6 @@ export function WorkMovementsTable({
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Entrada</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Salida</TableHead>
             <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo</TableHead>
-            <TableHead className="px-5 text-xs uppercase text-muted-foreground">Forma de pago</TableHead>
             <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Comprobante</TableHead>
             <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
           </TableRow>
@@ -450,9 +449,6 @@ export function WorkMovementsTable({
                 </TableCell>
                 <TableCell className={cn("text-right font-semibold tabular-nums", signedTone(movement.balance))}>
                   {formatCurrency(movement.balance)}
-                </TableCell>
-                <TableCell className="px-5 text-muted-foreground">
-                  {movement.method?.name ?? "Sin forma"}
                 </TableCell>
                 <TableCell className="px-5 text-right">
                   {receiptCode ? (

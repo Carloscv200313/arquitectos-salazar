@@ -44,6 +44,14 @@ function transferBucket(value: unknown): InternalTransferBucket {
   return value === "office" ? "office" : "normal";
 }
 
+function normalizedWorkCategory(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
 function sb() {
   return createAdminClient();
 }
@@ -491,7 +499,7 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
   const client = sb();
   const [methodsRes, movementRows, transfersRes] = await Promise.all([
     client.from("payment_accounts").select("id, name").eq("status", 1),
-    listWorkMovementRows({ select: "payment_method_id, movement_type, amount" }),
+    listWorkMovementRows({ select: "payment_method_id, movement_type, category, amount" }),
     client
       .from("work_internal_transfers")
       .select("from_payment_method_id, to_payment_method_id, from_account_bucket, to_account_bucket, amount")
@@ -513,8 +521,17 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
   for (const mv of movementRows) {
     const row = rows.get(mv.payment_method_id as string);
     if (!row) continue;
+    const amount = Number(mv.amount);
+    const isOfficeTransfer =
+      (mv.movement_type as string) === "expense" &&
+      normalizedWorkCategory(mv.category) === "cuenta de oficina";
+    if (isOfficeTransfer) {
+      row.normalBalance = round2(row.normalBalance - amount);
+      row.officeBalance = round2(row.officeBalance + amount);
+      continue;
+    }
     const sign = (mv.movement_type as string) === "income" ? 1 : -1;
-    row.clientMovements = round2(row.clientMovements + Number(mv.amount) * sign);
+    row.clientMovements = round2(row.clientMovements + amount * sign);
   }
   for (const t of transfersRes.data ?? []) {
     const from = rows.get(t.from_payment_method_id as string);
@@ -543,14 +560,32 @@ export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReport
 
 export async function listWorkInternalTransfers(): Promise<WorkInternalTransferWithMethods[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await sb()
-    .from("work_internal_transfers")
-    .select(
-      "*, fromMethod:payment_accounts!work_internal_transfers_from_payment_method_id_fkey(id,name,created_at), toMethod:payment_accounts!work_internal_transfers_to_payment_method_id_fkey(id,name,created_at)",
-    )
-    .eq("status", 1)
-    .order("transfer_date", { ascending: false });
-  return (data ?? []).map((r) => ({
+  const client = sb();
+  const [transfersRes, officeMovementRows, methodsRes, worksRes] = await Promise.all([
+    client
+      .from("work_internal_transfers")
+      .select(
+        "*, fromMethod:payment_accounts!work_internal_transfers_from_payment_method_id_fkey(id,name,created_at), toMethod:payment_accounts!work_internal_transfers_to_payment_method_id_fkey(id,name,created_at)",
+      )
+      .eq("status", 1),
+    listWorkMovementRows({
+      select:
+        "id,work_id,concept,category,movement_type,amount,movement_date,payment_method_id,created_at,created_by",
+    }),
+    client.from("payment_accounts").select("id,name,created_at").eq("status", 1),
+    client.from("works").select("id,name"),
+  ]);
+  if (transfersRes.error) throw new Error(transfersRes.error.message);
+  if (methodsRes.error) throw new Error(methodsRes.error.message);
+  if (worksRes.error) throw new Error(worksRes.error.message);
+
+  const methods = new Map(
+    (methodsRes.data ?? []).map((row) => [row.id as string, mapMethod(row as Row)]),
+  );
+  const workNames = new Map(
+    (worksRes.data ?? []).map((row) => [row.id as string, row.name as string]),
+  );
+  const transfers: WorkInternalTransferWithMethods[] = (transfersRes.data ?? []).map((r) => ({
     id: r.id as string,
     description: r.description as string,
     amount: Number(r.amount),
@@ -564,6 +599,38 @@ export async function listWorkInternalTransfers(): Promise<WorkInternalTransferW
     fromMethod: r.fromMethod ? mapMethod(r.fromMethod as Row) : null,
     toMethod: r.toMethod ? mapMethod(r.toMethod as Row) : null,
   }));
+
+  for (const row of officeMovementRows) {
+    if (
+      row.movement_type !== "expense" ||
+      normalizedWorkCategory(row.category) !== "cuenta de oficina"
+    ) {
+      continue;
+    }
+    const paymentMethodId = String(row.payment_method_id ?? "");
+    const method = methods.get(paymentMethodId) ?? null;
+    const workName = workNames.get(String(row.work_id ?? "")) ?? "Obra";
+    transfers.push({
+      id: `work-office:${String(row.id)}`,
+      description: `${workName} · ${String(row.concept ?? "Cuenta de oficina")}`,
+      amount: Number(row.amount),
+      transfer_date: String(row.movement_date),
+      from_payment_method_id: paymentMethodId,
+      to_payment_method_id: paymentMethodId,
+      from_account_bucket: "normal",
+      to_account_bucket: "office",
+      created_at: String(row.created_at ?? row.movement_date),
+      created_by: (row.created_by as string) ?? null,
+      fromMethod: method,
+      toMethod: method,
+    });
+  }
+
+  return transfers.sort((a, b) => {
+    const byDate = b.transfer_date.localeCompare(a.transfer_date);
+    if (byDate !== 0) return byDate;
+    return b.created_at.localeCompare(a.created_at);
+  });
 }
 
 export async function getWorksAdministrationUtilityReport(): Promise<
