@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   deleteFinanceCapture,
   deleteManualDebtorPayment,
+  deleteProviderDebtPayment,
   deleteSalaryDayRecord,
   deleteSalaryPayment,
   deleteSalaryWeek,
@@ -23,6 +24,7 @@ import {
   saveManualDebtor,
   saveManualProviderDebt,
   settleProviderDebt,
+  updateProviderDebtPayment,
   updateSalaryWeekStatus,
 } from "@/lib/data/finance";
 import { registerWorkInternalTransfer } from "@/lib/data/works";
@@ -31,6 +33,7 @@ import {
   generalBalanceEntrySchema,
   deleteFinanceCaptureSchema,
   deleteManualDebtorPaymentSchema,
+  deleteProviderDebtPaymentSchema,
   financeCaptureSchema,
   financeMovementConceptSchema,
   financeMovementTagSchema,
@@ -44,6 +47,7 @@ import {
   saveSalaryWeekSchema,
   deleteSalaryWeekSchema,
   settleProviderDebtSchema,
+  updateProviderDebtPaymentSchema,
   updateSalaryWeekStatusSchema,
 } from "@/lib/validation";
 
@@ -262,6 +266,56 @@ export async function settleProviderDebtAction(raw: unknown): Promise<ActionResu
     return {
       ok: false,
       error: error instanceof Error ? error.message : "No se pudo saldar la deuda.",
+    };
+  }
+}
+
+export async function updateProviderDebtPaymentAction(raw: unknown): Promise<ActionResult> {
+  const parsed = updateProviderDebtPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Revisa los datos del abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const result = await updateProviderDebtPayment(parsed.data);
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/${encodeURIComponent(result.provider)}`);
+    revalidatePath("/finance/balance-general");
+    revalidatePath("/auditoria");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo actualizar el abono.",
+    };
+  }
+}
+
+export async function deleteProviderDebtPaymentAction(raw: unknown): Promise<ActionResult> {
+  const parsed = deleteProviderDebtPaymentSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Escribe una observación válida para eliminar el abono.",
+      fieldErrors: fieldErrorsFrom(parsed.error),
+    };
+  }
+
+  try {
+    const result = await deleteProviderDebtPayment(parsed.data);
+    revalidatePath("/finance/deudas");
+    revalidatePath(`/finance/deudas/${encodeURIComponent(result.provider)}`);
+    revalidatePath("/finance/balance-general");
+    revalidatePath("/auditoria");
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "No se pudo eliminar el abono.",
     };
   }
 }

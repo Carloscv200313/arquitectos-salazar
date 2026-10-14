@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   listWorkMovementConceptNames,
-  listWorkMovementSupplierNames,
   listWorks,
   type WorkFilters,
 } from "@/lib/data/works";
@@ -36,18 +35,14 @@ export default async function WorksPage({
     client: sp.client,
     status,
   };
-  const [works, methods, providers, categories, movementConcepts, movementSuppliers] =
+  const [works, methods, providers, categories, movementConcepts] =
     await Promise.all([
       listWorks(filters),
       listPaymentMethods(),
       listProviderNames(),
       listWorkCategoryNames(),
       listWorkMovementConceptNames(),
-      listWorkMovementSupplierNames(),
     ]);
-  const providerOptions = Array.from(new Set([...providers, ...movementSuppliers])).sort((a, b) =>
-    a.localeCompare(b, "es", { sensitivity: "base" }),
-  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,7 +82,7 @@ export default async function WorksPage({
             <WorksTable
               works={works}
               methods={methods}
-              providers={providerOptions}
+              providers={providers}
               categories={categories}
               concepts={movementConcepts}
             />

@@ -1,20 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BadgeDollarSign,
   Boxes,
   CheckCircle2,
+  Eye,
   HandCoins,
   Loader2,
+  Pencil,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
+  deleteProviderDebtPaymentAction,
   registerManualProviderDebtPaymentAction,
   saveManualProviderDebtAction,
   settleProviderDebtAction,
+  updateProviderDebtPaymentAction,
 } from "@/app/(dashboard)/finance/actions";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +27,15 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/ui/money-input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Table,
@@ -33,12 +47,110 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
-import type { ProviderDebtDetail } from "@/lib/types";
+import type { ProviderDebtDetail, ProviderDebtPayment, ProviderDebtSourceType } from "@/lib/types";
 
 type SettleTarget =
   | { sourceType: "work_order"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
   | { sourceType: "work_movement"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
   | { sourceType: "manual_provider_debt"; sourceId: string; provider: string; title: string; subtitle: string; pending: number };
+
+type ProviderDebtDisplayUpdate =
+  | { type: "settlement"; target: SettleTarget; amount: number }
+  | { type: "payment-deleted"; payment: ProviderDebtPayment };
+
+type PaymentHistoryTarget = {
+  sourceType: ProviderDebtSourceType;
+  sourceId: string;
+  title: string;
+};
+
+function updateProviderDebtDisplay(
+  current: ProviderDebtDetail,
+  update: ProviderDebtDisplayUpdate,
+): ProviderDebtDetail {
+  if (update.type === "payment-deleted") {
+    const { payment } = update;
+    const amount = Math.round(payment.amount * 100) / 100;
+    return {
+      ...current,
+      totalPaid: Math.max(Math.round((current.totalPaid - amount) * 100) / 100, 0),
+      totalPending: Math.round((current.totalPending + amount) * 100) / 100,
+      payments: current.payments.filter(
+        (item) => !(item.id === payment.id && item.kind === payment.kind),
+      ),
+      orders: current.orders.map((order) =>
+        payment.sourceType === "work_order" && order.id === payment.sourceId
+          ? {
+              ...order,
+              paid: Math.max(Math.round((order.paid - amount) * 100) / 100, 0),
+              pending: Math.round((order.pending + amount) * 100) / 100,
+            }
+          : order,
+      ),
+      workMovements: current.workMovements.map((movement) =>
+        payment.sourceType === "work_movement" && movement.id === payment.sourceId
+          ? {
+              ...movement,
+              settled: Math.max(Math.round((movement.settled - amount) * 100) / 100, 0),
+              pending: Math.round((movement.pending + amount) * 100) / 100,
+            }
+          : movement,
+      ),
+      manualDebts: current.manualDebts.map((manual) =>
+        payment.sourceType === "manual_provider_debt" && manual.debt.id === payment.sourceId
+          ? {
+              ...manual,
+              totalPaid: Math.max(Math.round((manual.totalPaid - amount) * 100) / 100, 0),
+              totalPending: Math.round((manual.totalPending + amount) * 100) / 100,
+              payments: manual.payments.filter((item) => item.id !== payment.id),
+            }
+          : manual,
+      ),
+    };
+  }
+
+  const appliedAmount = Math.round(Math.min(Math.max(update.amount, 0), update.target.pending) * 100) / 100;
+  if (!Number.isFinite(appliedAmount) || appliedAmount <= 0) return current;
+
+  return {
+    ...current,
+    totalPaid: Math.round((current.totalPaid + appliedAmount) * 100) / 100,
+    totalPending: Math.max(Math.round((current.totalPending - appliedAmount) * 100) / 100, 0),
+    orders: current.orders
+      .map((order) =>
+        update.target.sourceType === "work_order" && order.id === update.target.sourceId
+          ? {
+              ...order,
+              paid: Math.round((order.paid + appliedAmount) * 100) / 100,
+              pending: Math.max(Math.round((order.pending - appliedAmount) * 100) / 100, 0),
+            }
+          : order,
+      )
+      .filter((order) => order.pending > 0.001),
+    workMovements: current.workMovements
+      .map((movement) =>
+        update.target.sourceType === "work_movement" && movement.id === update.target.sourceId
+          ? {
+              ...movement,
+              settled: Math.round((movement.settled + appliedAmount) * 100) / 100,
+              pending: Math.max(Math.round((movement.pending - appliedAmount) * 100) / 100, 0),
+            }
+          : movement,
+      )
+      .filter((movement) => movement.pending > 0.001),
+    manualDebts: current.manualDebts
+      .map((manual) =>
+        update.target.sourceType === "manual_provider_debt" && manual.debt.id === update.target.sourceId
+          ? {
+              ...manual,
+              totalPaid: Math.round((manual.totalPaid + appliedAmount) * 100) / 100,
+              totalPending: Math.max(Math.round((manual.totalPending - appliedAmount) * 100) / 100, 0),
+            }
+          : manual,
+      )
+      .filter((manual) => manual.totalPending > 0.001),
+  };
+}
 
 
 function pendingTone(pending: number, total: number) {
@@ -100,10 +212,12 @@ function SettleProviderDebtSheet({
   open,
   onOpenChange,
   target,
+  onSettled,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: SettleTarget;
+  onSettled: (target: SettleTarget, amount: number) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -122,6 +236,8 @@ function SettleProviderDebtSheet({
   function submit() {
     setErrors({});
     startTransition(async () => {
+      const settledAmount = Math.min(Number(amount), target.pending);
+      onSettled(target, settledAmount);
       const result =
         target.sourceType === "manual_provider_debt"
           ? await registerManualProviderDebtPaymentAction({
@@ -139,8 +255,12 @@ function SettleProviderDebtSheet({
               note,
             });
       if (result.ok) {
-        toast.success("Deuda saldada", {
-          description: `${formatCurrency(Number(amount))} · ${target.provider}`,
+        const remaining = Math.max(target.pending - settledAmount, 0);
+        toast.success(remaining > 0.001 ? "Abono registrado" : "Deuda saldada", {
+          description:
+            remaining > 0.001
+              ? `${formatCurrency(settledAmount)} abonados · pendiente ${formatCurrency(remaining)}`
+              : `${formatCurrency(settledAmount)} · ${target.provider}`,
         });
         reset();
         onOpenChange(false);
@@ -162,7 +282,7 @@ function SettleProviderDebtSheet({
     >
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Saldar deuda</SheetTitle>
+          <SheetTitle>Registrar abono</SheetTitle>
           <SheetDescription>
             {target.title} · pendiente {formatCurrency(target.pending)}
           </SheetDescription>
@@ -170,7 +290,9 @@ function SettleProviderDebtSheet({
         <div className="grid gap-4 px-4 pb-4">
           <Card className="bg-brand-muted/50 p-4">
             <p className="font-medium">{target.subtitle}</p>
-            <p className="mt-1 text-sm text-muted-foreground">Este registro dejará de aparecer como deuda pendiente.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              El saldo pendiente se actualizará con el monto abonado.
+            </p>
           </Card>
           <div className="grid gap-2">
             <Label htmlFor="settle-provider-date">Fecha</Label>
@@ -186,7 +308,7 @@ function SettleProviderDebtSheet({
             )}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="settle-provider-amount">Monto a saldar</Label>
+            <Label htmlFor="settle-provider-amount">Monto del abono</Label>
             <MoneyInput
               id="settle-provider-amount"
               value={amount}
@@ -209,11 +331,282 @@ function SettleProviderDebtSheet({
           </div>
           <Button onClick={submit} disabled={isPending} className="bg-brand text-brand-foreground hover:bg-brand/90">
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-            Saldar deuda
+            Registrar abono
           </Button>
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function ProviderPaymentHistorySheet({
+  open,
+  onOpenChange,
+  target,
+  payments,
+  onPaymentDeleted,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  target: PaymentHistoryTarget;
+  payments: ProviderDebtPayment[];
+  onPaymentDeleted: (payment: ProviderDebtPayment) => void;
+}) {
+  const router = useRouter();
+  const [editTarget, setEditTarget] = useState<ProviderDebtPayment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProviderDebtPayment | null>(null);
+  const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(todayISODate());
+  const [paymentNote, setPaymentNote] = useState("");
+  const [observation, setObservation] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isPending, startTransition] = useTransition();
+
+  function beginEdit(payment: ProviderDebtPayment) {
+    setEditTarget(payment);
+    setAmount(String(payment.amount));
+    setPaymentDate(payment.paymentDate);
+    setPaymentNote(payment.note ?? "");
+    setObservation("");
+    setErrors({});
+  }
+
+  function submitEdit() {
+    if (!editTarget) return;
+    setErrors({});
+    startTransition(async () => {
+      const result = await updateProviderDebtPaymentAction({
+        paymentId: editTarget.id,
+        kind: editTarget.kind,
+        amount: Number(amount),
+        paymentDate,
+        paymentNote,
+        observation,
+      });
+      if (!result.ok) {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Abono actualizado", { description: "El saldo y la auditoría fueron actualizados." });
+      setEditTarget(null);
+      router.refresh();
+    });
+  }
+
+  function submitDelete() {
+    if (!deleteTarget) return;
+    setErrors({});
+    startTransition(async () => {
+      const result = await deleteProviderDebtPaymentAction({
+        paymentId: deleteTarget.id,
+        kind: deleteTarget.kind,
+        observation,
+      });
+      if (!result.ok) {
+        if (result.fieldErrors) setErrors(result.fieldErrors);
+        toast.error(result.error);
+        return;
+      }
+      const deletedPayment = deleteTarget;
+      setDeleteTarget(null);
+      setObservation("");
+      onPaymentDeleted(deletedPayment);
+      router.refresh();
+      window.requestAnimationFrame(() => {
+        toast.success("Abono eliminado", { description: "El saldo pendiente fue recalculado." });
+      });
+    });
+  }
+
+  return (
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Historial de abonos</SheetTitle>
+            <SheetDescription>{target.title}</SheetDescription>
+          </SheetHeader>
+          <div className="px-4 pb-4">
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader className="bg-muted/40">
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Nota</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="w-24 text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((payment) => (
+                    <TableRow key={`${payment.kind}-${payment.id}`}>
+                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                        {formatDate(payment.paymentDate)}
+                      </TableCell>
+                      <TableCell className="max-w-52 whitespace-normal break-words text-muted-foreground">
+                        {payment.note || "-"}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums text-brand-foreground">
+                        {formatCurrency(payment.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            title="Editar abono"
+                            aria-label="Editar abono"
+                            onClick={() => beginEdit(payment)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
+                            title="Eliminar abono"
+                            aria-label="Eliminar abono"
+                            onClick={() => {
+                              setDeleteTarget(payment);
+                              setObservation("");
+                              setErrors({});
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {payments.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
+                        Sin abonos registrados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(next) => {
+          if (!next && !isPending) setEditTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar abono</DialogTitle>
+            <DialogDescription>El saldo pendiente se recalculará automáticamente.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="provider-payment-edit-date">Fecha</Label>
+              <Input
+                id="provider-payment-edit-date"
+                type="date"
+                value={paymentDate}
+                onChange={(event) => setPaymentDate(event.target.value)}
+                aria-invalid={!!errors.paymentDate}
+              />
+              {errors.paymentDate && <p className="text-xs text-destructive">{errors.paymentDate}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-payment-edit-amount">Monto</Label>
+              <MoneyInput
+                id="provider-payment-edit-amount"
+                value={amount}
+                onValueChange={setAmount}
+                aria-invalid={!!errors.amount}
+              />
+              {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-payment-edit-note">Nota del abono</Label>
+              <Input
+                id="provider-payment-edit-note"
+                value={paymentNote}
+                onChange={(event) => setPaymentNote(event.target.value)}
+                placeholder="Nota opcional"
+                aria-invalid={!!errors.paymentNote}
+              />
+              {errors.paymentNote && <p className="text-xs text-destructive">{errors.paymentNote}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="provider-payment-edit-observation">Observación</Label>
+              <Textarea
+                id="provider-payment-edit-observation"
+                value={observation}
+                onChange={(event) => setObservation(event.target.value)}
+                placeholder="Explica por qué editas este abono"
+                rows={3}
+                aria-invalid={!!errors.observation}
+              />
+              {errors.observation && <p className="text-xs text-destructive">{errors.observation}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button onClick={submitEdit} disabled={isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              Guardar cambios
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(next) => {
+          if (!next && !isPending) setDeleteTarget(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar abono</DialogTitle>
+            <DialogDescription>
+              El monto volverá al saldo pendiente. La observación quedará registrada en Auditoría.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteTarget && (
+            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+              <p className="font-medium">{formatDate(deleteTarget.paymentDate)}</p>
+              <p className="mt-1 text-muted-foreground">{formatCurrency(deleteTarget.amount)}</p>
+            </div>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="provider-payment-delete-observation">Observación</Label>
+            <Textarea
+              id="provider-payment-delete-observation"
+              value={observation}
+              onChange={(event) => setObservation(event.target.value)}
+              placeholder="Explica por qué eliminas este abono"
+              rows={3}
+              aria-invalid={!!errors.observation}
+            />
+            {errors.observation && <p className="text-xs text-destructive">{errors.observation}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isPending}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={submitDelete} disabled={isPending}>
+              {isPending && <Loader2 className="size-4 animate-spin" />}
+              {isPending ? "Eliminando..." : "Eliminar abono"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -338,13 +731,25 @@ export function ProviderDebtDetail({
 }: {
   detail: ProviderDebtDetail;
 }) {
+  const [displayDetail, updateDisplayedDetail] = useOptimistic(detail, updateProviderDebtDisplay);
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<PaymentHistoryTarget | null>(null);
   const [manualDebtOpen, setManualDebtOpen] = useState(false);
-  const pendingRowsCount = detail.orders.length + detail.workMovements.length + detail.manualDebts.length;
+
+  function applySettlement(target: SettleTarget, amount: number) {
+    updateDisplayedDetail({ type: "settlement", target, amount });
+  }
+
+  function applyDeletedPayment(payment: ProviderDebtPayment) {
+    updateDisplayedDetail({ type: "payment-deleted", payment });
+  }
+
+  const pendingRowsCount =
+    displayDetail.orders.length + displayDetail.workMovements.length + displayDetail.manualDebts.length;
   const debtRows = [
-    ...detail.orders.map((order) => ({ kind: "order" as const, order })),
-    ...detail.workMovements.map((movement) => ({ kind: "movement" as const, movement })),
-    ...detail.manualDebts.map((manual) => ({ kind: "manual" as const, manual })),
+    ...displayDetail.orders.map((order) => ({ kind: "order" as const, order })),
+    ...displayDetail.workMovements.map((movement) => ({ kind: "movement" as const, movement })),
+    ...displayDetail.manualDebts.map((manual) => ({ kind: "manual" as const, manual })),
   ].sort((a, b) => {
     const aPending =
       a.kind === "order" ? a.order.pending : a.kind === "movement" ? a.movement.pending : a.manual.totalPending;
@@ -364,21 +769,21 @@ export function ProviderDebtDetail({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <Stat
             label="Deuda pendiente"
-            value={formatCurrency(detail.totalPending)}
+            value={formatCurrency(displayDetail.totalPending)}
             hint="Saldo pendiente del proveedor"
             icon={<Boxes className="size-5" />}
             accent
           />
           <Stat
             label="Abonado"
-            value={formatCurrency(detail.totalPaid)}
+            value={formatCurrency(displayDetail.totalPaid)}
             hint="Pagos registrados"
             icon={<HandCoins className="size-5" />}
             tone="success"
           />
           <Stat
             label="Prestado"
-            value={formatCurrency(detail.totalAmount)}
+            value={formatCurrency(displayDetail.totalAmount)}
             hint={`${pendingRowsCount} registro${pendingRowsCount === 1 ? "" : "s"} pendiente${
               pendingRowsCount === 1 ? "" : "s"
             }`}
@@ -449,27 +854,49 @@ export function ProviderDebtDetail({
                           {order.amount === null ? "-" : formatCurrency(order.pending)}
                         </TableCell>
                         <TableCell>
-                          <OrderStatusBadge status={order.status} />
+                          {order.paid > 0.001 ? (
+                            <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+                              Pagando
+                            </span>
+                          ) : (
+                            <OrderStatusBadge status={order.status} />
+                          )}
                         </TableCell>
                         <TableCell className="px-5 text-right">
-                          <Button
-                            size="sm"
-                            className="bg-brand text-brand-foreground hover:bg-brand/90"
-                            disabled={order.pending <= 0.001}
-                            onClick={() =>
-                              setSettleTarget({
-                                sourceType: "work_order",
-                                sourceId: order.id,
-                                provider: detail.provider,
-                                title: order.material,
-                                subtitle: `${order.work.name} · ${order.work.client.name}`,
-                                pending: order.pending,
-                              })
-                            }
-                          >
-                            <CheckCircle2 className="size-4" />
-                            Saldar
-                          </Button>
+                          <div className="flex justify-end gap-1.5">
+                            {order.paid > 0.001 && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                title="Ver abonos"
+                                aria-label="Ver abonos"
+                                onClick={() =>
+                                  setHistoryTarget({ sourceType: "work_order", sourceId: order.id, title: order.material })
+                                }
+                              >
+                                <Eye className="size-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              className="bg-brand text-brand-foreground hover:bg-brand/90"
+                              disabled={order.pending <= 0.001}
+                              onClick={() =>
+                                setSettleTarget({
+                                  sourceType: "work_order",
+                                  sourceId: order.id,
+                                  provider: displayDetail.provider,
+                                  title: order.material,
+                                  subtitle: `${order.work.name} · ${order.work.client.name}`,
+                                  pending: order.pending,
+                                })
+                              }
+                            >
+                              <CheckCircle2 className="size-4" />
+                              Saldar
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -503,29 +930,56 @@ export function ProviderDebtDetail({
                           {formatCurrency(movement.pending)}
                         </TableCell>
                         <TableCell>
-                          <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-destructive">
-                            Por pagar
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                              movement.settled > 0.001
+                                ? "bg-amber-100 text-amber-900"
+                                : "bg-red-50 text-destructive",
+                            )}
+                          >
+                            {movement.settled > 0.001 ? "Pagando" : "Por pagar"}
                           </span>
                         </TableCell>
                         <TableCell className="px-5 text-right">
-                          <Button
-                            size="sm"
-                            className="bg-brand text-brand-foreground hover:bg-brand/90"
-                            disabled={movement.pending <= 0.001}
-                            onClick={() =>
-                              setSettleTarget({
-                                sourceType: "work_movement",
-                                sourceId: movement.id,
-                                provider: detail.provider,
-                                title: movement.concept,
-                                subtitle: `${movement.workName} · ${movement.category || "Egreso de obra"}`,
-                                pending: movement.pending,
-                              })
-                            }
-                          >
-                            <CheckCircle2 className="size-4" />
-                            Saldar
-                          </Button>
+                          <div className="flex justify-end gap-1.5">
+                            {movement.settled > 0.001 && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                title="Ver abonos"
+                                aria-label="Ver abonos"
+                                onClick={() =>
+                                  setHistoryTarget({
+                                    sourceType: "work_movement",
+                                    sourceId: movement.id,
+                                    title: movement.concept,
+                                  })
+                                }
+                              >
+                                <Eye className="size-4" />
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              className="bg-brand text-brand-foreground hover:bg-brand/90"
+                              disabled={movement.pending <= 0.001}
+                              onClick={() =>
+                                setSettleTarget({
+                                  sourceType: "work_movement",
+                                  sourceId: movement.id,
+                                  provider: displayDetail.provider,
+                                  title: movement.concept,
+                                  subtitle: `${movement.workName} · ${movement.category || "Egreso de obra"}`,
+                                  pending: movement.pending,
+                                })
+                              }
+                            >
+                              <CheckCircle2 className="size-4" />
+                              Saldar
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -558,29 +1012,56 @@ export function ProviderDebtDetail({
                         {formatCurrency(manual.totalPending)}
                       </TableCell>
                       <TableCell>
-                        <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-destructive">
-                          Por pagar
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+                            manual.totalPaid > 0.001
+                              ? "bg-amber-100 text-amber-900"
+                              : "bg-red-50 text-destructive",
+                          )}
+                        >
+                          {manual.totalPaid > 0.001 ? "Pagando" : "Por pagar"}
                         </span>
                       </TableCell>
                       <TableCell className="px-5 text-right">
-                        <Button
-                          size="sm"
-                          className="bg-brand text-brand-foreground hover:bg-brand/90"
-                          disabled={manual.totalPending <= 0.001}
-                          onClick={() =>
-                            setSettleTarget({
-                              sourceType: "manual_provider_debt",
-                              sourceId: manual.debt.id,
-                              provider: detail.provider,
-                              title: manual.debt.note || "Gasto manual de proveedor",
-                              subtitle: `${detail.provider} · deuda manual`,
-                              pending: manual.totalPending,
-                            })
-                          }
-                        >
-                          <CheckCircle2 className="size-4" />
-                          Saldar
-                        </Button>
+                        <div className="flex justify-end gap-1.5">
+                          {manual.totalPaid > 0.001 && (
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              title="Ver abonos"
+                              aria-label="Ver abonos"
+                              onClick={() =>
+                                setHistoryTarget({
+                                  sourceType: "manual_provider_debt",
+                                  sourceId: manual.debt.id,
+                                  title: manual.debt.note || "Gasto manual de proveedor",
+                                })
+                              }
+                            >
+                              <Eye className="size-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            className="bg-brand text-brand-foreground hover:bg-brand/90"
+                            disabled={manual.totalPending <= 0.001}
+                            onClick={() =>
+                              setSettleTarget({
+                                sourceType: "manual_provider_debt",
+                                sourceId: manual.debt.id,
+                                provider: displayDetail.provider,
+                                title: manual.debt.note || "Gasto manual de proveedor",
+                                subtitle: `${displayDetail.provider} · deuda manual`,
+                                pending: manual.totalPending,
+                              })
+                            }
+                          >
+                            <CheckCircle2 className="size-4" />
+                            Saldar
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -604,12 +1085,25 @@ export function ProviderDebtDetail({
           open={!!settleTarget}
           onOpenChange={(next) => !next && setSettleTarget(null)}
           target={settleTarget}
+          onSettled={applySettlement}
+        />
+      )}
+      {historyTarget && (
+        <ProviderPaymentHistorySheet
+          open={!!historyTarget}
+          onOpenChange={(next) => !next && setHistoryTarget(null)}
+          target={historyTarget}
+          payments={displayDetail.payments.filter(
+            (payment) =>
+              payment.sourceType === historyTarget.sourceType && payment.sourceId === historyTarget.sourceId,
+          )}
+          onPaymentDeleted={applyDeletedPayment}
         />
       )}
       <ManualProviderDebtSheet
         open={manualDebtOpen}
         onOpenChange={setManualDebtOpen}
-        provider={detail.provider}
+        provider={displayDetail.provider}
       />
     </>
   );

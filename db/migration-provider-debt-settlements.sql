@@ -8,8 +8,12 @@ create table if not exists public.provider_debt_settlements (
   note            text,
   status          smallint not null default 1,
   created_at      timestamptz not null default now(),
-  created_by      uuid references auth.users(id)
+  created_by      uuid
 );
+
+-- La aplicación usa usuarios propios en public.users, no auth.users.
+alter table public.provider_debt_settlements
+  drop constraint if exists provider_debt_settlements_created_by_fkey;
 
 create index if not exists provider_debt_settlements_source_idx
   on public.provider_debt_settlements(source_type, source_id)

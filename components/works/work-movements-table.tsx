@@ -163,7 +163,7 @@ export function WorkMovementsTable({
       const marginX = 10;
       const marginTop = 12;
       const usableWidth = pageWidth - marginX * 2;
-      const colWidths = [22, 22, 18, 48, 30, 26, 21, 21, 21, 27];
+      const colWidths = [23, 22, 20, 63, 40, 35, 24, 24, 26];
       const rowHeight = 7;
       const contentBottom = pageHeight - 10;
       const headers = [
@@ -176,7 +176,6 @@ export function WorkMovementsTable({
         "Entrada",
         "Salida",
         "Saldo",
-        "Forma de pago",
       ];
 
       let y = marginTop;
@@ -213,7 +212,7 @@ export function WorkMovementsTable({
         pdf.setFontSize(8);
         headers.forEach((header, index) => {
           const width = colWidths[index];
-          const align = index >= 5 && index <= 7 ? "right" : "left";
+          const align = index >= 6 && index <= 8 ? "right" : "left";
           const textX = align === "right" ? x + width - 1.5 : x + 1.5;
           pdf.text(header, textX, y + 4.6, { align });
           x += width;
@@ -243,7 +242,6 @@ export function WorkMovementsTable({
           movement.movement_type === "income" ? formatCurrency(movement.amount) : "—",
           movement.movement_type === "expense" ? formatCurrency(movement.amount) : "—",
           formatCurrency(movement.balance),
-          movement.method?.name ?? "Sin forma",
         ];
 
         const wrapped = cells.map((cell, index) =>
@@ -255,7 +253,7 @@ export function WorkMovementsTable({
         let x = marginX;
         wrapped.forEach((lines, index) => {
           const width = colWidths[index];
-          const align = index >= 5 && index <= 7 ? "right" : "left";
+          const align = index >= 6 && index <= 8 ? "right" : "left";
           const textX = align === "right" ? x + width - 1.5 : x + 1.5;
           pdf.text(lines, textX, y + 4, { align, baseline: "top" });
           x += width;

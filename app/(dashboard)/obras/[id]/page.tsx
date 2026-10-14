@@ -6,7 +6,6 @@ import {
   getWorkAdministrationUtilities,
   getWorkCategorySummary,
   listWorkMovementConceptNames,
-  listWorkMovementSupplierNames,
   listWorkMovements,
 } from "@/lib/data/works";
 import { listPaymentMethods } from "@/lib/data/projects";
@@ -45,7 +44,6 @@ export default async function WorkDetailPage({
     providers,
     categories,
     movementConcepts,
-    movementSuppliers,
   ] = await Promise.all([
     getWork(id),
     listWorkMovements(id),
@@ -55,16 +53,9 @@ export default async function WorkDetailPage({
     listProviderNames(),
     listWorkCategoryNames(),
     listWorkMovementConceptNames(),
-    listWorkMovementSupplierNames(),
   ]);
   if (!work) notFound();
 
-  const movementProviderOptions = movements
-    .map((movement) => movement.supplier)
-    .filter((supplier) => supplier && supplier !== "Cliente");
-  const providerOptions = Array.from(
-    new Set([...providers, ...movementSuppliers, ...movementProviderOptions]),
-  ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
   const conceptOptions = Array.from(
     new Set([...movementConcepts, ...movements.map((movement) => movement.concept)]),
   ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
@@ -106,7 +97,7 @@ export default async function WorkDetailPage({
           workId={work.id}
           workName={work.name}
           methods={methods}
-          providers={providerOptions}
+          providers={providers}
           categories={categories}
           concepts={conceptOptions}
         />
@@ -129,7 +120,7 @@ export default async function WorkDetailPage({
         workName={work.name}
         clientName={work.client.name}
         methods={methods}
-        providers={providerOptions}
+        providers={providers}
         categories={categories}
         concepts={conceptOptions}
       />

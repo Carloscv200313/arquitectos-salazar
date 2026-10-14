@@ -118,20 +118,36 @@ export async function hideTaskTypeAction(id: string): Promise<ActionResult> {
 }
 
 /* Providers */
+const providerPaths = [
+  "/configuracion",
+  "/obras",
+  "/pedidos",
+  "/pedido",
+];
+
+async function runProviderChange(fn: () => Promise<void>): Promise<ActionResult> {
+  const result = await run(fn, providerPaths);
+  if (result.ok) {
+    revalidatePath("/obras/[id]", "page");
+    revalidatePath("/pedidos/[workId]", "page");
+  }
+  return result;
+}
+
 export async function saveProviderAction(raw: unknown): Promise<ActionResult> {
   const g = guard();
   if (g) return g;
   const parsed = providerSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos" };
   const d = parsed.data;
-  return run(() =>
+  return runProviderChange(() =>
     d.id ? updateProvider({ id: d.id, name: d.name }) : createProvider({ name: d.name }),
   );
 }
 export async function hideProviderAction(id: string): Promise<ActionResult> {
   const g = guard();
   if (g) return g;
-  return run(() => hideProvider(id));
+  return runProviderChange(() => hideProvider(id));
 }
 
 /* Work categories */

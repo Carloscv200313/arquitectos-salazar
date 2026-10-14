@@ -308,6 +308,18 @@ export interface DebtReportRow {
 }
 
 export type ProviderDebtSourceType = "work_order" | "work_movement" | "manual_provider_debt";
+export type ProviderDebtPaymentKind = "settlement" | "manual" | "order_payment";
+
+export interface ProviderDebtPayment {
+  id: string;
+  kind: ProviderDebtPaymentKind;
+  sourceType: ProviderDebtSourceType;
+  sourceId: string;
+  paymentDate: string;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
 
 export interface ManualProviderDebt {
   id: string;
@@ -361,6 +373,7 @@ export interface ProviderDebtDetail {
   orders: WorkOrderWithRelations[];
   workMovements: WorkMovementProviderDebt[];
   manualDebts: ManualProviderDebtDetail[];
+  payments: ProviderDebtPayment[];
 }
 
 export interface ManualDebtorDetail {

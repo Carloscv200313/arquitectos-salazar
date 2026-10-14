@@ -752,6 +752,21 @@ export const settleProviderDebtSchema = z.object({
 
 export type SettleProviderDebtInput = z.infer<typeof settleProviderDebtSchema>;
 
+export const updateProviderDebtPaymentSchema = z.object({
+  paymentId: z.string().uuid("Abono inválido"),
+  kind: z.enum(["settlement", "manual", "order_payment"]),
+  amount: money,
+  paymentDate: isoDate,
+  paymentNote: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
+  observation: auditNote,
+});
+
+export const deleteProviderDebtPaymentSchema = z.object({
+  paymentId: z.string().uuid("Abono inválido"),
+  kind: z.enum(["settlement", "manual", "order_payment"]),
+  observation: auditNote,
+});
+
 export const editProjectMovementSchema = z
   .object({
     paymentId: z.string().uuid("Movimiento inválido"),

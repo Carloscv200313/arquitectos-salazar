@@ -274,11 +274,11 @@ export async function listProviders(): Promise<Provider[]> {
   return (data as Provider[]) ?? [];
 }
 
-/** Active provider names for form selects. Falls back to the seed list. */
+/** Active provider names for form selects. Seeds are only used without a configured database. */
 export async function listProviderNames(): Promise<string[]> {
+  if (!isAdminConfigured()) return [...WORK_PROVIDERS];
   const rows = await listProviders();
-  if (rows.length > 0) return rows.map((p) => p.name);
-  return [...WORK_PROVIDERS];
+  return rows.map((provider) => provider.name);
 }
 
 export async function createProvider(input: { name: string }) {

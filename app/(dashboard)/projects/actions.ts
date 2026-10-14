@@ -43,6 +43,14 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   return out;
 }
 
+function projectSaveError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  if (/projects_(proposal|modeling_3d|plans|render)_responsible_check/.test(error.message)) {
+    return "No se pudo asignar al empleado porque la base de datos conserva una lista antigua de responsables.";
+  }
+  return fallback;
+}
+
 function areaBudget(project: Awaited<ReturnType<typeof getProject>>, area: InternalArea): number {
   if (!project) return 0;
   switch (area) {
@@ -94,8 +102,12 @@ export async function createProjectAction(
     });
     revalidatePath("/projects");
     return { ok: true, data: { projectId } };
-  } catch {
-    return { ok: false, error: "No se pudo crear el proyecto. Intenta nuevamente." };
+  } catch (error) {
+    console.error("[projects] No se pudo crear el proyecto:", error);
+    return {
+      ok: false,
+      error: projectSaveError(error, "No se pudo crear el proyecto. Intenta nuevamente."),
+    };
   }
 }
 
@@ -187,8 +199,12 @@ export async function updateProjectAction(
     revalidatePath("/projects");
     revalidatePath(`/projects/${d.id}`);
     return { ok: true, data: { projectId: d.id } };
-  } catch {
-    return { ok: false, error: "No se pudo actualizar el proyecto." };
+  } catch (error) {
+    console.error("[projects] No se pudo actualizar el proyecto:", error);
+    return {
+      ok: false,
+      error: projectSaveError(error, "No se pudo actualizar el proyecto."),
+    };
   }
 }
 

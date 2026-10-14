@@ -264,10 +264,14 @@ create table if not exists public.projects (
   modeling_3d_amount     numeric(14,2) not null default 0,
   plans_amount           numeric(14,2) not null default 0,
   render_amount          numeric(14,2) not null default 0,
-  proposal_responsible   text,
-  modeling_3d_responsible text,
-  plans_responsible      text,
-  render_responsible     text,
+  proposal_responsible   text not null
+                         check (char_length(trim(proposal_responsible)) between 2 and 120),
+  modeling_3d_responsible text not null
+                         check (char_length(trim(modeling_3d_responsible)) between 2 and 120),
+  plans_responsible      text not null
+                         check (char_length(trim(plans_responsible)) between 2 and 120),
+  render_responsible     text not null
+                         check (char_length(trim(render_responsible)) between 2 and 120),
   status                 smallint not null default 1,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
@@ -565,8 +569,12 @@ create table if not exists public.provider_debt_settlements (
   note            text,
   status          smallint not null default 1,
   created_at      timestamptz not null default now(),
-  created_by      uuid references auth.users(id)
+  created_by      uuid
 );
+
+alter table public.provider_debt_settlements
+  drop constraint if exists provider_debt_settlements_created_by_fkey;
+
 create index if not exists provider_debt_settlements_source_idx
   on public.provider_debt_settlements(source_type, source_id)
   where status = 1;

@@ -622,8 +622,15 @@ export async function deleteWorkOrderPayment(id: string, note: string): Promise<
   const before = await orderPaymentSnapshot(id);
   if (!before || (before.status as number) === 0) throw new Error("Abono no encontrado.");
 
-  const { error } = await client.from("work_order_payments").update({ status: 0 }).eq("id", id);
+  const { data: deletedPayment, error } = await client
+    .from("work_order_payments")
+    .update({ status: 0 })
+    .eq("id", id)
+    .eq("status", 1)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!deletedPayment) throw new Error("El abono no pudo eliminarse porque ya no estaba activo.");
 
   if (before.internal_transfer_id) {
     await client

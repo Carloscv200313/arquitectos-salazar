@@ -67,10 +67,11 @@ create table if not exists public.projects (
   modeling_3d_amount numeric(14,2) not null default 0 check (modeling_3d_amount >= 0),
   plans_amount       numeric(14,2) not null default 0 check (plans_amount >= 0),
   render_amount      numeric(14,2) not null default 0 check (render_amount >= 0),
-  proposal_responsible text not null check (proposal_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
-  modeling_3d_responsible text not null check (modeling_3d_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
-  plans_responsible text not null check (plans_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
-  render_responsible text not null check (render_responsible in ('Alejandra', 'Juanfer', 'Juan Jose', 'Esmeralda', 'Sin asignar')),
+  -- Los nombres provienen del catalogo dinamico de empleados.
+  proposal_responsible text not null check (char_length(trim(proposal_responsible)) between 2 and 120),
+  modeling_3d_responsible text not null check (char_length(trim(modeling_3d_responsible)) between 2 and 120),
+  plans_responsible text not null check (char_length(trim(plans_responsible)) between 2 and 120),
+  render_responsible text not null check (char_length(trim(render_responsible)) between 2 and 120),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   created_by         uuid references auth.users (id) on delete set null
@@ -336,8 +337,11 @@ create table if not exists public.provider_debt_settlements (
   note             text,
   status           smallint not null default 1,
   created_at       timestamptz not null default now(),
-  created_by       uuid references auth.users (id) on delete set null
+  created_by       uuid
 );
+
+alter table public.provider_debt_settlements
+  drop constraint if exists provider_debt_settlements_created_by_fkey;
 
 create index if not exists idx_provider_debt_settlements_source
   on public.provider_debt_settlements (source_type, source_id)

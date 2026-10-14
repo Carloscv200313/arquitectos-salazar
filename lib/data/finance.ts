@@ -31,6 +31,8 @@ import type {
   MovementType,
   PaymentMethod,
   ProviderDebtDetail,
+  ProviderDebtPayment,
+  ProviderDebtPaymentKind,
   SalaryDayRecordWithRelations,
   SalaryPaymentWithRelations,
   SalaryPaymentType,
@@ -45,7 +47,7 @@ import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
 import { deleteProjectMovement, getUtilityReport, listProjects } from "./projects";
 import { getWorksAdministrationUtilityReport, listWorks } from "./works";
-import { listWorkOrders } from "./orders";
+import { deleteWorkOrderPayment, listWorkOrders, updateWorkOrderPayment } from "./orders";
 import { writeAudit } from "./audit";
 
 type Row = Record<string, unknown>;
@@ -273,17 +275,35 @@ function providerDebtKey(sourceType: "work_order" | "work_movement", sourceId: s
   return `${sourceType}:${sourceId}`;
 }
 
-async function getProviderDebtSettlements(): Promise<Map<string, number>> {
-  const { data } = await sb()
+async function getProviderDebtSettlements(): Promise<{
+  totals: Map<string, number>;
+  paymentsBySource: Map<string, ProviderDebtPayment[]>;
+}> {
+  const { data, error } = await sb()
     .from("provider_debt_settlements")
-    .select("source_type, source_id, amount")
+    .select("id, source_type, source_id, amount, settlement_date, note, created_at")
     .eq("status", 1);
-  const settled = new Map<string, number>();
+  if (error) throw new Error(error.message);
+
+  const totals = new Map<string, number>();
+  const paymentsBySource = new Map<string, ProviderDebtPayment[]>();
   for (const row of data ?? []) {
     const key = providerDebtKey(row.source_type as "work_order" | "work_movement", row.source_id as string);
-    settled.set(key, round2((settled.get(key) ?? 0) + num(row.amount)));
+    totals.set(key, round2((totals.get(key) ?? 0) + num(row.amount)));
+    const payments = paymentsBySource.get(key) ?? [];
+    payments.push({
+      id: row.id as string,
+      kind: "settlement",
+      sourceType: row.source_type as "work_order" | "work_movement",
+      sourceId: row.source_id as string,
+      paymentDate: row.settlement_date as string,
+      amount: num(row.amount),
+      note: (row.note as string) ?? null,
+      createdAt: row.created_at as string,
+    });
+    paymentsBySource.set(key, payments);
   }
-  return settled;
+  return { totals, paymentsBySource };
 }
 
 async function getAccountsPayableWorkMovementDebts(
@@ -473,11 +493,12 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
 export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const groups = new Map<string, ProviderDebtDetail>();
-  const [works, settledBySource, manualDebts] = await Promise.all([
+  const [works, settlementData, manualDebts] = await Promise.all([
     listWorks(),
     getProviderDebtSettlements(),
     getManualProviderDebtDetails(),
   ]);
+  const settledBySource = settlementData.totals;
 
   for (const work of works) {
     const orders = await listWorkOrders(work.id);
@@ -494,11 +515,25 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         orders: [],
         workMovements: [],
         manualDebts: [],
+        payments: [],
       };
       current.totalAmount = round2(current.totalAmount + (order.amount ?? 0));
       current.totalPaid = round2(current.totalPaid + order.paid + settled);
       current.totalPending = round2(current.totalPending + pending);
       current.orders.push({ ...order, paid: round2(order.paid + settled), pending });
+      current.payments.push(
+        ...order.payments.map((payment) => ({
+          id: payment.id,
+          kind: "order_payment" as const,
+          sourceType: "work_order" as const,
+          sourceId: order.id,
+          paymentDate: payment.payment_date,
+          amount: payment.amount,
+          note: payment.description,
+          createdAt: payment.created_at,
+        })),
+      );
+      current.payments.push(...(settlementData.paymentsBySource.get(providerDebtKey("work_order", order.id)) ?? []));
       groups.set(order.supplier, current);
     }
   }
@@ -514,11 +549,13 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
       orders: [],
       workMovements: [],
       manualDebts: [],
+      payments: [],
     };
     current.totalAmount = round2(current.totalAmount + movement.amount);
     current.totalPaid = round2(current.totalPaid + movement.settled);
     current.totalPending = round2(current.totalPending + movement.pending);
     current.workMovements.push(movement);
+    current.payments.push(...(settlementData.paymentsBySource.get(providerDebtKey("work_movement", movement.id)) ?? []));
     groups.set(supplier, current);
   }
 
@@ -533,11 +570,24 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
       orders: [],
       workMovements: [],
       manualDebts: [],
+      payments: [],
     };
     current.totalAmount = round2(current.totalAmount + manualDebt.totalAmount);
     current.totalPaid = round2(current.totalPaid + manualDebt.totalPaid);
     current.totalPending = round2(current.totalPending + manualDebt.totalPending);
     current.manualDebts.push(manualDebt);
+    current.payments.push(
+      ...manualDebt.payments.map((payment) => ({
+        id: payment.id,
+        kind: "manual" as const,
+        sourceType: "manual_provider_debt" as const,
+        sourceId: manualDebt.debt.id,
+        paymentDate: payment.payment_date,
+        amount: payment.amount,
+        note: payment.note,
+        createdAt: payment.created_at,
+      })),
+    );
     groups.set(provider, current);
   }
 
@@ -559,6 +609,9 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         if (Math.abs(byPending) > 0.001) return byPending;
         return b.debt.debt_date.localeCompare(a.debt.debt_date);
       }),
+      payments: group.payments.sort(
+        (a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.createdAt.localeCompare(a.createdAt),
+      ),
     }))
     .sort((a, b) => b.totalPending - a.totalPending);
 }
@@ -1842,19 +1895,34 @@ export async function settleProviderDebt(data: SettleProviderDebtData): Promise<
   const amount = round2(data.amount);
   if (amount > pending + 0.001) throw new Error("El monto supera el saldo pendiente.");
 
-  const { data: row, error } = await sb()
+  const payload = {
+    provider: data.provider.trim(),
+    source_type: data.sourceType,
+    source_id: data.sourceId,
+    amount,
+    settlement_date: data.settlementDate,
+    note: data.note?.trim() || null,
+    created_by: data.userId,
+  };
+  let { data: row, error } = await sb()
     .from("provider_debt_settlements")
-    .insert({
-      provider: data.provider.trim(),
-      source_type: data.sourceType,
-      source_id: data.sourceId,
-      amount,
-      settlement_date: data.settlementDate,
-      note: data.note?.trim() || null,
-      created_by: await getCurrentUserId(),
-    })
+    .insert(payload)
     .select("id")
     .single();
+
+  // Compatibilidad mientras se aplica la migración que elimina la FK a auth.users.
+  if (
+    error?.code === "23503" &&
+    error.message.includes("provider_debt_settlements_created_by_fkey")
+  ) {
+    const retry = await sb()
+      .from("provider_debt_settlements")
+      .insert({ ...payload, created_by: null })
+      .select("id")
+      .single();
+    row = retry.data;
+    error = retry.error;
+  }
   if (error) throw new Error(error.message);
 
   await audit(
@@ -1862,6 +1930,191 @@ export async function settleProviderDebt(data: SettleProviderDebtData): Promise<
     (row?.id as string) ?? data.sourceId,
     `Deuda saldada · ${data.provider} · ${amount.toFixed(2)}`,
   );
+}
+
+export interface UpdateProviderDebtPaymentData {
+  paymentId: string;
+  kind: ProviderDebtPaymentKind;
+  amount: number;
+  paymentDate: string;
+  paymentNote?: string | null;
+  observation: string;
+}
+
+export async function updateProviderDebtPayment(
+  data: UpdateProviderDebtPaymentData,
+): Promise<{ provider: string }> {
+  const client = sb();
+  if (data.kind === "order_payment") {
+    const { data: payment, error } = await client
+      .from("work_order_payments")
+      .select("id, order_id, description, amount, payment_date, payment_method_id, status")
+      .eq("id", data.paymentId)
+      .eq("status", 1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!payment) throw new Error("No se encontró el abono activo.");
+
+    const { data: order, error: orderError } = await client
+      .from("work_orders")
+      .select("id, work_id, supplier")
+      .eq("id", payment.order_id)
+      .maybeSingle();
+    if (orderError) throw new Error(orderError.message);
+    if (!order) throw new Error("No se encontró el pedido del abono.");
+
+    const provider = order.supplier as string;
+    const detail = await getProviderDebtDetail(provider);
+    const pending = detail?.orders.find((item) => item.id === order.id)?.pending ?? 0;
+    const amount = round2(data.amount);
+    const maximumAmount = round2(pending + num(payment.amount));
+    if (amount > maximumAmount + 0.001) {
+      throw new Error(`El abono no puede superar ${maximumAmount.toFixed(2)}.`);
+    }
+
+    await updateWorkOrderPayment(
+      data.paymentId,
+      {
+        description: data.paymentNote?.trim() || (payment.description as string) || "Abono del pedido",
+        amount,
+        paymentDate: data.paymentDate,
+        paymentMethodId: payment.payment_method_id as string,
+      },
+      data.observation,
+    );
+    return { provider };
+  }
+
+  const table = data.kind === "settlement" ? "provider_debt_settlements" : "manual_provider_debt_payments";
+  const dateColumn = data.kind === "settlement" ? "settlement_date" : "payment_date";
+  const { data: paymentData, error } = await client
+    .from(table)
+    .select("*")
+    .eq("id", data.paymentId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const payment = paymentData as unknown as Row | null;
+  if (!payment) throw new Error("No se encontró el abono activo.");
+
+  const amount = round2(data.amount);
+  let provider = "Proveedor";
+  let maximumAmount = num(payment.amount);
+
+  if (data.kind === "settlement") {
+    provider = String(payment.provider ?? "Proveedor");
+    const detail = await getProviderDebtDetail(provider);
+    const currentPending =
+      payment.source_type === "work_order"
+        ? detail?.orders.find((order) => order.id === payment.source_id)?.pending
+        : detail?.workMovements.find((movement) => movement.id === payment.source_id)?.pending;
+    maximumAmount = round2((currentPending ?? 0) + num(payment.amount));
+  } else {
+    const debt = await getManualProviderDebtDetail(String(payment.debt_id));
+    if (!debt) throw new Error("No se encontró la deuda del proveedor.");
+    provider = debt.debt.provider;
+    maximumAmount = round2(debt.totalPending + num(payment.amount));
+  }
+
+  if (amount > maximumAmount + 0.001) {
+    throw new Error(`El abono no puede superar ${maximumAmount.toFixed(2)}.`);
+  }
+
+  const update = {
+    amount,
+    [dateColumn]: data.paymentDate,
+    note: data.paymentNote?.trim() || null,
+  };
+  const { error: updateError } = await client.from(table).update(update).eq("id", data.paymentId).eq("status", 1);
+  if (updateError) throw new Error(updateError.message);
+
+  await writeAudit({
+    entityType: "finance_movement",
+    entityId: data.paymentId,
+    operation: "update",
+    note: data.observation,
+    amount,
+    description: `Abono de proveedor · ${provider}`,
+    snapshot: {
+      before: {
+        amount: num(payment.amount),
+        payment_date: payment[dateColumn],
+        note: payment.note,
+      },
+      after: {
+        amount,
+        payment_date: data.paymentDate,
+        note: update.note,
+      },
+    },
+  });
+  return { provider };
+}
+
+export async function deleteProviderDebtPayment(data: {
+  paymentId: string;
+  kind: ProviderDebtPaymentKind;
+  observation: string;
+}): Promise<{ provider: string }> {
+  const client = sb();
+  if (data.kind === "order_payment") {
+    const { data: payment, error } = await client
+      .from("work_order_payments")
+      .select("id, order_id")
+      .eq("id", data.paymentId)
+      .eq("status", 1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!payment) throw new Error("No se encontró el abono activo.");
+    const { data: order, error: orderError } = await client
+      .from("work_orders")
+      .select("supplier")
+      .eq("id", payment.order_id)
+      .maybeSingle();
+    if (orderError) throw new Error(orderError.message);
+    if (!order) throw new Error("No se encontró el pedido del abono.");
+    await deleteWorkOrderPayment(data.paymentId, data.observation);
+    return { provider: order.supplier as string };
+  }
+
+  const table = data.kind === "settlement" ? "provider_debt_settlements" : "manual_provider_debt_payments";
+  const { data: paymentData, error } = await client
+    .from(table)
+    .select("*")
+    .eq("id", data.paymentId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const payment = paymentData as unknown as Row | null;
+  if (!payment) throw new Error("No se encontró el abono activo.");
+
+  let provider = String(payment.provider ?? "Proveedor");
+  if (data.kind === "manual") {
+    const debt = await getManualProviderDebtDetail(String(payment.debt_id));
+    if (!debt) throw new Error("No se encontró la deuda del proveedor.");
+    provider = debt.debt.provider;
+  }
+
+  const { data: deletedRow, error: deleteError } = await client
+    .from(table)
+    .update({ status: 0 })
+    .eq("id", data.paymentId)
+    .eq("status", 1)
+    .select("id")
+    .maybeSingle();
+  if (deleteError) throw new Error(deleteError.message);
+  if (!deletedRow) throw new Error("El abono no pudo eliminarse porque ya no estaba activo.");
+
+  await writeAudit({
+    entityType: "finance_movement",
+    entityId: data.paymentId,
+    operation: "delete",
+    note: data.observation,
+    amount: num(payment.amount),
+    description: `Abono de proveedor · ${provider}`,
+    snapshot: { before: payment },
+  });
+  return { provider };
 }
 
 /* ============================================================== SALARY ===== */
