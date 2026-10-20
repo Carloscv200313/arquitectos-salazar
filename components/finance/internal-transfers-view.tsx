@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowLeftRight, Loader2, Plus, WalletCards } from "lucide-react";
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Loader2, Plus, WalletCards } from "lucide-react";
 import { registerFinanceInternalTransferAction } from "@/app/(dashboard)/finance/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -78,6 +78,7 @@ function TransferDrawer({
     () => methods.map((method) => ({ label: method.name, value: method.id })),
     [methods],
   );
+  const isOfficeTransfer = fromAccountBucket === "office" || toAccountBucket === "office";
 
   function reset() {
     setDescription("");
@@ -134,12 +135,14 @@ function TransferDrawer({
 
         <div className="grid gap-4 px-4 pb-4">
           <div className="grid gap-2">
-            <Label htmlFor="finance-transfer-description">Descripción</Label>
+            <Label htmlFor="finance-transfer-description">
+              {isOfficeTransfer ? "Obra" : "Descripción"}
+            </Label>
             <Input
               id="finance-transfer-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Ej. Cierre de obras varias"
+              placeholder={isOfficeTransfer ? "Ej. Casa Valle" : "Ej. Cierre de obras varias"}
               aria-invalid={!!errors.description}
             />
             {errors.description && (
@@ -355,12 +358,19 @@ export function InternalTransfersView({
   transfers: WorkInternalTransferWithMethods[];
 }) {
   const [open, setOpen] = useState(false);
+  const [officePage, setOfficePage] = useState(0);
   const totalInternalMovements = round2(
     paymentMethodRows.reduce((sum, row) => sum + row.internalMovements, 0),
   );
   const touchedAccounts = paymentMethodRows.filter(
     (row) => Math.abs(row.internalMovements) > 0.001 || Math.abs(row.officeBalance) > 0.001,
   ).length;
+  const officeTransfers = transfers.filter(
+    (transfer) => transfer.from_account_bucket === "office" || transfer.to_account_bucket === "office",
+  );
+  const officeTotal = round2(officeTransfers.reduce((sum, transfer) => sum + transfer.amount, 0));
+  const officePageCount = Math.ceil(officeTransfers.length / 10);
+  const visibleOfficeTransfers = officeTransfers.slice(officePage * 10, officePage * 10 + 10);
 
   return (
     <>
@@ -389,57 +399,87 @@ export function InternalTransfersView({
 
         <Card className="gap-0 overflow-hidden p-0">
           <div className="border-b px-5 py-4">
-            <h2 className="font-semibold">Saldos por cuenta</h2>
+            <h2 className="font-semibold">Cuenta de oficina</h2>
             <p className="text-sm text-muted-foreground">
-              Separación entre saldo normal y Cuenta de oficina.
+              Registro interno de utilidades de obra que pasan de una cuenta a otra.
             </p>
           </div>
           <Table>
             <TableHeader className="bg-muted/40">
               <TableRow>
-                <TableHead className="px-5 text-xs uppercase text-muted-foreground">
-                  Cuenta
-                </TableHead>
-                <TableHead className="text-right text-xs uppercase text-muted-foreground">
-                  Normal
-                </TableHead>
-                <TableHead className="text-right text-xs uppercase text-muted-foreground">
-                  Cuenta de oficina
-                </TableHead>
-                <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">
-                  Total
-                </TableHead>
+                <TableHead className="px-5 text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Obra</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Desde</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Hacia</TableHead>
+                <TableHead className="px-5 text-right text-xs uppercase text-muted-foreground">Monto</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paymentMethodRows.map((row) => (
-                <TableRow key={row.methodId}>
-                  <TableCell className="px-5 font-medium">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-brand" />
-                      {row.methodName}
-                    </span>
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", row.normalBalance < -0.001 && "text-destructive")}>
-                    {signedCurrency(row.normalBalance)}
-                  </TableCell>
-                  <TableCell className={cn("text-right tabular-nums", row.officeBalance < -0.001 && "text-destructive")}>
-                    {signedCurrency(row.officeBalance)}
-                  </TableCell>
-                  <TableCell className={cn("px-5 text-right font-semibold tabular-nums", row.finalBalance < -0.001 && "text-destructive")}>
-                    {signedCurrency(row.finalBalance)}
+              {visibleOfficeTransfers.map((transfer) => (
+                  <TableRow key={transfer.id}>
+                    <TableCell className="px-5 whitespace-nowrap text-muted-foreground">
+                      {formatDate(transfer.transfer_date)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {transfer.workName ?? transfer.description}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {transfer.fromMethod?.name ?? "Sin cuenta"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {transfer.toMethod?.name ?? "Sin cuenta"}
+                    </TableCell>
+                    <TableCell className="px-5 text-right font-semibold tabular-nums">
+                      {formatCurrency(transfer.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {officeTransfers.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    Sin movimientos de Cuenta de oficina.
                   </TableCell>
                 </TableRow>
-              ))}
-              {paymentMethodRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                    Sin cuentas activas.
+              )}
+              {officeTransfers.length > 0 && (
+                <TableRow className="bg-muted/30 font-semibold">
+                  <TableCell colSpan={4} className="px-5 text-muted-foreground">
+                    {officeTransfers.length} movimientos
+                  </TableCell>
+                  <TableCell className="px-5 text-right tabular-nums">
+                    Total: {formatCurrency(officeTotal)}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          {officePageCount > 1 && (
+            <div className="flex items-center justify-between border-t px-5 py-3 text-sm text-muted-foreground">
+              <span>
+                {officeTransfers.length} movimientos · Página {officePage + 1} de {officePageCount}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label="Página anterior"
+                  disabled={officePage === 0}
+                  onClick={() => setOfficePage((page) => Math.max(0, page - 1))}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label="Página siguiente"
+                  disabled={officePage + 1 >= officePageCount}
+                  onClick={() => setOfficePage((page) => Math.min(officePageCount - 1, page + 1))}
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
 
         <Card className="gap-0 overflow-hidden p-0">

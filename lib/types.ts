@@ -124,6 +124,7 @@ export interface InternalTransferWithMethods extends InternalTransfer {
 export interface WorkInternalTransferWithMethods extends InternalTransfer {
   fromMethod: PaymentMethod | null;
   toMethod: PaymentMethod | null;
+  workName?: string | null;
 }
 
 export interface PaymentMethodReportRow {

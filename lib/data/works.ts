@@ -623,6 +623,7 @@ export async function listWorkInternalTransfers(): Promise<WorkInternalTransferW
       created_by: (row.created_by as string) ?? null,
       fromMethod: method,
       toMethod: method,
+      workName,
     });
   }
 
