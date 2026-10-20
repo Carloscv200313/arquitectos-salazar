@@ -45,9 +45,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDate, todayISODate } from "@/lib/format";
-import type { ProviderDebtDetail, ProviderDebtPayment, ProviderDebtSourceType } from "@/lib/types";
+import type { PaymentMethod, ProviderDebtDetail, ProviderDebtPayment, ProviderDebtSourceType } from "@/lib/types";
 
 type SettleTarget =
   | { sourceType: "work_order"; sourceId: string; provider: string; title: string; subtitle: string; pending: number }
@@ -213,22 +220,26 @@ function SettleProviderDebtSheet({
   onOpenChange,
   target,
   onSettled,
+  accounts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: SettleTarget;
   onSettled: (target: SettleTarget, amount: number) => void;
+  accounts: PaymentMethod[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [settlementDate, setSettlementDate] = useState(todayISODate());
   const [amount, setAmount] = useState(String(target.pending));
+  const [fromAccountId, setFromAccountId] = useState("");
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   function reset() {
     setSettlementDate(todayISODate());
     setAmount(String(target.pending));
+    setFromAccountId("");
     setNote("");
     setErrors({});
   }
@@ -244,6 +255,7 @@ function SettleProviderDebtSheet({
               debtId: target.sourceId,
               amount: Number(amount),
               paymentDate: settlementDate,
+              fromAccountId,
               note,
             })
           : await settleProviderDebtAction({
@@ -252,6 +264,7 @@ function SettleProviderDebtSheet({
               sourceId: target.sourceId,
               amount: Number(amount),
               settlementDate,
+              fromAccountId,
               note,
             });
       if (result.ok) {
@@ -317,6 +330,30 @@ function SettleProviderDebtSheet({
               aria-invalid={!!errors.amount}
             />
             {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="settle-provider-account">Cuenta de salida</Label>
+            <Select
+              value={fromAccountId}
+              onValueChange={(value) => setFromAccountId(value ?? "")}
+              items={accounts.map((account) => ({ value: account.id, label: account.name }))}
+            >
+              <SelectTrigger
+                id="settle-provider-account"
+                className="w-full"
+                aria-invalid={!!errors.fromAccountId}
+              >
+                <SelectValue placeholder="Selecciona la cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.fromAccountId && <p className="text-xs text-destructive">{errors.fromAccountId}</p>}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="settle-provider-note">Nota</Label>
@@ -433,6 +470,7 @@ function ProviderPaymentHistorySheet({
                 <TableHeader className="bg-muted/40">
                   <TableRow>
                     <TableHead>Fecha</TableHead>
+                    <TableHead>Cuenta de salida</TableHead>
                     <TableHead>Nota</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
                     <TableHead className="w-24 text-right">Acciones</TableHead>
@@ -443,6 +481,9 @@ function ProviderPaymentHistorySheet({
                     <TableRow key={`${payment.kind}-${payment.id}`}>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {formatDate(payment.paymentDate)}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {payment.accountName ?? "Sin especificar"}
                       </TableCell>
                       <TableCell className="max-w-52 whitespace-normal break-words text-muted-foreground">
                         {payment.note || "-"}
@@ -483,7 +524,7 @@ function ProviderPaymentHistorySheet({
                   ))}
                   {payments.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-20 text-center text-muted-foreground">
+                      <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
                         Sin abonos registrados.
                       </TableCell>
                     </TableRow>
@@ -728,8 +769,10 @@ function ManualProviderDebtSheet({
 
 export function ProviderDebtDetail({
   detail,
+  accounts,
 }: {
   detail: ProviderDebtDetail;
+  accounts: PaymentMethod[];
 }) {
   const [displayDetail, updateDisplayedDetail] = useOptimistic(detail, updateProviderDebtDisplay);
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
@@ -1086,6 +1129,7 @@ export function ProviderDebtDetail({
           onOpenChange={(next) => !next && setSettleTarget(null)}
           target={settleTarget}
           onSettled={applySettlement}
+          accounts={accounts}
         />
       )}
       {historyTarget && (

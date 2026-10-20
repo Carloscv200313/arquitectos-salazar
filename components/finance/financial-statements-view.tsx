@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Workbook, Worksheet } from "exceljs";
-import { Download, Loader2 } from "lucide-react";
+import { Download, FilterX, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -19,20 +20,15 @@ import { formatCurrency } from "@/lib/format";
 import type { FinanceCaptureReport, FinanceUtilityReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const MONTHS = [
-  { key: "01", label: "Enero" },
-  { key: "02", label: "Febrero" },
-  { key: "03", label: "Marzo" },
-  { key: "04", label: "Abril" },
-  { key: "05", label: "Mayo" },
-  { key: "06", label: "Junio" },
-  { key: "07", label: "Julio" },
-  { key: "08", label: "Agosto" },
-  { key: "09", label: "Septiembre" },
-  { key: "10", label: "Octubre" },
-  { key: "11", label: "Noviembre" },
-  { key: "12", label: "Diciembre" },
+const MONTH_LABELS = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+interface MonthColumn {
+  key: string;
+  label: string;
+}
 
 const FINANCING_ROWS = ["Pago de interés y capital", "Prestamos", "Créditos"];
 const RESERVED_INCOME_TAGS = new Set([
@@ -84,44 +80,44 @@ function uniqueLabels(labels: string[]) {
 }
 
 function hasValues(values: MonthlyValues) {
-  return MONTHS.some((month) => Math.abs(values[month.key] ?? 0) > 0.001);
+  return Object.values(values).some((value) => Math.abs(value) > 0.001);
 }
 
-function zeroValues(): MonthlyValues {
-  return Object.fromEntries(MONTHS.map((month) => [month.key, 0]));
+function zeroValues(months: MonthColumn[]): MonthlyValues {
+  return Object.fromEntries(months.map((month) => [month.key, 0]));
 }
 
 function monthKeyFromISO(date: string) {
-  return date.slice(5, 7);
+  return date.slice(0, 7);
 }
 
 function monthKeyFromPeriod(period: string) {
-  return period.slice(5, 7);
+  return period.slice(0, 7);
 }
 
 function addValue(values: MonthlyValues, month: string, amount: number) {
   values[month] = (values[month] ?? 0) + amount;
 }
 
-function sumValues(...rows: MonthlyValues[]) {
-  const result = zeroValues();
+function sumValues(months: MonthColumn[], ...rows: MonthlyValues[]) {
+  const result = zeroValues(months);
   for (const row of rows) {
-    for (const month of MONTHS) result[month.key] += row[month.key] ?? 0;
+    for (const month of months) result[month.key] += row[month.key] ?? 0;
   }
   return result;
 }
 
-function subtractValues(base: MonthlyValues, ...rows: MonthlyValues[]) {
+function subtractValues(base: MonthlyValues, months: MonthColumn[], ...rows: MonthlyValues[]) {
   const result = { ...base };
   for (const row of rows) {
-    for (const month of MONTHS) result[month.key] -= row[month.key] ?? 0;
+    for (const month of months) result[month.key] -= row[month.key] ?? 0;
   }
   return result;
 }
 
-function valuesByTag(report: FinanceCaptureReport, labels: string[]) {
+function valuesByTag(report: FinanceCaptureReport, labels: string[], months: MonthColumn[]) {
   const targets = new Map(
-    labels.map((label) => [normalizedLabel(label), { label, values: zeroValues() }]),
+    labels.map((label) => [normalizedLabel(label), { label, values: zeroValues(months) }]),
   );
   for (const row of report.rows) {
     if (row.movement_type !== "expense") continue;
@@ -134,12 +130,16 @@ function valuesByTag(report: FinanceCaptureReport, labels: string[]) {
     addValue(target.values, monthKeyFromISO(row.capture_date), Math.abs(row.amount));
   }
   return labels.map(
-    (label) => targets.get(normalizedLabel(label)) ?? { label, values: zeroValues() },
+    (label) => targets.get(normalizedLabel(label)) ?? { label, values: zeroValues(months) },
   );
 }
 
-function valuesByMovementType(report: FinanceCaptureReport, movementType: "income" | "expense") {
-  const values = zeroValues();
+function valuesByMovementType(
+  report: FinanceCaptureReport,
+  movementType: "income" | "expense",
+  months: MonthColumn[],
+) {
+  const values = zeroValues(months);
   for (const row of report.rows) {
     if (row.movement_type !== movementType) continue;
     addValue(values, monthKeyFromISO(row.capture_date), Math.abs(row.amount));
@@ -147,16 +147,20 @@ function valuesByMovementType(report: FinanceCaptureReport, movementType: "incom
   return values;
 }
 
-function utilityValues(report: FinanceUtilityReport, field: "projectUtility" | "workUtility") {
-  const values = zeroValues();
+function utilityValues(
+  report: FinanceUtilityReport,
+  field: "projectUtility" | "workUtility",
+  months: MonthColumn[],
+) {
+  const values = zeroValues(months);
   for (const row of report.rows) {
     addValue(values, monthKeyFromPeriod(row.month), row[field]);
   }
   return values;
 }
 
-function monthlyAmountValues(rows: Array<{ month: string; amount: number }>) {
-  const values = zeroValues();
+function monthlyAmountValues(rows: Array<{ month: string; amount: number }>, months: MonthColumn[]) {
+  const values = zeroValues(months);
   for (const row of rows) {
     addValue(values, monthKeyFromPeriod(row.month), row.amount);
   }
@@ -195,19 +199,67 @@ function StatementTable({
   subtitle,
   rows,
   showPercent,
+  months,
+  dateFrom,
+  dateTo,
+  onDateFromChange,
+  onDateToChange,
+  onClearFilters,
+  dateIdPrefix,
 }: {
   title: string;
   subtitle?: string;
   rows: StatementRow[];
   showPercent?: boolean;
+  months: MonthColumn[];
+  dateFrom: string;
+  dateTo: string;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+  onClearFilters: () => void;
+  dateIdPrefix: string;
 }) {
   const incomeRow = rows.find((row) => row.label === "Total de ingresos" || row.label === "Ingresos totales");
 
   return (
     <Card className="gap-0 overflow-hidden p-0">
-      <div className="border-b px-5 py-4">
-        <h2 className="font-semibold">{title}</h2>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b px-5 py-4">
+        <div>
+          <h2 className="font-semibold">{title}</h2>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="grid gap-1.5">
+            <label htmlFor={`${dateIdPrefix}-date-from`} className="text-xs font-medium text-muted-foreground">
+              Desde
+            </label>
+            <Input
+              id={`${dateIdPrefix}-date-from`}
+              type="month"
+              value={dateFrom}
+              max={dateTo}
+              onChange={(event) => onDateFromChange(event.target.value)}
+              className="w-[170px]"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <label htmlFor={`${dateIdPrefix}-date-to`} className="text-xs font-medium text-muted-foreground">
+              Hasta
+            </label>
+            <Input
+              id={`${dateIdPrefix}-date-to`}
+              type="month"
+              value={dateTo}
+              min={dateFrom}
+              onChange={(event) => onDateToChange(event.target.value)}
+              className="w-[170px]"
+            />
+          </div>
+          <Button type="button" variant="outline" onClick={onClearFilters}>
+            <FilterX className="size-4" />
+            Limpiar filtros
+          </Button>
+        </div>
       </div>
       <Table className={showPercent ? "w-max min-w-[1680px]" : "w-max min-w-[1080px]"}>
         <TableHeader className="bg-muted/40">
@@ -221,7 +273,7 @@ function StatementTable({
             >
               Concepto
             </TableHead>
-            {MONTHS.map((month) => (
+            {months.map((month) => (
               <TableHead
                 key={month.key}
                 colSpan={showPercent ? 2 : 1}
@@ -236,7 +288,7 @@ function StatementTable({
           </TableRow>
           {showPercent && (
             <TableRow>
-              {MONTHS.flatMap((month) => [
+              {months.flatMap((month) => [
                 <TableHead
                   key={`${month.key}-amount`}
                   className="h-8 px-3 text-right text-[11px] uppercase text-muted-foreground"
@@ -280,7 +332,7 @@ function StatementTable({
               >
                 {row.label}
               </TableCell>
-              {MONTHS.flatMap((month) => {
+              {months.flatMap((month) => {
                 const amount = row.values[month.key] ?? 0;
                 const income = incomeRow?.values[month.key] ?? 0;
                 const cellClass = cn(
@@ -358,6 +410,7 @@ function addStatementWorksheet(
   title: string,
   rows: StatementRow[],
   showPercent: boolean,
+  months: MonthColumn[],
 ) {
   const worksheet = workbook.addWorksheet(name, {
     pageSetup: {
@@ -369,7 +422,7 @@ function addStatementWorksheet(
       margins: { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
     },
   });
-  const columnCount = 1 + MONTHS.length * (showPercent ? 2 : 1);
+  const columnCount = 1 + months.length * (showPercent ? 2 : 1);
   worksheet.mergeCells(1, 1, 1, columnCount);
   const titleCell = worksheet.getCell(1, 1);
   titleCell.value = title;
@@ -381,7 +434,7 @@ function addStatementWorksheet(
   if (showPercent) {
     worksheet.getCell(2, 1).value = "Concepto";
     worksheet.mergeCells(2, 1, 3, 1);
-    MONTHS.forEach((month, index) => {
+    months.forEach((month, index) => {
       const startColumn = 2 + index * 2;
       worksheet.getCell(2, startColumn).value = month.label;
       worksheet.mergeCells(2, startColumn, 2, startColumn + 1);
@@ -390,7 +443,7 @@ function addStatementWorksheet(
     });
     dataStart = 4;
   } else {
-    worksheet.addRow(["Concepto", ...MONTHS.map((month) => month.label)]);
+    worksheet.addRow(["Concepto", ...months.map((month) => month.label)]);
   }
 
   for (let rowNumber = 2; rowNumber < dataStart; rowNumber += 1) {
@@ -406,7 +459,7 @@ function addStatementWorksheet(
   );
   rows.forEach((statementRow, index) => {
     const values: Array<string | number | null> = [statementRow.label];
-    MONTHS.forEach((month) => {
+    months.forEach((month) => {
       const amount = statementRow.values[month.key] ?? 0;
       values.push(statementRow.hideValues ? null : amount);
       if (showPercent) {
@@ -449,16 +502,49 @@ export function FinancialStatementsView({
   architectCommissions: Array<{ month: string; amount: number }>;
   administrativeSalaries: Array<{ month: string; amount: number }>;
 }) {
+  const availablePeriods = [
+    ...new Set([
+      ...utilities.rows.map((row) => row.month.slice(0, 7)),
+      ...workIncome.map((row) => row.month.slice(0, 7)),
+      ...workExpenses.map((row) => row.month.slice(0, 7)),
+      ...architectCommissions.map((row) => row.month.slice(0, 7)),
+      ...administrativeSalaries.map((row) => row.month.slice(0, 7)),
+      ...movements.rows.map((row) => row.capture_date.slice(0, 7)),
+    ]),
+  ].filter(Boolean).sort();
+  const latestPeriod = availablePeriods.at(-1) ?? new Date().toISOString().slice(0, 7);
+  const [initialYear] = latestPeriod.split("-");
   const [isExporting, setIsExporting] = useState(false);
-  const projectIncome = utilityValues(utilities, "projectUtility");
-  const workIncomeValues = monthlyAmountValues(workIncome);
-  const otherIncome = valuesByMovementType(movements, "income");
-  const regularIncome = sumValues(projectIncome, workIncomeValues);
-  const totalIncome = sumValues(regularIncome, otherIncome);
-  const workExpenseValues = monthlyAmountValues(workExpenses);
-  const architectCommissionValues = monthlyAmountValues(architectCommissions);
-  const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries);
-  const directCosts = sumValues(workExpenseValues, architectCommissionValues);
+  const [dateFrom, setDateFrom] = useState(`${initialYear}-01`);
+  const [dateTo, setDateTo] = useState(`${initialYear}-12`);
+  const months = useMemo(() => {
+    const first = new Date(`${dateFrom}-01T12:00:00`);
+    const last = new Date(`${dateTo}-01T12:00:00`);
+    if (Number.isNaN(first.getTime()) || Number.isNaN(last.getTime()) || first > last) return [];
+    const result: MonthColumn[] = [];
+    const current = new Date(first);
+    while (current <= last) {
+      const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`;
+      const monthLabel = MONTH_LABELS[current.getMonth()];
+      result.push({
+        key,
+        label: first.getFullYear() === last.getFullYear()
+          ? monthLabel
+          : `${monthLabel} ${current.getFullYear()}`,
+      });
+      current.setMonth(current.getMonth() + 1);
+    }
+    return result;
+  }, [dateFrom, dateTo]);
+  const projectIncome = utilityValues(utilities, "projectUtility", months);
+  const workIncomeValues = monthlyAmountValues(workIncome, months);
+  const otherIncome = valuesByMovementType(movements, "income", months);
+  const regularIncome = sumValues(months, projectIncome, workIncomeValues);
+  const totalIncome = sumValues(months, regularIncome, otherIncome);
+  const workExpenseValues = monthlyAmountValues(workExpenses, months);
+  const architectCommissionValues = monthlyAmountValues(architectCommissions, months);
+  const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries, months);
+  const directCosts = sumValues(months, workExpenseValues, architectCommissionValues);
   const tagLabels = uniqueLabels(movements.tags.map((tag) => tag.name));
   const financeLabels = tagLabels.filter(isFinancingLabel);
   const adminLabels = tagLabels.filter((label) => {
@@ -475,32 +561,32 @@ export function FinancialStatementsView({
   ) {
     adminLabels.push("Sueldos");
   }
-  const adminRows: StatementRow[] = valuesByTag(movements, adminLabels).map((row): StatementRow =>
+  const adminRows: StatementRow[] = valuesByTag(movements, adminLabels, months).map((row): StatementRow =>
     normalizedLabel(row.label) === "sueldos"
       ? {
           ...row,
-          values: sumValues(row.values, administrativeSalaryValues),
+          values: sumValues(months, row.values, administrativeSalaryValues),
           tone: "admin",
           description:
             "Aquí se cruzan los pagos por semana registrados en Salario y las capturas manuales vinculadas a la etiqueta Sueldos. No incluye pagos por proyecto ni mano de obra de Obras.",
         }
       : { ...row, tone: "admin" },
   );
-  const financeRows: StatementRow[] = valuesByTag(movements, financeLabels).map((row) => ({
+  const financeRows: StatementRow[] = valuesByTag(movements, financeLabels, months).map((row) => ({
     ...row,
     tone: "finance",
   }));
-  const adminTotal = sumValues(...adminRows.map((row) => row.values));
-  const financeTotal = sumValues(...financeRows.map((row) => row.values));
-  const grossUtility = subtractValues(totalIncome, directCosts);
-  const operatingUtility = subtractValues(grossUtility, adminTotal);
-  const beforeTaxes = subtractValues(operatingUtility, financeTotal);
-  const taxes = zeroValues();
-  const netUtility = subtractValues(beforeTaxes, taxes);
+  const adminTotal = sumValues(months, ...adminRows.map((row) => row.values));
+  const financeTotal = sumValues(months, ...financeRows.map((row) => row.values));
+  const grossUtility = subtractValues(totalIncome, months, directCosts);
+  const operatingUtility = subtractValues(grossUtility, months, adminTotal);
+  const beforeTaxes = subtractValues(operatingUtility, months, financeTotal);
+  const taxes = zeroValues(months);
+  const netUtility = subtractValues(beforeTaxes, months, taxes);
 
   const cashFlowRows: StatementRow[] = [
-    { label: "SALDO INICIAL", values: zeroValues(), strong: true },
-    { label: "Flujo operativo", values: zeroValues(), section: true },
+    { label: "SALDO INICIAL", values: zeroValues(months), strong: true },
+    { label: "Flujo operativo", values: zeroValues(months), section: true },
     { label: "Ingresos", values: totalIncome, section: true, tone: "income" },
     {
       label: "Ingresos por proyectos",
@@ -525,7 +611,7 @@ export function FinancialStatementsView({
     },
     {
       label: "Gastos",
-      values: sumValues(directCosts, adminTotal, financeTotal),
+      values: sumValues(months, directCosts, adminTotal, financeTotal),
       section: true,
       tone: "direct",
     },
@@ -623,13 +709,14 @@ export function FinancialStatementsView({
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "Arquitectos Salazar";
       workbook.created = new Date();
-      addStatementWorksheet(workbook, "Flujo de caja", "Flujo de caja", cashFlowRows, false);
+      addStatementWorksheet(workbook, "Flujo de caja", "Flujo de caja", cashFlowRows, false, months);
       addStatementWorksheet(
         workbook,
         "Estado de resultados",
         "Estado de resultados",
         resultRows,
         true,
+        months,
       );
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([new Uint8Array(buffer)], {
@@ -679,10 +766,50 @@ export function FinancialStatementsView({
           title="Flujo de caja"
           subtitle="Desglose mensual de ingresos y gastos operativos y de financiamiento"
           rows={cashFlowRows}
+          months={months}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          dateIdPrefix="cash-flow"
+          onDateFromChange={(value) => {
+            if (!value) return;
+            setDateFrom(value);
+            if (value > dateTo) setDateTo(value);
+          }}
+          onDateToChange={(value) => {
+            if (!value) return;
+            setDateTo(value);
+            if (value < dateFrom) setDateFrom(value);
+          }}
+          onClearFilters={() => {
+            setDateFrom(`${initialYear}-01`);
+            setDateTo(`${initialYear}-12`);
+          }}
         />
       </TabsContent>
       <TabsContent value="estado-resultados">
-        <StatementTable title="Estado de resultados" rows={resultRows} showPercent />
+        <StatementTable
+          title="Estado de resultados"
+          rows={resultRows}
+          showPercent
+          months={months}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          dateIdPrefix="income-statement"
+          onDateFromChange={(value) => {
+            if (!value) return;
+            setDateFrom(value);
+            if (value > dateTo) setDateTo(value);
+          }}
+          onDateToChange={(value) => {
+            if (!value) return;
+            setDateTo(value);
+            if (value < dateFrom) setDateFrom(value);
+          }}
+          onClearFilters={() => {
+            setDateFrom(`${initialYear}-01`);
+            setDateTo(`${initialYear}-12`);
+          }}
+        />
       </TabsContent>
     </Tabs>
   );

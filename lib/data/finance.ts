@@ -129,13 +129,15 @@ async function audit(action: string, recordId: string, description: string) {
 
 async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
-  const [pp, wm, it, wt, debtorRows, debtorPayments, captures, salaryPayments] = await Promise.all([
+  const [pp, wm, it, wt, debtorRows, debtorPayments, providerSettlements, manualProviderPayments, captures, salaryPayments] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
     listWorkMovementRows({ select: "payment_method_id, movement_type, category, amount" }),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
     client.from("manual_debtor_payments").select("to_account_id, amount").eq("status", 1),
+    client.from("provider_debt_settlements").select("from_account_id, amount").eq("status", 1),
+    client.from("manual_provider_debt_payments").select("from_account_id, amount").eq("status", 1),
     client
       .from("finance_movement_captures")
       .select("source_account_id, movement_type, amount")
@@ -176,6 +178,12 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   for (const payment of debtorPayments.data ?? []) {
     add((payment.to_account_id as string) ?? null, num(payment.amount));
   }
+  for (const payment of providerSettlements.data ?? []) {
+    add((payment.from_account_id as string) ?? null, -num(payment.amount));
+  }
+  for (const payment of manualProviderPayments.data ?? []) {
+    add((payment.from_account_id as string) ?? null, -num(payment.amount));
+  }
   for (const capture of captures.data ?? []) {
     add(
       (capture.source_account_id as string) ?? null,
@@ -210,6 +218,11 @@ function mapPaymentAccount(row: Row | null | undefined): PaymentMethod | null {
     is_active: true,
     created_at: (row.created_at as string) ?? "",
   };
+}
+
+function relatedRow(value: unknown): Row | null {
+  const row = Array.isArray(value) ? value[0] : value;
+  return row && typeof row === "object" ? (row as Row) : null;
 }
 
 function mapManualDebtor(row: Row): ManualDebtor & { account: PaymentMethod | null } {
@@ -257,12 +270,14 @@ function mapManualProviderDebt(row: Row): ManualProviderDebt {
 }
 
 function mapManualProviderDebtPayment(row: Row): ManualProviderDebtPayment {
+  const fromAccount = mapPaymentAccount(relatedRow(row.fromAccount));
   return {
     id: row.id as string,
     debt_id: row.debt_id as string,
     payment_date: row.payment_date as string,
     amount: num(row.amount),
     note: (row.note as string) ?? null,
+    accountName: fromAccount?.name ?? null,
     created_at: row.created_at as string,
     created_by: (row.created_by as string) ?? null,
   };
@@ -288,7 +303,7 @@ async function getProviderDebtSettlements(): Promise<{
 }> {
   const { data, error } = await sb()
     .from("provider_debt_settlements")
-    .select("id, source_type, source_id, amount, settlement_date, note, created_at")
+    .select("id, source_type, source_id, amount, settlement_date, note, created_at, fromAccount:payment_accounts!provider_debt_settlements_from_account_id_fkey(id,name,created_at)")
     .eq("status", 1);
   if (error) throw new Error(error.message);
 
@@ -307,6 +322,7 @@ async function getProviderDebtSettlements(): Promise<{
       amount: num(row.amount),
       note: (row.note as string) ?? null,
       createdAt: row.created_at as string,
+      accountName: (relatedRow(row.fromAccount)?.name as string) ?? null,
     });
     paymentsBySource.set(key, payments);
   }
@@ -419,7 +435,7 @@ export async function getManualProviderDebtDetails(): Promise<ManualProviderDebt
       .order("provider", { ascending: true }),
     client
       .from("manual_provider_debt_payments")
-      .select("*")
+      .select("*, fromAccount:payment_accounts!manual_provider_debt_payments_from_account_id_fkey(id,name,created_at)")
       .eq("status", 1)
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -538,6 +554,7 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
           amount: payment.amount,
           note: payment.description,
           createdAt: payment.created_at,
+      accountName: null,
         })),
       );
       current.payments.push(...(settlementData.paymentsBySource.get(providerDebtKey("work_order", order.id)) ?? []));
@@ -593,6 +610,7 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
         amount: payment.amount,
         note: payment.note,
         createdAt: payment.created_at,
+          accountName: payment.accountName,
       })),
     );
     groups.set(provider, current);
@@ -761,7 +779,7 @@ export async function getGeneralBalanceAccountReport(
         }
       }
     } else {
-      const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes] = await Promise.all([
+      const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes, providerSettlementsRes, manualProviderPaymentsRes] = await Promise.all([
         listWorkMovementRows({ paymentMethodId: method.id }),
         client.from("project_payments").select("*").eq("status", 1).eq("payment_method_id", method.id),
         client.from("projects").select("id, name"),
@@ -775,6 +793,16 @@ export async function getGeneralBalanceAccountReport(
           .select("id, debtor_id, amount, payment_date, debtor:manual_debtors(name)")
           .eq("status", 1)
           .eq("to_account_id", method.id),
+        client
+          .from("provider_debt_settlements")
+          .select("id, provider, amount, settlement_date")
+          .eq("status", 1)
+          .eq("from_account_id", method.id),
+        client
+          .from("manual_provider_debt_payments")
+          .select("id, amount, payment_date, debt:manual_provider_debts(provider)")
+          .eq("status", 1)
+          .eq("from_account_id", method.id),
       ]);
       const projectName = new Map((projRes.data ?? []).map((p) => [p.id as string, p.name as string]));
       for (const m of wmRes) {
@@ -821,6 +849,29 @@ export async function getGeneralBalanceAccountReport(
           description: `Abono de ${debtor?.name ?? "deudor"}`,
           expenseAccount: debtor?.name ?? "Deudor",
           incomeAccount: method.name,
+          amount: num(payment.amount),
+          source: "manual",
+        });
+      }
+      for (const payment of providerSettlementsRes.data ?? []) {
+        history.push({
+          id: `provider-settlement-${payment.id}`,
+          date: payment.settlement_date as string,
+          description: "Abono a deuda de proveedor",
+          expenseAccount: method.name,
+          incomeAccount: payment.provider as string,
+          amount: num(payment.amount),
+          source: "manual",
+        });
+      }
+      for (const payment of manualProviderPaymentsRes.data ?? []) {
+        const debt = payment.debt as { provider?: string } | null;
+        history.push({
+          id: `manual-provider-payment-${payment.id}`,
+          date: payment.payment_date as string,
+          description: "Abono a deuda manual de proveedor",
+          expenseAccount: method.name,
+          incomeAccount: debt?.provider ?? "Proveedor",
           amount: num(payment.amount),
           source: "manual",
         });
@@ -1862,6 +1913,7 @@ export interface RegisterManualProviderDebtPaymentData {
   debtId: string;
   amount: number;
   paymentDate: string;
+  fromAccountId: string;
   note?: string | null;
   userId: string | null;
 }
@@ -1875,6 +1927,14 @@ export async function registerManualProviderDebtPayment(
   if (amount > detail.totalPending + 0.001) {
     throw new Error("El abono supera el saldo pendiente.");
   }
+  const account = await sb()
+    .from("payment_accounts")
+    .select("id, name")
+    .eq("id", data.fromAccountId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (account.error) throw new Error(account.error.message);
+  if (!account.data) throw new Error("Selecciona una cuenta activa para registrar el abono.");
 
   const { data: created, error } = await sb()
     .from("manual_provider_debt_payments")
@@ -1882,6 +1942,7 @@ export async function registerManualProviderDebtPayment(
       debt_id: data.debtId,
       amount,
       payment_date: data.paymentDate,
+      from_account_id: data.fromAccountId,
       note: data.note?.trim() || null,
       created_by: await getCurrentUserId(),
     })
@@ -1892,7 +1953,7 @@ export async function registerManualProviderDebtPayment(
   await audit(
     "provider_payment",
     (created?.id as string) ?? data.debtId,
-    `Abono de proveedor · ${detail.debt.provider} · ${amount.toFixed(2)}`,
+    `Abono de proveedor · ${detail.debt.provider} · ${amount.toFixed(2)} · Cuenta: ${account.data.name}`,
   );
   return { paymentId: created.id as string, provider: detail.debt.provider };
 }
@@ -1903,6 +1964,7 @@ export interface SettleProviderDebtData {
   sourceId: string;
   amount: number;
   settlementDate: string;
+  fromAccountId: string;
   note?: string;
   userId: string | null;
 }
@@ -1919,6 +1981,14 @@ export async function settleProviderDebt(data: SettleProviderDebtData): Promise<
   if (pending === undefined) throw new Error("La deuda seleccionada ya no está pendiente.");
   const amount = round2(data.amount);
   if (amount > pending + 0.001) throw new Error("El monto supera el saldo pendiente.");
+  const account = await sb()
+    .from("payment_accounts")
+    .select("id, name")
+    .eq("id", data.fromAccountId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (account.error) throw new Error(account.error.message);
+  if (!account.data) throw new Error("Selecciona una cuenta activa para registrar el abono.");
 
   const payload = {
     provider: data.provider.trim(),
@@ -1926,6 +1996,7 @@ export async function settleProviderDebt(data: SettleProviderDebtData): Promise<
     source_id: data.sourceId,
     amount,
     settlement_date: data.settlementDate,
+    from_account_id: data.fromAccountId,
     note: data.note?.trim() || null,
     created_by: data.userId,
   };
@@ -1953,7 +2024,7 @@ export async function settleProviderDebt(data: SettleProviderDebtData): Promise<
   await audit(
     "settle",
     (row?.id as string) ?? data.sourceId,
-    `Deuda saldada · ${data.provider} · ${amount.toFixed(2)}`,
+    `Deuda saldada · ${data.provider} · ${amount.toFixed(2)} · Cuenta: ${account.data.name}`,
   );
 }
 

@@ -1496,6 +1496,13 @@ function EmployeeDetailSheet({
         );
       })
       .reduce((sum, payment) => sum + payment.amount, 0);
+    if (item.type === "project") {
+      const projectPaid =
+        projectOptions.find((project) => project.id === item.referenceId)?.taskPaid[item.taskName] ?? 0;
+      // Project expense movements and salary payments can represent the same payout.
+      // Use the greater recorded total instead of adding both sources together.
+      return round2(Math.max(thisWeek, projectPaid));
+    }
     return round2(thisWeek);
   }
 

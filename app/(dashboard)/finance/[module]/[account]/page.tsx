@@ -98,7 +98,10 @@ export default async function FinanceAccountPage({
       );
     }
 
-    const detail = await getProviderDebtDetail(account);
+    const [detail, accounts] = await Promise.all([
+      getProviderDebtDetail(account),
+      listPaymentMethods(),
+    ]);
     if (!detail) notFound();
 
     return (
@@ -116,7 +119,7 @@ export default async function FinanceAccountPage({
           </p>
         </div>
 
-        <ProviderDebtDetail detail={detail} />
+        <ProviderDebtDetail detail={detail} accounts={accounts} />
       </div>
     );
   }

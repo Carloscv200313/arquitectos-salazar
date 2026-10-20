@@ -634,6 +634,7 @@ export const manualProviderDebtPaymentSchema = z.object({
   debtId: z.string().uuid("Deuda inválida"),
   paymentDate: isoDate,
   amount: money,
+  fromAccountId: z.string().uuid("Selecciona la cuenta de salida"),
   note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),
 });
 
@@ -747,6 +748,7 @@ export const settleProviderDebtSchema = z.object({
   sourceId: z.string().uuid("Registro inválido"),
   amount: money,
   settlementDate: isoDate,
+  fromAccountId: z.string().uuid("Selecciona la cuenta de salida"),
   note: z.string().trim().max(160, "Máximo 160 caracteres").optional().or(z.literal("")),
 });
 

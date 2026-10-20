@@ -319,6 +319,7 @@ export interface ProviderDebtPayment {
   amount: number;
   note: string | null;
   createdAt: string;
+  accountName: string | null;
 }
 
 export interface ManualProviderDebt {
@@ -338,6 +339,7 @@ export interface ManualProviderDebtPayment {
   payment_date: string;
   amount: number;
   note: string | null;
+  accountName: string | null;
   created_at: string;
   created_by: string | null;
 }

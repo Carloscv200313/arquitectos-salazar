@@ -222,6 +222,7 @@ export async function registerManualProviderDebtPaymentAction(
       debtId: d.debtId,
       amount: d.amount,
       paymentDate: d.paymentDate,
+      fromAccountId: d.fromAccountId,
       note: d.note || null,
       userId: currentUserId(),
     });
@@ -255,6 +256,7 @@ export async function settleProviderDebtAction(raw: unknown): Promise<ActionResu
       sourceId: d.sourceId,
       amount: d.amount,
       settlementDate: d.settlementDate,
+      fromAccountId: d.fromAccountId,
       note: d.note || undefined,
       userId: currentUserId(),
     });
