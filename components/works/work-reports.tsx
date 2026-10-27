@@ -265,7 +265,7 @@ export function WorkReports({
         <Card className="gap-0 overflow-hidden p-0">
           <SectionTitle
             title="Utilidad por administración"
-            description="Suma mensual de movimientos con categoría Honorarios."
+            description="Suma mensual de egresos de la categoría Cuenta de oficina."
             action={
               <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
                 <Clock className="size-4 text-muted-foreground" />

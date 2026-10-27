@@ -93,25 +93,29 @@ test('dashboard agrupa movimientos de 24 proyectos sin cambiar el orden ni los i
 test('8.170 movimientos: utilidad y saldos comparten lectura sin cambiar el dashboard',async()=>{
  const current=await run(root,'dashboard-bundle',12,430,19);
  current.result.wm=current.result.wm.map(m=>({id:m.id,work_id:m.work_id,movement_date:m.movement_date,movement_type:m.movement_type,amount:m.amount}));
- assert.equal(createHash('sha256').update(JSON.stringify(current.result)).digest('hex'),'d666f7a0ed238c9b5b985f56178b2654bd351bd7dc6d79217cbd3a61d5dcb458');
+ assert.equal(createHash('sha256').update(JSON.stringify(current.result)).digest('hex'),'b4a89ec573088c4cbef56592bdc7ad688074a53a5d787c9857553bc372d3efe5');
  assert.ok(current.metrics.queries<72);
  assert.ok(current.metrics.tables.work_movements<34);
  assert.ok(current.metrics.bytes<4_799_941);
  console.log(JSON.stringify({scenario:'dashboard-8170-movements',before:{queries:72,workMovementQueries:34,bytes:4_799_941},after:current.metrics}));
 });
-test('reporte de utilidades de obras conserva exactamente los Honorarios por mes',async()=>{
+test('utilidad de obras usa egresos de Cuenta de oficina por mes en ambos reportes',async()=>{
  const data=fixture(2,45);
+ data.work_movements.push({...data.work_movements[0],id:'office-negative',category:'CUENTA DE OFICINA',movement_type:'expense',amount:-17.25,movement_date:'2026-10-01'});
+ data.work_movements.push({...data.work_movements[0],id:'office-income',category:'Cuenta de oficina',movement_type:'income',amount:999,movement_date:'2026-10-01'});
  const db=database(data);
  const load=createLoader(root,{react:{cache:fn=>fn},'@/lib/supabase/admin':{...db,isAdminConfigured:()=>true},'@/features/auth/get-user':{getCurrentUserId:async()=>null}});
- const actual=await load('lib/data/works').getWorksAdministrationUtilityReport();
+ const works=load('lib/data/works');
+ const actual=await works.getWorksAdministrationUtilityReport();
  const amounts=new Map();
- for(const row of data.work_movements.filter(row=>row.status===1&&row.category==='Honorarios')){
+ for(const row of data.work_movements.filter(row=>row.status===1&&row.movement_type==='expense'&&row.category?.trim().toLowerCase()==='cuenta de oficina')){
   const month=row.movement_date.slice(0,7);
-  amounts.set(month,Math.round(((amounts.get(month)??0)+row.amount)*100)/100);
+  amounts.set(month,Math.round(((amounts.get(month)??0)+Math.abs(row.amount))*100)/100);
  }
  const expected=[...amounts].sort(([a],[b])=>a.localeCompare(b)).map(([month,amount])=>({month,amount}));
  assert.deepEqual(actual,expected);
  assert.equal(db.metrics.tables.work_movements,2);
+ assert.deepEqual(await works.getWorkAdministrationUtilities('w1'),expected);
 });
 test('30 llamadas a obras en un render comparten movimientos; 30 navegaciones los vuelven a consultar',async()=>{
  const rows=fixtureManyWorks(19,2,40);

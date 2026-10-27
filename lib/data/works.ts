@@ -55,6 +55,10 @@ function normalizedWorkCategory(value: unknown) {
     .toLowerCase();
 }
 
+function isOfficeUtilityMovement(movement: { category: unknown; movement_type: string }) {
+  return movement.movement_type === "expense" && normalizedWorkCategory(movement.category) === "cuenta de oficina";
+}
+
 function sb() {
   return createAdminClient("works");
 }
@@ -492,9 +496,9 @@ async function getWorkAdministrationUtilitiesUncached(
   const movements = await movementsOf(workId);
   const byMonth = new Map<string, number>();
   for (const m of movements) {
-    if (m.category !== "Honorarios") continue;
+    if (!isOfficeUtilityMovement(m)) continue;
     const month = m.movement_date.slice(0, 7);
-    byMonth.set(month, round2((byMonth.get(month) ?? 0) + m.amount));
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(m.amount)));
   }
   return [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -650,9 +654,9 @@ export async function getWorksAdministrationUtilityReport(): Promise<
   const data = await listActiveWorkMovementFacts();
   const byMonth = new Map<string, number>();
   for (const m of data) {
-    if (m.category !== "Honorarios") continue;
+    if (!isOfficeUtilityMovement(m)) continue;
     const month = (m.movement_date as string).slice(0, 7);
-    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Number(m.amount)));
+    byMonth.set(month, round2((byMonth.get(month) ?? 0) + Math.abs(Number(m.amount))));
   }
   return [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
