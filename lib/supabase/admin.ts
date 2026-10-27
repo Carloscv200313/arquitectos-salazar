@@ -1,6 +1,8 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
+import { databaseFetch } from "./transport";
+import { validateProductionConfig } from "./config-validation";
 import { SUPABASE_URL } from "./env";
 
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -11,8 +13,10 @@ export function isAdminConfigured(): boolean {
 
 // Service-role client. SERVER ONLY — bypasses RLS. Never import in client code.
 // Auth is enforced by our own session (lib/auth/session), not by Supabase Auth.
-export function createAdminClient() {
+export function createAdminClient(module = "application") {
+  validateProductionConfig(process.env);
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    global: { fetch: databaseFetch(module) },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

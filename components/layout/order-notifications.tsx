@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { notificationRefreshDelayMs, notificationRequestIsTerminal } from "./notification-timing";
 
 const UNREAD_KEY = "arquitectos-salazar:public-order-notifications";
 const UNSEEN_IDS_KEY = "arquitectos-salazar:public-order-notification-ids";
@@ -70,12 +71,12 @@ function playBellSound() {
   }, 1100);
 }
 
-async function fetchPublicOrders(since?: string | null): Promise<PublicOrderNotification[]> {
+async function fetchPublicOrders(since?: string | null, signal?: AbortSignal): Promise<PublicOrderNotification[]> {
   const url = since
     ? `/api/order-notifications?since=${encodeURIComponent(since)}`
     : "/api/order-notifications";
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error("No se pudieron leer las notificaciones.");
+  const response = await fetch(url, { cache: "no-store", signal });
+  if (!response.ok) throw Object.assign(new Error("No se pudieron leer las notificaciones."), { status: response.status });
   const payload = (await response.json()) as { orders?: PublicOrderNotification[] };
   return payload.orders ?? [];
 }
@@ -110,6 +111,57 @@ export function OrderNotifications() {
 
   useEffect(() => {
     let active = true;
+    let inFlight = false;
+    let stopped = false;
+    let live = false;
+    let failures = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
+    const seen = new Set<string>();
+
+    function schedule() {
+      clearTimeout(timer);
+      if (!active || stopped || document.hidden) return;
+      // Realtime remains primary; a heartbeat recovers missed/unauthorized events.
+      const delay = notificationRefreshDelayMs(live, failures);
+      timer = setTimeout(() => void refresh(), delay);
+    }
+
+    async function refresh() {
+      if (!active || stopped || inFlight || document.hidden) return;
+      inFlight = true;
+      controller = new AbortController();
+      try {
+        const incoming = await fetchPublicOrders(hydratedRef.current ? latestSeenRef.current : null, controller.signal);
+        if (!active) return;
+        failures = 0;
+        setStatus(live ? "live" : "fallback");
+        if (!hydratedRef.current) {
+          setOrders(incoming);
+          incoming.forEach(order => seen.add(order.id));
+          latestSeenRef.current = incoming[0]?.createdAt ?? new Date().toISOString();
+          hydratedRef.current = true;
+        } else {
+          for (const order of incoming) {
+            if (!seen.has(order.id)) { seen.add(order.id); registerIncoming(order, true); }
+            if (!latestSeenRef.current || order.createdAt > latestSeenRef.current) latestSeenRef.current = order.createdAt;
+          }
+        }
+        // Bound client memory; retained notifications already have server timestamps.
+        if (seen.size > 1000) { const recent = [...seen].slice(-100); seen.clear(); recent.forEach(id => seen.add(id)); }
+      } catch (error) {
+        if (!active) return;
+        const status = (error as { status?: number }).status;
+        stopped = notificationRequestIsTerminal(status);
+        failures++;
+        setStatus("error");
+      } finally { inFlight = false; schedule(); }
+    }
+
+    function visibilityChanged() {
+      clearTimeout(timer);
+      if (!document.hidden) void refresh();
+    }
 
     function registerIncoming(order: PublicOrderNotification, notify: boolean) {
       setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)].slice(0, 5));
@@ -135,42 +187,8 @@ export function OrderNotifications() {
       }
     }
 
-    async function loadRecent() {
-      try {
-        const nextOrders = await fetchPublicOrders();
-        if (!active) return;
-        setOrders(nextOrders);
-        setStatus((current) => (current === "live" ? "live" : "fallback"));
-        if (!latestSeenRef.current && nextOrders[0]) {
-          latestSeenRef.current = nextOrders[0].createdAt;
-        }
-        hydratedRef.current = true;
-      } catch {
-        if (active) setStatus("error");
-      }
-    }
-
-    async function pollNewOrders() {
-      if (!hydratedRef.current) return;
-      const since = latestSeenRef.current;
-      try {
-        const incoming = await fetchPublicOrders(since);
-        if (!active) return;
-        setStatus((current) => (current === "live" ? "live" : "fallback"));
-        if (!incoming.length) return;
-        for (const order of incoming) {
-          registerIncoming(order, true);
-          latestSeenRef.current = order.createdAt;
-        }
-      } catch {
-        if (active) setStatus("error");
-      }
-    }
-
-    void loadRecent();
-    const pollId = window.setInterval(() => {
-      void pollNewOrders();
-    }, 15000);
+    void refresh();
+    document.addEventListener("visibilitychange", visibilityChanged);
 
     const channel = supabase
       ?.channel("public-work-order-notifications")
@@ -185,17 +203,21 @@ export function OrderNotifications() {
         async (payload) => {
           const id = String(payload.new.id ?? "");
           if (!id) return;
-          void pollNewOrders();
+          void refresh();
         },
       )
       .subscribe((status) => {
         if (!active) return;
-        if (status === "SUBSCRIBED") setStatus("live");
+        live = status === "SUBSCRIBED";
+        if (!stopped) setStatus(live ? "live" : "fallback");
+        schedule();
       });
 
     return () => {
       active = false;
-      window.clearInterval(pollId);
+      clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener("visibilitychange", visibilityChanged);
       if (channel) void supabase?.removeChannel(channel);
     };
   }, [supabase]);

@@ -1,3 +1,6 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
+import { traceScreen } from "@/lib/supabase/telemetry";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -15,7 +18,10 @@ export default async function WorkOrdersPage({
 }: {
   params: Promise<{ workId: string }>;
 }) {
+  const user = await requirePermission("orders.view");
+
   const { workId } = await params;
+  return traceScreen("orders-detail", user.id, async () => {
   const [work, orders, methods, providers, categories] = await Promise.all([
     getWork(workId),
     listWorkOrders(workId),
@@ -49,4 +55,5 @@ export default async function WorkOrdersPage({
       <WorkOrdersView work={work} orders={orders} methods={methods} providers={providers} categories={categories} />
     </div>
   );
+  });
 }

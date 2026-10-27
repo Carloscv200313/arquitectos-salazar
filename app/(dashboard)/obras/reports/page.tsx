@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import {
@@ -10,6 +12,8 @@ import { WorkReports } from "@/components/works/work-reports";
 export const metadata = { title: "Reportes de obras" };
 
 export default async function WorkReportsPage() {
+  await requirePermission("works.view");
+
   const [works, paymentMethodRows, administrationUtilities] = await Promise.all([
     listWorks(),
     getWorksPaymentMethodReport(),

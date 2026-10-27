@@ -1,10 +1,11 @@
 "use server";
+import { requirePermission } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   createWorkOrder,
-  getWorkOrder,
   quoteWorkOrder,
   registerWorkOrderPayment,
   updateWorkOrder,
@@ -53,6 +54,8 @@ function revalidateOrderSurfaces(workId?: string) {
 export async function createWorkOrderAction(
   raw: unknown,
 ): Promise<ActionResult<{ orderId: string }>> {
+  await requirePermission("orders.edit");
+
   const parsed = createWorkOrderSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -80,6 +83,8 @@ export async function createWorkOrderAction(
 }
 
 export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = quoteWorkOrderSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -91,7 +96,7 @@ export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> 
 
   try {
     const d = parsed.data;
-    await quoteWorkOrder({
+    const workId = await quoteWorkOrder({
       orderId: d.orderId,
       quoteDate: d.quoteDate,
       category: d.category,
@@ -100,8 +105,7 @@ export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> 
       advancePaymentMethodId: d.registerAdvance ? d.advancePaymentMethodId : undefined,
       userId: await getCurrentUserId(),
     });
-    const order = await getWorkOrder(d.orderId);
-    revalidateOrderSurfaces(order?.work_id);
+    revalidateOrderSurfaces(workId);
     return { ok: true, data: undefined };
   } catch (error) {
     return {
@@ -113,6 +117,8 @@ export async function quoteWorkOrderAction(raw: unknown): Promise<ActionResult> 
 }
 
 export async function editWorkOrderAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = editWorkOrderSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -142,6 +148,8 @@ export async function editWorkOrderAction(raw: unknown): Promise<ActionResult> {
 export async function toggleWorkOrderRequestedAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = z
     .object({
       orderId: z.string().uuid("Pedido inválido"),
@@ -175,6 +183,8 @@ export async function toggleWorkOrderRequestedAction(
 export async function registerWorkOrderPaymentAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = registerWorkOrderPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -186,7 +196,7 @@ export async function registerWorkOrderPaymentAction(
 
   try {
     const d = parsed.data;
-    await registerWorkOrderPayment({
+    const workId = await registerWorkOrderPayment({
       orderId: d.orderId,
       paymentDate: d.paymentDate,
       description: d.description || undefined,
@@ -194,8 +204,7 @@ export async function registerWorkOrderPaymentAction(
       paymentMethodId: d.paymentMethodId,
       userId: await getCurrentUserId(),
     });
-    const order = await getWorkOrder(d.orderId);
-    revalidateOrderSurfaces(order?.work_id);
+    revalidateOrderSurfaces(workId);
     return { ok: true, data: undefined };
   } catch (error) {
     return {
@@ -206,6 +215,8 @@ export async function registerWorkOrderPaymentAction(
 }
 
 export async function editWorkOrderPaymentAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = editOrderPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -237,6 +248,8 @@ export async function editWorkOrderPaymentAction(raw: unknown): Promise<ActionRe
 }
 
 export async function deleteWorkOrderPaymentAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("orders.edit");
+
   const parsed = deleteOrderPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {

@@ -1,4 +1,6 @@
 import "server-only";
+import { requirePermission, requireUser } from "@/lib/auth/authorize";
+
 
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
@@ -143,7 +145,7 @@ async function renameWorkCategoryUsage(
 
 export async function listEmployees(): Promise<Employee[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("employees")
     .select("id, full_name, default_work_type, status")
     .eq("status", 1)
@@ -155,7 +157,9 @@ export async function createEmployee(input: {
   fullName: string;
   defaultWorkType: Employee["default_work_type"];
 }) {
-  const { error } = await createAdminClient().from("employees").insert({
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("employees").insert({
     full_name: input.fullName.trim(),
     default_work_type: input.defaultWorkType,
     created_by: await getCurrentUserId(),
@@ -168,7 +172,9 @@ export async function updateEmployee(input: {
   fullName: string;
   defaultWorkType: Employee["default_work_type"];
 }) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("employees")
     .update({ full_name: input.fullName.trim(), default_work_type: input.defaultWorkType })
     .eq("id", input.id);
@@ -176,7 +182,9 @@ export async function updateEmployee(input: {
 }
 
 export async function hideEmployee(id: string) {
-  const { error } = await createAdminClient().from("employees").update({ status: 0 }).eq("id", id);
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("employees").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -184,7 +192,7 @@ export async function hideEmployee(id: string) {
 
 export async function listPaymentAccounts(): Promise<PaymentAccount[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("payment_accounts")
     .select("id, name, description, status")
     .eq("status", 1)
@@ -193,7 +201,9 @@ export async function listPaymentAccounts(): Promise<PaymentAccount[]> {
 }
 
 export async function createPaymentAccount(input: { name: string; description?: string }) {
-  const { error } = await createAdminClient().from("payment_accounts").insert({
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("payment_accounts").insert({
     name: input.name.trim(),
     description: input.description?.trim() || null,
     created_by: await getCurrentUserId(),
@@ -206,7 +216,9 @@ export async function updatePaymentAccount(input: {
   name: string;
   description?: string;
 }) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("payment_accounts")
     .update({ name: input.name.trim(), description: input.description?.trim() || null })
     .eq("id", input.id);
@@ -214,7 +226,9 @@ export async function updatePaymentAccount(input: {
 }
 
 export async function hidePaymentAccount(id: string) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("payment_accounts")
     .update({ status: 0 })
     .eq("id", id);
@@ -225,7 +239,7 @@ export async function hidePaymentAccount(id: string) {
 
 export async function listTaskTypes(): Promise<TaskType[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("task_types")
     .select("id, name, module_type, status")
     .eq("status", 1)
@@ -237,7 +251,9 @@ export async function createTaskType(input: {
   name: string;
   moduleType: TaskType["module_type"];
 }) {
-  const { error } = await createAdminClient().from("task_types").insert({
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("task_types").insert({
     name: input.name.trim(),
     module_type: input.moduleType,
     created_by: await getCurrentUserId(),
@@ -250,7 +266,9 @@ export async function updateTaskType(input: {
   name: string;
   moduleType: TaskType["module_type"];
 }) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("task_types")
     .update({ name: input.name.trim(), module_type: input.moduleType })
     .eq("id", input.id);
@@ -258,7 +276,9 @@ export async function updateTaskType(input: {
 }
 
 export async function hideTaskType(id: string) {
-  const { error } = await createAdminClient().from("task_types").update({ status: 0 }).eq("id", id);
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("task_types").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -266,7 +286,7 @@ export async function hideTaskType(id: string) {
 
 export async function listProviders(): Promise<Provider[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("providers")
     .select("id, name, status")
     .eq("status", 1)
@@ -282,7 +302,9 @@ export async function listProviderNames(): Promise<string[]> {
 }
 
 export async function createProvider(input: { name: string }) {
-  const { error } = await createAdminClient().from("providers").insert({
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("providers").insert({
     name: input.name.trim(),
     created_by: await getCurrentUserId(),
   });
@@ -290,7 +312,9 @@ export async function createProvider(input: { name: string }) {
 }
 
 export async function updateProvider(input: { id: string; name: string }) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("providers")
     .update({ name: input.name.trim() })
     .eq("id", input.id);
@@ -298,7 +322,9 @@ export async function updateProvider(input: { id: string; name: string }) {
 }
 
 export async function hideProvider(id: string) {
-  const { error } = await createAdminClient().from("providers").update({ status: 0 }).eq("id", id);
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("providers").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
@@ -306,7 +332,7 @@ export async function hideProvider(id: string) {
 
 export async function listWorkCategories(): Promise<WorkCategory[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("work_categories")
     .select("id, name, status")
     .eq("status", 1)
@@ -322,7 +348,9 @@ export async function listWorkCategoryNames(): Promise<string[]> {
 }
 
 export async function createWorkCategory(input: { name: string }) {
-  const { error } = await createAdminClient().from("work_categories").insert({
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings").from("work_categories").insert({
     name: input.name.trim(),
     created_by: await getCurrentUserId(),
   });
@@ -330,7 +358,9 @@ export async function createWorkCategory(input: { name: string }) {
 }
 
 export async function updateWorkCategory(input: { id: string; name: string }) {
-  const client = createAdminClient();
+  await requirePermission("settings.edit");
+
+  const client = createAdminClient("settings");
   const nextName = input.name.trim();
 
   const { data: current, error: currentError } = await client
@@ -363,7 +393,9 @@ export async function updateWorkCategory(input: { id: string; name: string }) {
 }
 
 export async function hideWorkCategory(id: string) {
-  const { error } = await createAdminClient()
+  await requirePermission("settings.edit");
+
+  const { error } = await createAdminClient("settings")
     .from("work_categories")
     .update({ status: 0 })
     .eq("id", id);
@@ -374,7 +406,7 @@ export async function hideWorkCategory(id: string) {
 
 export async function listHelpItems(): Promise<HelpItem[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("settings")
     .from("help_items")
     .select("id, title, content, section, order_index")
     .eq("status", 1)
@@ -386,9 +418,11 @@ export async function listHelpItems(): Promise<HelpItem[]> {
 /* --------------------------------------------------------------- Profile */
 
 export async function updateProfileName(fullName: string) {
+  await requireUser();
+
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("Sesión no válida");
-  const { error } = await createAdminClient()
+  const { error } = await createAdminClient("settings")
     .from("users")
     .update({ full_name: fullName.trim() })
     .eq("id", userId);
@@ -396,9 +430,11 @@ export async function updateProfileName(fullName: string) {
 }
 
 export async function changePassword(newPassword: string) {
+  await requireUser();
+
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("Sesión no válida");
-  const { error } = await createAdminClient().rpc("admin_set_password", {
+  const { error } = await createAdminClient("settings").rpc("admin_set_password", {
     p_user_id: userId,
     p_password: newPassword,
   });

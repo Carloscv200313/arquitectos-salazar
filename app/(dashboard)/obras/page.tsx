@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import { Suspense } from "react";
 import Link from "next/link";
 import { FileText, Plus } from "lucide-react";
@@ -28,6 +30,8 @@ export default async function WorksPage({
 }: {
   searchParams: SearchParams;
 }) {
+  await requirePermission("works.view");
+
   const sp = await searchParams;
   const status = (sp.status as WorkFilterStatus | "all" | undefined) ?? "all";
   const filters: WorkFilters = {

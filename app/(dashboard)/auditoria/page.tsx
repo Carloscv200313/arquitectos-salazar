@@ -1,19 +1,23 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import { notFound } from "next/navigation";
 import { getCurrentAppUser } from "@/features/auth/get-user";
 import { hasPermission } from "@/lib/auth/permissions";
-import { listAuditLogs } from "@/lib/data/audit";
+import { listAuditPage } from "@/lib/data/audit";
 import { listPaymentMethods } from "@/lib/data/projects";
 import { AuditView } from "@/components/audit/audit-view";
 
 export const metadata = { title: "Auditoría" };
 
 export default async function AuditPage() {
+  await requirePermission("audit.view");
+
   const user = await getCurrentAppUser();
   // Solo quien tenga el permiso puede ver el log central.
   if (user && !hasPermission(user.permissions, "audit.view")) notFound();
 
   const [logs, methods] = await Promise.all([
-    listAuditLogs({ limit: 300 }),
+    listAuditPage(),
     listPaymentMethods(),
   ]);
   // Mapa id→nombre para mostrar la forma de pago legible en los cambios.
@@ -27,7 +31,7 @@ export default async function AuditPage() {
           Registro central de todos los movimientos: creados, editados y eliminados.
         </p>
       </div>
-      <AuditView logs={logs} methodNames={methodNames} />
+      <AuditView logs={logs.rows} total={logs.total} methodNames={methodNames} />
     </div>
   );
 }

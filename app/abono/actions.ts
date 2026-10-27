@@ -1,9 +1,13 @@
 "use server";
+import { issueDocumentToken } from "@/lib/security/document-token";
+import { receiptResource } from "@/lib/security/documents";
+import { searchPublicEntities } from "@/lib/data/public-search";
+import { limitPublicRequest } from "@/lib/security/rate-limit";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { listProjects, getProject, registerMovement } from "@/lib/data/projects";
-import { listWorks, getWork, registerWorkMovement } from "@/lib/data/works";
+import { getPublicProjectPending, registerMovement } from "@/lib/data/projects";
+import { activeWorkExists, registerWorkMovement } from "@/lib/data/works";
 import { WORK_INCOME_CATEGORY } from "@/lib/constants";
 import { hasMaxTwoDecimals, round2 } from "@/lib/calculations";
 
@@ -25,46 +29,10 @@ export interface PayableHit {
 }
 
 export async function searchPayables(query: string): Promise<PayableHit[]> {
-  const q = query.trim().toLowerCase();
-  if (q.length < 2) return [];
+  await limitPublicRequest("search-payables");
+  const [projects, works] = await Promise.all([searchPublicEntities("projects", query), searchPublicEntities("works", query)]);
+  return [...projects.map(p => ({ ...p, kind: "project" as const })), ...works.map(w => ({ ...w, kind: "work" as const }))].slice(0, 20);
 
-  // Fetch unfiltered, then match across name + client + address so the search
-  // also works by the client's name (not just the project/obra name).
-  const [projects, works] = await Promise.all([listProjects(), listWorks()]);
-
-  const projectHits: PayableHit[] = projects
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.client.name.toLowerCase().includes(q) ||
-        (p.address?.toLowerCase().includes(q) ?? false),
-    )
-    .map((p) => ({
-      kind: "project",
-      id: p.id,
-      name: p.name,
-      clientName: p.client.name,
-      address: p.address ?? null,
-      pending: p.finance.pending,
-    }));
-
-  const workHits: PayableHit[] = works
-    .filter(
-      (w) =>
-        w.name.toLowerCase().includes(q) ||
-        w.client.name.toLowerCase().includes(q) ||
-        (w.address?.toLowerCase().includes(q) ?? false),
-    )
-    .map((w) => ({
-      kind: "work",
-      id: w.id,
-      name: w.name,
-      clientName: w.client.name,
-      address: w.address ?? null,
-      pending: null,
-    }));
-
-  return [...projectHits, ...workHits].slice(0, 20);
 }
 
 const isoDate = z
@@ -86,10 +54,11 @@ const publicAbonoSchema = z.object({
 });
 
 export type PublicAbonoResult =
-  | { ok: true; receiptKind: "proyecto" | "obra"; receiptId: string }
+  | { ok: true; receiptKind: "proyecto" | "obra"; receiptId: string; receiptToken: string }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResult> {
+  await limitPublicRequest("create-abono", 10);
   const parsed = publicAbonoSchema.safeParse(raw);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -103,13 +72,13 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
 
   try {
     if (d.kind === "project") {
-      const project = await getProject(d.id);
-      if (!project) return { ok: false, error: "Proyecto no encontrado." };
+      const pending = await getPublicProjectPending(d.id);
+      if (pending === null) return { ok: false, error: "Proyecto no encontrado." };
       // Income cannot exceed what's left to collect.
-      if (d.amount > project.finance.pending + 0.001) {
+      if (d.amount > pending + 0.001) {
         return {
           ok: false,
-          error: `El abono supera el saldo pendiente (${project.finance.pending.toFixed(2)}).`,
+          error: `El abono supera el saldo pendiente (${pending.toFixed(2)}).`,
           fieldErrors: { amount: "Supera el saldo pendiente" },
         };
       }
@@ -125,12 +94,11 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
       });
       revalidatePath("/projects");
       revalidatePath(`/projects/${d.id}`);
-      return { ok: true, receiptKind: "proyecto", receiptId: created.id };
+      return { ok: true, receiptKind: "proyecto", receiptId: created.id, receiptToken: issueDocumentToken(receiptResource("proyecto", created.id)) };
     }
 
     // kind === "work" — ledger, no fixed total to cap against.
-    const work = await getWork(d.id);
-    if (!work) return { ok: false, error: "Obra no encontrada." };
+    if (!(await activeWorkExists(d.id))) return { ok: false, error: "Obra no encontrada." };
     const created = await registerWorkMovement({
       workId: d.id,
       receipt: "", // income auto-genera código OBR
@@ -146,7 +114,7 @@ export async function registerPublicAbono(raw: unknown): Promise<PublicAbonoResu
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.id}`);
-    return { ok: true, receiptKind: "obra", receiptId: created.id };
+    return { ok: true, receiptKind: "obra", receiptId: created.id, receiptToken: issueDocumentToken(receiptResource("obra", created.id)) };
   } catch {
     return { ok: false, error: "No se pudo registrar el abono. Intenta nuevamente." };
   }

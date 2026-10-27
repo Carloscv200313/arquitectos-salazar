@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, User, CalendarDays, MapPin } from "lucide-react";
@@ -15,6 +17,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("projects.view");
+
   const { id } = await params;
   const project = await getProject(id);
   return { title: project?.name ?? "Proyecto" };
@@ -25,6 +29,8 @@ export default async function ProjectDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("projects.view");
+
   const { id } = await params;
   const [project, payments, methods, employees] = await Promise.all([
     getProject(id),

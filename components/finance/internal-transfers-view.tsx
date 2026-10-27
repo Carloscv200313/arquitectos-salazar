@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Loader2, Plus, WalletCards } from "lucide-react";
+import { ArrowLeftRight, Loader2, Plus, WalletCards } from "lucide-react";
 import { registerFinanceInternalTransferAction } from "@/app/(dashboard)/finance/actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -358,7 +358,6 @@ export function InternalTransfersView({
   transfers: WorkInternalTransferWithMethods[];
 }) {
   const [open, setOpen] = useState(false);
-  const [officePage, setOfficePage] = useState(0);
   const totalInternalMovements = round2(
     paymentMethodRows.reduce((sum, row) => sum + row.internalMovements, 0),
   );
@@ -369,8 +368,6 @@ export function InternalTransfersView({
     (transfer) => transfer.from_account_bucket === "office" || transfer.to_account_bucket === "office",
   );
   const officeTotal = round2(officeTransfers.reduce((sum, transfer) => sum + transfer.amount, 0));
-  const officePageCount = Math.ceil(officeTransfers.length / 10);
-  const visibleOfficeTransfers = officeTransfers.slice(officePage * 10, officePage * 10 + 10);
 
   return (
     <>
@@ -415,7 +412,7 @@ export function InternalTransfersView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibleOfficeTransfers.map((transfer) => (
+              {officeTransfers.map((transfer) => (
                   <TableRow key={transfer.id}>
                     <TableCell className="px-5 whitespace-nowrap text-muted-foreground">
                       {formatDate(transfer.transfer_date)}
@@ -442,7 +439,7 @@ export function InternalTransfersView({
                 </TableRow>
               )}
               {officeTransfers.length > 0 && (
-                <TableRow className="bg-muted/30 font-semibold">
+                <TableRow pinned className="bg-muted/30 font-semibold">
                   <TableCell colSpan={4} className="px-5 text-muted-foreground">
                     {officeTransfers.length} movimientos
                   </TableCell>
@@ -453,33 +450,6 @@ export function InternalTransfersView({
               )}
             </TableBody>
           </Table>
-          {officePageCount > 1 && (
-            <div className="flex items-center justify-between border-t px-5 py-3 text-sm text-muted-foreground">
-              <span>
-                {officeTransfers.length} movimientos · Página {officePage + 1} de {officePageCount}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Página anterior"
-                  disabled={officePage === 0}
-                  onClick={() => setOfficePage((page) => Math.max(0, page - 1))}
-                >
-                  <ChevronLeft className="size-4" />
-                </Button>
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label="Página siguiente"
-                  disabled={officePage + 1 >= officePageCount}
-                  onClick={() => setOfficePage((page) => Math.min(officePageCount - 1, page + 1))}
-                >
-                  <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
-          )}
         </Card>
 
         <Card className="gap-0 overflow-hidden p-0">

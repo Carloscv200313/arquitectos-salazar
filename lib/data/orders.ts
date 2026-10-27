@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { round2 } from "@/lib/calculations";
 import type {
@@ -13,11 +14,24 @@ import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
 import { getWork, listWorks, nextWorkFolioCode } from "./works";
 import { writeAudit } from "./audit";
+import { WORK_ORDER_COLUMNS, WORK_ORDER_PAYMENT_COLUMNS } from "./columns";
 
 type Row = Record<string, unknown>;
 
 function sb() {
-  return createAdminClient();
+  return createAdminClient("orders");
+}
+
+// Shared by the dashboard order summary and provider-debt calculation in one render.
+const loadAllWorkOrderRows = cache(async (): Promise<Row[]> => {
+  const { data, error } = await sb().from("work_orders").select(WORK_ORDER_COLUMNS).eq("status", 1);
+  if (error) throw new Error("No se pudieron consultar los pedidos.");
+  return (data ?? []) as Row[];
+});
+
+export async function listLinkedPayableMovementIds(): Promise<Set<string>> {
+  const rows = await loadAllWorkOrderRows();
+  return new Set(rows.map(row => row.payable_movement_id as string).filter(Boolean));
 }
 
 function mapMethod(r: Row): PaymentMethod {
@@ -86,7 +100,7 @@ function statusFor(amount: number | null, paid: number, pending: number): WorkOr
 async function paymentsOf(orderId: string): Promise<WorkOrderPaymentWithMethod[]> {
   const { data } = await sb()
     .from("work_order_payments")
-    .select("*, method:payment_accounts(id, name, created_at)")
+    .select(`${WORK_ORDER_PAYMENT_COLUMNS}, method:payment_accounts(id, name, created_at)`)
     .eq("order_id", orderId)
     .eq("status", 1);
   return (data ?? [])
@@ -121,13 +135,12 @@ export async function listOrderWorks(): Promise<
 > {
   if (!isAdminConfigured()) return [];
   const client = sb();
-  const [works, ordersRes, paymentsRes] = await Promise.all([
+  const [works, orders, paymentsRes] = await Promise.all([
     listWorks(),
-    client.from("work_orders").select("*").eq("status", 1),
+    loadAllWorkOrderRows(),
     client.from("work_order_payments").select("order_id, amount").eq("status", 1),
   ]);
 
-  const orders = ordersRes.data ?? [];
   const paidByOrder = new Map<string, number>();
   for (const p of paymentsRes.data ?? []) {
     const id = p.order_id as string;
@@ -185,20 +198,72 @@ export async function updateWorkOrderRequested(
 
 export async function listWorkOrders(workId: string): Promise<WorkOrderWithRelations[]> {
   if (!isAdminConfigured()) return [];
-  const { data } = await sb()
-    .from("work_orders")
-    .select("*")
-    .eq("work_id", workId)
-    .eq("status", 1)
-    .order("order_date", { ascending: false });
-  const rows = await Promise.all((data ?? []).map((r) => enrich(mapOrder(r))));
-  return rows.filter((row): row is WorkOrderWithRelations => row !== null);
+  const work = await getWork(workId);
+  if (!work) return [];
+  return listOrdersForWorks([work], workId);
+}
+
+/** One orders query and one payments query, independent of the number of orders. */
+export async function listOrdersForWorks(works: WorkWithFinance[], workId?: string): Promise<WorkOrderWithRelations[]> {
+  if (!works.length) return [];
+  let rows: Row[];
+  if (workId) {
+    const { data, error } = await sb().from("work_orders").select(WORK_ORDER_COLUMNS).eq("status", 1)
+      .eq("work_id", workId).order("order_date", { ascending: false });
+    if (error) throw new Error("No se pudieron consultar los pedidos.");
+    rows = (data ?? []) as Row[];
+  } else {
+    rows = await loadAllWorkOrderRows();
+  }
+  const orders = rows.map(mapOrder).sort((a, b) => b.order_date.localeCompare(a.order_date));
+  const workById = new Map(works.map(work => [work.id, work]));
+  const paymentByOrder = new Map<string, WorkOrderPaymentWithMethod[]>();
+  // Filtering by the selected work's orders avoids an oversized URL in global reports.
+  const ids = orders.map(order => order.id);
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const { data: payments, error: paymentError } = await sb().from("work_order_payments")
+      .select(`${WORK_ORDER_PAYMENT_COLUMNS}, method:payment_accounts(id, name, created_at)`).eq("status", 1)
+      .in("order_id", ids.slice(offset, offset + 100));
+    if (paymentError) throw new Error("No se pudieron consultar los pagos.");
+    for (const row of payments ?? []) {
+      const payment = mapPayment(row);
+      const bucket = paymentByOrder.get(payment.order_id) ?? [];
+      bucket.push(payment);
+      paymentByOrder.set(payment.order_id, bucket);
+    }
+  }
+  return orders.flatMap(order => {
+    const work = workById.get(order.work_id);
+    if (!work) return [];
+    const payments = (paymentByOrder.get(order.id) ?? []).sort((a, b) => a.payment_date.localeCompare(b.payment_date) || a.created_at.localeCompare(b.created_at));
+    const paid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+    const pending = order.amount === null ? 0 : round2(Math.max(order.amount - paid, 0));
+    return [{ ...order, work, payments, paid, pending, status: statusFor(order.amount, paid, pending) }];
+  });
 }
 
 export async function getWorkOrder(id: string): Promise<WorkOrderWithRelations | null> {
   if (!isAdminConfigured()) return null;
-  const { data } = await sb().from("work_orders").select("*").eq("id", id).maybeSingle();
+  const { data } = await sb().from("work_orders").select(WORK_ORDER_COLUMNS).eq("id", id).maybeSingle();
   return data ? enrich(mapOrder(data)) : null;
+}
+
+/** A payment needs the order balance, not the work's complete movement history. */
+export async function getWorkOrderPaymentState(id: string) {
+  const { data, error } = await sb().from("work_orders")
+    .select("id,work_id,material,amount").eq("id", id).maybeSingle();
+  if (error) throw new Error("No se pudo consultar el pedido.");
+  if (!data) return null;
+  const payments = await paymentsOf(id);
+  const paid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
+  const amount = data.amount === null ? null : Number(data.amount);
+  return {
+    id: data.id as string,
+    work_id: data.work_id as string,
+    material: data.material as string,
+    amount,
+    pending: amount === null ? 0 : round2(Math.max(amount - paid, 0)),
+  };
 }
 
 export interface CreateWorkOrderData {
@@ -242,12 +307,12 @@ export interface QuoteWorkOrderData {
   userId: string | null;
 }
 
-export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<void> {
+export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<string> {
   const client = sb();
   const userId = await getCurrentUserId();
   const { data: orderRow } = await client
     .from("work_orders")
-    .select("*")
+    .select("id,work_id,amount,material,supplier,description")
     .eq("id", data.orderId)
     .maybeSingle();
   if (!orderRow) throw new Error("Pedido no encontrado");
@@ -327,6 +392,7 @@ export async function quoteWorkOrder(data: QuoteWorkOrderData): Promise<void> {
   }
 
   await client.from("work_orders").update(updates).eq("id", order.id);
+  return order.work_id;
 }
 
 export interface RegisterWorkOrderPaymentData {
@@ -340,10 +406,10 @@ export interface RegisterWorkOrderPaymentData {
 
 export async function registerWorkOrderPayment(
   data: RegisterWorkOrderPaymentData,
-): Promise<void> {
+): Promise<string> {
   const client = sb();
   const userId = await getCurrentUserId();
-  const order = await getWorkOrder(data.orderId);
+  const order = await getWorkOrderPaymentState(data.orderId);
   if (!order) throw new Error("Pedido no encontrado");
   if (order.amount === null) throw new Error("Primero registra el monto del pedido");
 
@@ -390,6 +456,7 @@ export async function registerWorkOrderPayment(
     amount,
     description: `Abono pedido · ${order.material}`,
   });
+  return order.work_id;
 }
 
 async function orderPaymentSnapshot(id: string) {
@@ -436,7 +503,7 @@ export async function updateWorkOrder(
 ): Promise<void> {
   const client = sb();
   const userId = await getCurrentUserId();
-  const { data: orderRow } = await client.from("work_orders").select("*").eq("id", id).maybeSingle();
+  const { data: orderRow } = await client.from("work_orders").select(WORK_ORDER_COLUMNS).eq("id", id).maybeSingle();
   if (!orderRow || (orderRow.status as number) === 0) throw new Error("Pedido no encontrado.");
 
   const order = mapOrder(orderRow);

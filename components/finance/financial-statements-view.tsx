@@ -261,13 +261,31 @@ function StatementTable({
           </Button>
         </div>
       </div>
-      <Table className={showPercent ? "w-max min-w-[1680px]" : "w-max min-w-[1080px]"}>
+      <Table
+        className={cn(
+          "table-fixed",
+          showPercent ? "w-max min-w-[1680px]" : "w-max min-w-[1080px]",
+        )}
+      >
+        <colgroup>
+          <col style={{ width: 300, minWidth: 300 }} />
+          {months.flatMap((month) =>
+            showPercent ? (
+              [
+                <col key={`${month.key}-amount-col`} style={{ width: 120, minWidth: 120 }} />,
+                <col key={`${month.key}-percent-col`} style={{ width: 120, minWidth: 120 }} />,
+              ]
+            ) : (
+              <col key={`${month.key}-amount-col`} style={{ width: 120, minWidth: 120 }} />
+            ),
+          )}
+        </colgroup>
         <TableHeader className="bg-muted/40">
           <TableRow>
             <TableHead
               rowSpan={showPercent ? 2 : 1}
               className={cn(
-                "sticky left-0 z-20 w-max min-w-[max-content] border-r bg-muted px-5 pr-8 text-xs uppercase text-muted-foreground",
+                "sticky left-0 z-40 isolate w-[300px] min-w-[300px] max-w-[300px] border-r bg-muted px-5 pr-8 text-xs uppercase text-muted-foreground shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)]",
                 showPercent ? "h-16" : "h-10",
               )}
             >
@@ -279,6 +297,7 @@ function StatementTable({
                 colSpan={showPercent ? 2 : 1}
                 className={cn(
                   "px-3 text-center text-xs uppercase text-muted-foreground",
+                  showPercent ? "w-[240px] min-w-[240px]" : "w-[120px] min-w-[120px]",
                   showPercent ? "h-8" : "h-10",
                 )}
               >
@@ -291,13 +310,13 @@ function StatementTable({
               {months.flatMap((month) => [
                 <TableHead
                   key={`${month.key}-amount`}
-                  className="h-8 px-3 text-right text-[11px] uppercase text-muted-foreground"
+                  className="h-8 w-[120px] min-w-[120px] px-3 text-right text-[11px] uppercase text-muted-foreground"
                 >
                   Monto
                 </TableHead>,
                 <TableHead
                   key={`${month.key}-percent`}
-                  className="h-8 w-20 px-3 text-right text-[11px] uppercase text-muted-foreground"
+                  className="h-8 w-[120px] min-w-[120px] px-3 text-right text-[11px] uppercase text-muted-foreground"
                 >
                   %
                 </TableHead>,
@@ -310,20 +329,20 @@ function StatementTable({
             <TableRow
               key={row.label}
               className={cn(
-                "h-10",
+                "min-h-10",
                 row.section && "bg-muted/40 hover:bg-muted/40",
                 row.mutedBlock && "bg-muted hover:bg-muted",
-                row.dark && "bg-brand-muted/60 hover:bg-brand-muted/60",
+                row.dark && "bg-brand-muted hover:bg-brand-muted",
                 rowToneClass(row.tone),
               )}
             >
               <TableCell
                 className={cn(
-                  "sticky left-0 z-10 h-10 w-max min-w-[max-content] border-r bg-background px-5 py-0 pr-8",
-                  row.section && "bg-muted/40 font-semibold",
+                  "sticky left-0 z-30 isolate min-h-10 w-[300px] min-w-[300px] max-w-[300px] border-r bg-background px-5 py-2 pr-8 !whitespace-normal align-middle leading-5 shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)]",
+                  row.section && "bg-muted font-semibold",
                   row.mutedBlock && "bg-muted font-semibold text-foreground",
                   row.strong && "font-semibold",
-                  row.dark && "bg-brand-muted/60 font-semibold text-brand-foreground",
+                  row.dark && "bg-brand-muted font-semibold text-brand-foreground",
                   row.tone === "income" && "bg-emerald-50",
                   row.tone === "direct" && "bg-sky-50",
                   row.tone === "admin" && "bg-amber-50",
@@ -336,7 +355,7 @@ function StatementTable({
                 const amount = row.values[month.key] ?? 0;
                 const income = incomeRow?.values[month.key] ?? 0;
                 const cellClass = cn(
-                  "h-10 px-3 py-0 text-right tabular-nums",
+                  "h-auto min-h-10 w-[120px] min-w-[120px] px-3 py-2 text-right tabular-nums",
                   row.mutedBlock && "font-semibold text-foreground",
                   row.strong && "font-semibold",
                   row.dark && "font-semibold text-brand-foreground",

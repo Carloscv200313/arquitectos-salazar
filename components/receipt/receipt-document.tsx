@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { Copy, Download, Loader2, PenLine, Printer } from "lucide-react";
 import { toast } from "sonner";
@@ -46,17 +47,20 @@ async function loadImageDataUrl(src: string) {
 }
 
 export function ReceiptDocument({
-  data,
+  data: initialData,
+  prepareAction,
   autoPrint = true,
   signAction,
   signPayload,
 }: {
   data: ReceiptData;
+  prepareAction?: () => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
   autoPrint?: boolean;
   // Acción que persiste la firma + identificadores del documento (sin la firma).
   signAction?: (raw: unknown) => Promise<SignResult>;
   signPayload?: Record<string, unknown>;
 }) {
+  const [data, setData] = useState(initialData);
   const padRef = useRef<SignaturePadHandle>(null);
   const [downloading, setDownloading] = useState(false);
   const [signature, setSignature] = useState<string | null>(data.signature);
@@ -85,6 +89,7 @@ export function ReceiptDocument({
     try {
       const res = await signAction({ ...(signPayload ?? {}), signature: dataUrl });
       if (res.ok) {
+        if (prepareAction) await prepareDocument();
         setSignature(dataUrl);
         toast.success("Firma guardada. Ya puedes imprimir el documento.");
       } else {
@@ -95,9 +100,24 @@ export function ReceiptDocument({
     }
   }
 
+  async function prepareDocument() {
+    if (data.code || !prepareAction) return data;
+    const result = await prepareAction();
+    if (!result.ok) throw new Error(result.error);
+    const next = { ...data, code: result.code };
+    flushSync(() => setData(next));
+    return next;
+  }
+
+  async function printDocument() {
+    try { await prepareDocument(); window.print(); }
+    catch { toast.error("No se pudo emitir el comprobante."); }
+  }
+
   async function downloadPdf() {
     setDownloading(true);
     try {
+      const data = await prepareDocument();
       const [{ default: jsPDF }, logoData] = await Promise.all([
         import("jspdf"),
         loadImageDataUrl("/logo-negro-trimmed.png").catch(() => null),
@@ -241,7 +261,7 @@ export function ReceiptDocument({
       ? "COMPROBANTE DE EGRESO POR"
       : "RECIBO DE DINERO POR";
   const recipientLabel = isPago || isEgreso ? "Recibió el Sr (a)" : "Recibí del Sr (a)";
-  const subjectLabel = data.kind === "obra" ? "de la obra" : "del proyecto";
+  const subjectLabel = data.subjectLabel ?? (data.kind === "obra" ? "de la obra" : "del proyecto");
   const showSubject = !isPago || !!data.subjectName?.trim();
   const signatureSharePath = getSignatureSharePath(signPayload);
   const signatureShareLabel =
@@ -315,7 +335,7 @@ export function ReceiptDocument({
             </button>
             <button
               type="button"
-              onClick={() => setSkipped(true)}
+              onClick={async () => { try { await prepareDocument(); setSkipped(true); } catch { toast.error("No se pudo emitir el comprobante."); } }}
               disabled={saving}
               className="mt-2 inline-flex w-full items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-amber-900 underline-offset-2 hover:underline disabled:opacity-60"
             >
@@ -336,7 +356,7 @@ export function ReceiptDocument({
               </button>
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={printDocument}
                 className="inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
               >
                 <Printer className="size-4" /> Imprimir
@@ -448,13 +468,13 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 function getSignatureSharePath(signPayload?: Record<string, unknown>) {
-  if (!signPayload) return null;
+  if (!signPayload || typeof signPayload.token !== "string") return null;
 
   const kind = signPayload?.kind;
   if (kind !== "proyecto" && kind !== "obra") return null;
 
   if (typeof signPayload.id === "string") {
-    return `/firma/recibo/${kind}/${signPayload.id}`;
+    return `/firma/recibo/${kind}/${signPayload.id}?token=${encodeURIComponent(String(signPayload.token ?? ""))}`;
   }
 
   const weekId = signPayload.weekId;
@@ -465,7 +485,7 @@ function getSignatureSharePath(signPayload?: Record<string, unknown>) {
     typeof employeeId === "string" &&
     typeof refId === "string"
   ) {
-    return `/firma/comprobante/${kind}/${weekId}/${employeeId}/${refId}`;
+    return `/firma/comprobante/${kind}/${weekId}/${employeeId}/${refId}?token=${encodeURIComponent(String(signPayload.token ?? ""))}`;
   }
 
   return null;

@@ -1,12 +1,15 @@
-import { listMovements, listProjects } from "@/lib/data/projects";
-import { listWorkMovements, listWorks } from "@/lib/data/works";
+
+import { requirePermission } from "@/lib/auth/authorize";
+import { traceScreen } from "@/lib/supabase/telemetry";
+import { listDashboardProjectMovements, listProjects } from "@/lib/data/projects";
+import { listDashboardWorksAndMovements } from "@/lib/data/works";
 import { listOrderWorks } from "@/lib/data/orders";
 import {
   getFinanceUtilityReport,
   getGeneralBalanceReport,
   getSalaryReport,
 } from "@/lib/data/finance";
-import { buildDashboardSnapshot, type DashboardMovement } from "@/lib/dashboard";
+import { buildDashboardSnapshot } from "@/lib/dashboard";
 import { buildOverviewSnapshot, type MovementLite } from "@/lib/overview";
 import { round2 } from "@/lib/calculations";
 import { FadeIn, Stagger, StaggerItem } from "@/components/motion/fade-in";
@@ -16,10 +19,13 @@ import { DashboardRecentMovementsCard } from "@/components/dashboard/recent-move
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [projects, works, orderWorks, utilityReport, salaryReport, balance] =
+  const user = await requirePermission("dashboard.view");
+  return traceScreen("dashboard", user.id, async () => {
+
+  const [projects, workData, orderWorks, utilityReport, salaryReport, balance] =
     await Promise.all([
       listProjects(),
-      listWorks(),
+      listDashboardWorksAndMovements(),
       listOrderWorks(),
       getFinanceUtilityReport(),
       getSalaryReport(),
@@ -27,22 +33,9 @@ export default async function DashboardPage() {
     ]);
 
   // Project movements (also feeds the recent-movements card).
-  const projectMovementGroups = await Promise.all(
-    projects.map(async (project) => {
-      const movements = await listMovements(project.id);
-      return movements.map<DashboardMovement>((movement) => ({
-        ...movement,
-        projectName: project.name,
-        clientName: project.client.name,
-      }));
-    }),
-  );
-  const projectMovements = projectMovementGroups.flat();
+  const projectMovements = await listDashboardProjectMovements(projects);
 
-  const workMovementGroups = await Promise.all(
-    works.map((work) => listWorkMovements(work.id)),
-  );
-  const workMovements = workMovementGroups.flat();
+  const { works, movements: workMovements } = workData;
 
   const movements: MovementLite[] = [
     ...projectMovements.map((m) => ({
@@ -99,4 +92,5 @@ export default async function DashboardPage() {
       </FadeIn>
     </div>
   );
+  });
 }

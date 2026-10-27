@@ -366,7 +366,6 @@ function ManualDebtorSheet({
   debtor: ManualDebtorDetail | null;
   accounts: PaymentMethod[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(debtor?.debtor.name ?? "");
   const [amount, setAmount] = useState(debtor ? String(debtor.totalAmount) : "");
@@ -403,7 +402,6 @@ function ManualDebtorSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -518,7 +516,6 @@ function DebtorPaymentSheet({
   debtor: ManualDebtorDetail;
   accounts: PaymentMethod[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [paymentDate, setPaymentDate] = useState(todayISODate());
   const [amount, setAmount] = useState(String(debtor.totalPending));
@@ -551,7 +548,6 @@ function DebtorPaymentSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -657,7 +653,6 @@ function ManualProviderDebtSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [provider, setProvider] = useState("");
   const [amount, setAmount] = useState("");
@@ -688,7 +683,6 @@ function ManualProviderDebtSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);

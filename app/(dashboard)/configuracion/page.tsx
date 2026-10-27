@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import { Settings } from "lucide-react";
 import { SettingsView } from "@/components/settings/settings-view";
 import {
@@ -15,6 +17,8 @@ import { hasPermission } from "@/lib/auth/permissions";
 export const metadata = { title: "Configuración" };
 
 export default async function ConfiguracionPage() {
+  await requirePermission("settings.view");
+
   const profile = await getCurrentAppUser();
   const canManageUsers = profile ? hasPermission(profile.permissions, "users.view") : false;
 

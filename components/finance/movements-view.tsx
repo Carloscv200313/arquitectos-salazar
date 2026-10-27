@@ -8,6 +8,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Receipt,
   Search,
   Tag,
   Trash2,
@@ -973,6 +974,18 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                   <TableCell className="px-5">
                     {row.is_editable ? (
                       <div className="flex justify-end gap-2">
+                        {row.receipt_href ? (
+                          <a
+                            href={row.receipt_href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex size-8 items-center justify-center rounded-md border bg-background hover:bg-accent"
+                            title="Ver recibo"
+                          >
+                            <Receipt className="size-4" />
+                            <span className="sr-only">Ver recibo</span>
+                          </a>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="icon"
@@ -999,7 +1012,21 @@ function CapturesTab({ report }: { report: FinanceCaptureReport }) {
                         </Button>
                       </div>
                     ) : (
-                      <p className="text-right text-xs text-muted-foreground">Solo lectura</p>
+                      <div className="flex items-center justify-end gap-2">
+                        {row.receipt_href ? (
+                          <a
+                            href={row.receipt_href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex size-8 items-center justify-center rounded-md border bg-background hover:bg-accent"
+                            title="Ver recibo"
+                          >
+                            <Receipt className="size-4" />
+                            <span className="sr-only">Ver recibo</span>
+                          </a>
+                        ) : null}
+                        <p className="text-right text-xs text-muted-foreground">Solo lectura</p>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>

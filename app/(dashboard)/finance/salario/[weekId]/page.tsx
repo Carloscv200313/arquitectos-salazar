@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, WalletCards } from "lucide-react";
@@ -13,6 +15,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ weekId: string }>;
 }) {
+  await requirePermission("salary.view");
+
   const { weekId } = await params;
   const report = await getSalaryWeekDetailReport(weekId);
   if (!report) return { title: "Semana de salario" };
@@ -27,6 +31,8 @@ export default async function SalaryWeekPage({
 }: {
   params: Promise<{ weekId: string }>;
 }) {
+  await requirePermission("salary.view");
+
   const { weekId } = await params;
   const [report, projects, works, areaPaid] = await Promise.all([
     getSalaryWeekDetailReport(weekId),

@@ -778,6 +778,9 @@ export function ProviderDebtDetail({
   const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
   const [historyTarget, setHistoryTarget] = useState<PaymentHistoryTarget | null>(null);
   const [manualDebtOpen, setManualDebtOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [workFilter, setWorkFilter] = useState("__all__");
 
   function applySettlement(target: SettleTarget, amount: number) {
     updateDisplayedDetail({ type: "settlement", target, amount });
@@ -798,12 +801,33 @@ export function ProviderDebtDetail({
       a.kind === "order" ? a.order.pending : a.kind === "movement" ? a.movement.pending : a.manual.totalPending;
     const bPending =
       b.kind === "order" ? b.order.pending : b.kind === "movement" ? b.movement.pending : b.manual.totalPending;
-    if (Math.abs(bPending - aPending) > 0.001) return bPending - aPending;
     const aDate =
       a.kind === "order" ? a.order.order_date : a.kind === "movement" ? a.movement.movementDate : a.manual.debt.debt_date;
     const bDate =
       b.kind === "order" ? b.order.order_date : b.kind === "movement" ? b.movement.movementDate : b.manual.debt.debt_date;
-    return bDate.localeCompare(aDate);
+    const byDate = aDate.localeCompare(bDate);
+    if (byDate !== 0) return byDate;
+    return aPending - bPending;
+  });
+  const workOptions = [...new Set(debtRows.map((row) =>
+    row.kind === "order" ? row.order.work.name : row.kind === "movement" ? row.movement.workName : "Administrativo",
+  ))].sort((a, b) => a.localeCompare(b, "es"));
+  const filteredDebtRows = debtRows.filter((row) => {
+    const date = row.kind === "order"
+      ? row.order.order_date
+      : row.kind === "movement"
+        ? row.movement.movementDate
+        : row.manual.debt.debt_date;
+    const work = row.kind === "order"
+      ? row.order.work.name
+      : row.kind === "movement"
+        ? row.movement.workName
+        : "Administrativo";
+    return (
+      (!dateFrom || date >= dateFrom) &&
+      (!dateTo || date <= dateTo) &&
+      (workFilter === "__all__" || work === workFilter)
+    );
   });
 
   return (
@@ -851,7 +875,57 @@ export function ProviderDebtDetail({
               Nueva deuda
             </Button>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-[70vh] overflow-auto">
+            <div className="flex flex-wrap items-end gap-3 border-b bg-muted/20 px-5 py-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="provider-debt-date-from" className="text-xs text-muted-foreground">Desde</Label>
+                <Input
+                  id="provider-debt-date-from"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => setDateFrom(event.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="provider-debt-date-to" className="text-xs text-muted-foreground">Hasta</Label>
+                <Input
+                  id="provider-debt-date-to"
+                  type="date"
+                  value={dateTo}
+                  onChange={(event) => setDateTo(event.target.value)}
+                  className="w-[160px]"
+                />
+              </div>
+              <div className="grid min-w-[240px] flex-1 gap-1.5">
+                <Label htmlFor="provider-debt-work" className="text-xs text-muted-foreground">Obra</Label>
+                <Select value={workFilter} onValueChange={(value) => setWorkFilter(value ?? "__all__")} items={[
+                  { label: "Todas las obras", value: "__all__" },
+                  ...workOptions.map((work) => ({ label: work, value: work })),
+                ]}>
+                  <SelectTrigger id="provider-debt-work" className="w-full">
+                    <SelectValue placeholder="Todas las obras" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">Todas las obras</SelectItem>
+                    {workOptions.map((work) => <SelectItem key={work} value={work}>{work}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {(dateFrom || dateTo || workFilter !== "__all__") && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                    setWorkFilter("__all__");
+                  }}
+                >
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
             <Table>
               <TableHeader className="bg-muted/40">
                 <TableRow>
@@ -867,8 +941,8 @@ export function ProviderDebtDetail({
                   <TableHead className="px-5 text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {debtRows.map((row) => {
+              <TableBody paginate={false}>
+                {filteredDebtRows.map((row) => {
                   if (row.kind === "order") {
                     const { order } = row;
                     return (
@@ -1109,7 +1183,7 @@ export function ProviderDebtDetail({
                     </TableRow>
                   );
                 })}
-                {debtRows.length === 0 && (
+                {filteredDebtRows.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
                       Sin deudas pendientes para este proveedor.

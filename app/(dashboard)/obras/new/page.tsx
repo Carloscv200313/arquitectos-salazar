@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { listClients } from "@/lib/data/projects";
@@ -6,6 +8,8 @@ import { WorkForm } from "@/components/works/work-form";
 export const metadata = { title: "Nueva obra" };
 
 export default async function NewWorkPage() {
+  await requirePermission("works.view");
+
   const clients = await listClients();
 
   return (

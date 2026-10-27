@@ -1,3 +1,4 @@
+import { authorizeDocument, receiptResource } from "@/lib/security/documents";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProjectPaymentReceipt } from "@/lib/data/projects";
@@ -12,11 +13,15 @@ export const metadata: Metadata = {
 
 export default async function PublicReceiptSignaturePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ kind: string; id: string }>;
+  searchParams: Promise<{ token?: string }>;
 }) {
   const { kind, id } = await params;
   if (kind !== "proyecto" && kind !== "obra") notFound();
+
+  const token = await authorizeDocument(receiptResource(kind, id), kind === "proyecto" ? "projects.view" : "works.view", (await searchParams).token);
 
   const data =
     kind === "proyecto"
@@ -30,7 +35,7 @@ export default async function PublicReceiptSignaturePage({
       subtitle={`${data.code ?? "Recibo"} · ${data.subjectName ?? data.concept}`}
       alreadySigned={!!data.signature}
       signAction={signAbonoAction}
-      signPayload={{ kind, id }}
+      signPayload={{ kind, id, token }}
     />
   );
 }

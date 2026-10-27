@@ -497,6 +497,7 @@ export interface FinanceCaptureRow {
   origin: "manual" | "project" | "work" | "salary";
   origin_label: string;
   is_editable: boolean;
+  receipt_href?: string | null;
 }
 
 export interface FinanceCaptureReport {

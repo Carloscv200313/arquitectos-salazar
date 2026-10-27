@@ -1,4 +1,7 @@
 import "server-only";
+import { cache } from "react";
+import { WORK_MOVEMENT_COLUMNS } from "./columns";
+import { listActiveWorkMovementFacts, type WorkMovementFact } from "./work-movement-facts";
 
 import { randomUUID } from "crypto";
 import { WORK_CATEGORIES } from "@/lib/constants";
@@ -53,7 +56,7 @@ function normalizedWorkCategory(value: unknown) {
 }
 
 function sb() {
-  return createAdminClient();
+  return createAdminClient("works");
 }
 
 function mapClient(r: Row): Client {
@@ -126,7 +129,7 @@ function percentOf(value: number, total: number | null): number | null {
   return round2((value / total) * 100);
 }
 
-function computeWorkFinance(movements: WorkMovement[]) {
+function computeWorkFinance(movements: Array<Pick<WorkMovementFact, "movement_type" | "amount" | "movement_date">>) {
   const income = round2(
     movements.filter((m) => m.movement_type === "income").reduce((s, m) => s + m.amount, 0),
   );
@@ -144,7 +147,7 @@ function computeWorkFinance(movements: WorkMovement[]) {
   };
 }
 
-function enrichRow(r: Row, movements: WorkMovement[] = []): WorkWithFinance | null {
+function enrichRow(r: Row, movements: WorkMovementFact[] = []): WorkWithFinance | null {
   const client = r.client as Row | null;
   if (!client) return null;
   return {
@@ -184,7 +187,7 @@ async function findOrCreateClientId(
 const WORK_SELECT = "*, client:clients(*)";
 
 async function listWorkMovementRows({
-  select = "*",
+  select = WORK_MOVEMENT_COLUMNS,
   workId,
   category,
   includeMethod = false,
@@ -196,11 +199,11 @@ async function listWorkMovementRows({
 } = {}): Promise<Row[]> {
   const rows: Row[] = [];
 
-  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+  for (let from = 0; ; ) {
     const to = from + SUPABASE_PAGE_SIZE - 1;
     let query = sb()
       .from("work_movements")
-      .select(includeMethod ? "*, method:payment_accounts(id, name, created_at)" : select)
+      .select(includeMethod ? `${WORK_MOVEMENT_COLUMNS}, method:payment_accounts(id, name, created_at)` : select)
       .eq("status", 1);
 
     if (workId) {
@@ -221,38 +224,23 @@ async function listWorkMovementRows({
 
     const page = (data ?? []) as unknown as Row[];
     rows.push(...page);
-    if (page.length < SUPABASE_PAGE_SIZE) break;
+    if (page.length === 0) break;
+    from += page.length;
   }
 
   return rows;
 }
 
-async function listWorkMovementsByWorkIds(workIds: string[]): Promise<Map<string, WorkMovement[]>> {
-  const movementsByWork = new Map<string, WorkMovement[]>();
+async function listWorkMovementsByWorkIds(workIds: string[]): Promise<Map<string, WorkMovementFact[]>> {
+  const movementsByWork = new Map<string, WorkMovementFact[]>();
   if (workIds.length === 0) return movementsByWork;
-
-  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
-    const to = from + SUPABASE_PAGE_SIZE - 1;
-    const { data, error } = await sb()
-      .from("work_movements")
-      .select("*")
-      .eq("status", 1)
-      .in("work_id", workIds)
-      .order("work_id", { ascending: true })
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, to);
-    if (error) throw new Error(error.message);
-
-    const page = ((data ?? []) as unknown as Row[]).map(mapMovement);
-    for (const movement of page) {
-      const bucket = movementsByWork.get(movement.work_id) ?? [];
-      bucket.push(movement);
-      movementsByWork.set(movement.work_id, bucket);
-    }
-    if (page.length < SUPABASE_PAGE_SIZE) break;
+  const activeWorkIds = new Set(workIds);
+  for (const movement of await listActiveWorkMovementFacts()) {
+    if (!activeWorkIds.has(movement.work_id)) continue;
+    const bucket = movementsByWork.get(movement.work_id) ?? [];
+    bucket.push(movement);
+    movementsByWork.set(movement.work_id, bucket);
   }
-
   return movementsByWork;
 }
 
@@ -312,8 +300,8 @@ function distinctNames(values: unknown[], excluded: string[] = []): string[] {
 
 /* ----------------------------------------------------------------- reads */
 
-export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFinance[]> {
-  if (!isAdminConfigured()) return [];
+async function listWorksBundleUncached(filters: WorkFilters): Promise<{ works: WorkWithFinance[]; movementsByWork: Map<string, WorkMovementFact[]> }> {
+  if (!isAdminConfigured()) return { works: [], movementsByWork: new Map() };
   const { data } = await sb().from("works").select(WORK_SELECT).eq("status", 1);
   const workRows = (data ?? []) as Row[];
   const movementsByWork = await listWorkMovementsByWorkIds(
@@ -345,13 +333,13 @@ export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFina
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   const filesByWork = await listWorkFilesByWorkIds(works.map((work) => work.id));
-  return works.map((work) => ({
-    ...work,
-    files: filesByWork.get(work.id) ?? [],
-  }));
+  return {
+    works: works.map((work) => ({ ...work, files: filesByWork.get(work.id) ?? [] })),
+    movementsByWork,
+  };
 }
 
-export async function getWork(id: string): Promise<WorkWithFinance | null> {
+async function getWorkUncached(id: string): Promise<WorkWithFinance | null> {
   if (!isAdminConfigured()) return null;
   const [workRes, movements] = await Promise.all([
     sb().from("works").select(WORK_SELECT).eq("id", id).maybeSingle(),
@@ -363,11 +351,26 @@ export async function getWork(id: string): Promise<WorkWithFinance | null> {
   return { ...work, files: filesByWork.get(id) ?? [] };
 }
 
-async function movementsOf(workId: string): Promise<WorkMovement[]> {
-  return (await listWorkMovementRows({ workId })).map(mapMovement);
+export const getWork = cache(getWorkUncached);
+
+export async function getWorkName(id: string): Promise<string | null> {
+  const { data, error } = await sb().from("works").select("name").eq("id", id).maybeSingle();
+  if (error) throw new Error("No se pudo consultar la obra.");
+  return data?.name ?? null;
 }
 
-export async function listWorkMovements(workId: string): Promise<WorkMovementWithBalance[]> {
+/** Public write forms only need to validate the target; balances are irrelevant here. */
+export async function activeWorkExists(id: string): Promise<boolean> {
+  const { data, error } = await sb().from("works").select("id").eq("id", id).eq("status", 1).maybeSingle();
+  if (error) throw new Error("No se pudo validar la obra.");
+  return Boolean(data);
+}
+
+async function movementsOf(workId: string): Promise<WorkMovement[]> {
+  return listWorkMovements(workId);
+}
+
+async function listWorkMovementsUncached(workId: string): Promise<WorkMovementWithBalance[]> {
   if (!isAdminConfigured()) return [];
   const sorted = await listWorkMovementRows({ workId, includeMethod: true });
   let balance = 0;
@@ -377,6 +380,8 @@ export async function listWorkMovements(workId: string): Promise<WorkMovementWit
     return { ...m, balance, method: r.method ? mapMethod(r.method as Row) : null };
   });
 }
+
+export const listWorkMovements = cache(listWorkMovementsUncached);
 
 export async function listWorkMovementConceptNames(): Promise<string[]> {
   if (!isAdminConfigured()) return [];
@@ -395,7 +400,7 @@ export async function listWorkMovementSupplierNames(): Promise<string[]> {
   );
 }
 
-export async function getWorkCategorySummary(workId: string): Promise<WorkCategorySummary[]> {
+async function getWorkCategorySummaryUncached(workId: string): Promise<WorkCategorySummary[]> {
   if (!isAdminConfigured()) return [];
   const [movements, configuredCategories, budgetRes] = await Promise.all([
     movementsOf(workId),
@@ -478,7 +483,9 @@ export async function getWorkCategorySummary(workId: string): Promise<WorkCatego
     });
 }
 
-export async function getWorkAdministrationUtilities(
+export const getWorkCategorySummary = cache(getWorkCategorySummaryUncached);
+
+async function getWorkAdministrationUtilitiesUncached(
   workId: string,
 ): Promise<WorkAdministrationUtilityRow[]> {
   if (!isAdminConfigured()) return [];
@@ -494,12 +501,14 @@ export async function getWorkAdministrationUtilities(
     .map(([month, amount]) => ({ month, amount: round2(amount) }));
 }
 
+export const getWorkAdministrationUtilities = cache(getWorkAdministrationUtilitiesUncached);
+
 export async function getWorksPaymentMethodReport(): Promise<PaymentMethodReportRow[]> {
   if (!isAdminConfigured()) return [];
   const client = sb();
   const [methodsRes, movementRows, transfersRes] = await Promise.all([
     client.from("payment_accounts").select("id, name").eq("status", 1),
-    listWorkMovementRows({ select: "payment_method_id, movement_type, category, amount" }),
+    listActiveWorkMovementFacts(),
     client
       .from("work_internal_transfers")
       .select("from_payment_method_id, to_payment_method_id, from_account_bucket, to_account_bucket, amount")
@@ -638,12 +647,10 @@ export async function getWorksAdministrationUtilityReport(): Promise<
   WorkAdministrationUtilityRow[]
 > {
   if (!isAdminConfigured()) return [];
-  const data = await listWorkMovementRows({
-    select: "category, movement_date, amount",
-    category: "Honorarios",
-  });
+  const data = await listActiveWorkMovementFacts();
   const byMonth = new Map<string, number>();
   for (const m of data) {
+    if (m.category !== "Honorarios") continue;
     const month = (m.movement_date as string).slice(0, 7);
     byMonth.set(month, round2((byMonth.get(month) ?? 0) + Number(m.amount)));
   }
@@ -922,11 +929,12 @@ export async function getWorkMovementReceipt(id: string): Promise<ReceiptData | 
 
 /** Guarda la firma dibujada del movimiento de obra. */
 export async function setWorkMovementSignature(id: string, signature: string): Promise<void> {
-  const { error } = await sb()
+  const { data, error } = await sb()
     .from("work_movements")
     .update({ signature, signed_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+    .eq("id", id).eq("status", 1).is("signature", null).select("id").maybeSingle();
+  if (error) throw new Error("No se pudo guardar la firma.");
+  if (!data) throw new Error("El documento ya está firmado o no está disponible.");
 }
 
 export async function deleteWork(id: string): Promise<void> {
@@ -1065,4 +1073,15 @@ export async function saveWorkCategoryBudget(
   if (error) throw new Error(error.message);
 
   return getWorkCategorySummary(workId);
+}
+
+const cachedWorkBundle = cache((key: string) => listWorksBundleUncached(JSON.parse(key) as WorkFilters));
+export async function listWorks(filters: WorkFilters = {}): Promise<WorkWithFinance[]> {
+  return (await cachedWorkBundle(JSON.stringify(filters))).works;
+}
+
+/** Dashboard receives only the fields it needs from the shared financial facts. */
+export async function listDashboardWorksAndMovements() {
+  const { works, movementsByWork } = await cachedWorkBundle("{}");
+  return { works, movements: works.flatMap(work => movementsByWork.get(work.id) ?? []) };
 }

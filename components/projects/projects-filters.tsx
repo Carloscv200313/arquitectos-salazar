@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ export function ProjectsFilters() {
 
   const [search, setSearch] = useState(params.get("search") ?? "");
   const [client, setClient] = useState(params.get("client") ?? "");
+  const clearing = useRef(false);
 
   const status = params.get("status") ?? "all";
   const from = params.get("from") ?? "";
@@ -43,24 +44,22 @@ export function ProjectsFilters() {
 
   // Debounce free-text inputs.
   useEffect(() => {
+    const skip = clearing.current;
+    clearing.current = false;
+    if (skip && !search && !client) return;
     const t = setTimeout(() => {
-      if ((params.get("search") ?? "") !== search) pushParams({ search });
+      if ((params.get("search") ?? "") !== search || (params.get("client") ?? "") !== client) {
+        pushParams({ search, client });
+      }
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if ((params.get("client") ?? "") !== client) pushParams({ client });
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]);
+  }, [search, client]);
 
   const hasFilters = !!(search || client || (status && status !== "all") || from || to);
 
   function clearAll() {
+    clearing.current = true;
     setSearch("");
     setClient("");
     startTransition(() => router.replace(pathname, { scroll: false }));

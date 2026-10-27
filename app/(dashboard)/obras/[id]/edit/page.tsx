@@ -1,8 +1,10 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { listClients } from "@/lib/data/projects";
-import { getWork } from "@/lib/data/works";
+import { getWork, getWorkName } from "@/lib/data/works";
 import { WorkForm } from "@/components/works/work-form";
 
 export async function generateMetadata({
@@ -10,9 +12,11 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("works.view");
+
   const { id } = await params;
-  const work = await getWork(id);
-  return { title: work ? `Editar ${work.name}` : "Editar obra" };
+  const name = await getWorkName(id);
+  return { title: name ? `Editar ${name}` : "Editar obra" };
 }
 
 export default async function EditWorkPage({
@@ -20,6 +24,8 @@ export default async function EditWorkPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("works.view");
+
   const { id } = await params;
   const [clients, work] = await Promise.all([listClients(), getWork(id)]);
   if (!work) notFound();

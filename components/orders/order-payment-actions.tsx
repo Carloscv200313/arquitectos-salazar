@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
@@ -52,7 +51,6 @@ export function OrderPaymentActions({
   workId: string;
   methods: PaymentMethod[];
 }) {
-  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -91,7 +89,6 @@ export function OrderPaymentActions({
       if (res.ok) {
         toast.success("Abono actualizado");
         setEditOpen(false);
-        router.refresh();
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);
@@ -110,7 +107,6 @@ export function OrderPaymentActions({
       if (res.ok) {
         toast.success("Abono eliminado");
         setDeleteOpen(false);
-        router.refresh();
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);

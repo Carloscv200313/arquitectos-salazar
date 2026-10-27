@@ -1,4 +1,6 @@
 import "server-only";
+import { requireAdministrator, requirePermission } from "@/lib/auth/authorize";
+
 
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
@@ -20,8 +22,10 @@ export interface Role {
 }
 
 export async function listUsers(): Promise<AppUser[]> {
+  await requirePermission("users.view");
+
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("users")
     .from("users")
     .select("id, email, full_name, role_id, permissions, last_login_at, status, roles(name)")
     .eq("status", 1)
@@ -45,8 +49,10 @@ export async function listUsers(): Promise<AppUser[]> {
 }
 
 export async function listRoles(): Promise<Role[]> {
+  await requirePermission("users.view");
+
   if (!isAdminConfigured()) return [];
-  const { data } = await createAdminClient()
+  const { data } = await createAdminClient("users")
     .from("roles")
     .select("id, name")
     .eq("status", 1)
@@ -61,7 +67,9 @@ export async function createUser(input: {
   roleId: string;
   permissions: string[];
 }) {
-  const { error } = await createAdminClient().rpc("admin_create_user", {
+  await requireAdministrator();
+
+  const { error } = await createAdminClient("users").rpc("admin_create_user", {
     p_email: input.email.trim(),
     p_password: input.password,
     p_full_name: input.fullName.trim(),
@@ -78,7 +86,9 @@ export async function updateUser(input: {
   roleId: string;
   permissions: string[];
 }) {
-  const { error } = await createAdminClient()
+  await requireAdministrator();
+
+  const { error } = await createAdminClient("users")
     .from("users")
     .update({
       full_name: input.fullName.trim(),
@@ -90,7 +100,9 @@ export async function updateUser(input: {
 }
 
 export async function setUserPassword(id: string, password: string) {
-  const { error } = await createAdminClient().rpc("admin_set_password", {
+  await requireAdministrator();
+
+  const { error } = await createAdminClient("users").rpc("admin_set_password", {
     p_user_id: id,
     p_password: password,
   });
@@ -98,8 +110,10 @@ export async function setUserPassword(id: string, password: string) {
 }
 
 export async function deactivateUser(id: string) {
+  await requireAdministrator();
+
   const currentId = await getCurrentUserId();
   if (currentId === id) throw new Error("No puedes desactivar tu propio usuario.");
-  const { error } = await createAdminClient().from("users").update({ status: 0 }).eq("id", id);
+  const { error } = await createAdminClient("users").from("users").update({ status: 0 }).eq("id", id);
   if (error) throw new Error(error.message);
 }

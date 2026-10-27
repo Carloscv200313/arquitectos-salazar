@@ -1,0 +1,62 @@
+{
+  "deudas": {
+    "queries": 1190,
+    "bytes": 62186030,
+    "tables": {
+      "works": 290,
+      "provider_debt_settlements": 1,
+      "manual_provider_debts": 1,
+      "manual_provider_debt_payments": 1,
+      "manual_debtors": 1,
+      "manual_debtor_payments": 1,
+      "work_movements": 291,
+      "work_files": 290,
+      "work_orders": 25,
+      "work_order_payments": 288,
+      "payment_accounts": 1
+    },
+    "digest": "f6d19e7aa93af0bce6abc5b14650536de63b4439244bc7612a85a3bb33eedde6"
+  },
+  "dashboard": {
+    "queries": 1251,
+    "bytes": 79731935,
+    "tables": {
+      "projects": 3,
+      "works": 294,
+      "work_orders": 26,
+      "work_order_payments": 289,
+      "project_payments": 3,
+      "work_movements": 320,
+      "payment_accounts": 3,
+      "employees": 1,
+      "task_types": 1,
+      "provider_debt_settlements": 2,
+      "manual_provider_debts": 1,
+      "manual_provider_debt_payments": 2,
+      "manual_debtors": 2,
+      "manual_debtor_payments": 2,
+      "internal_transfers": 1,
+      "work_internal_transfers": 1,
+      "finance_movement_captures": 1,
+      "salary_payments": 2,
+      "general_balance_entries": 1,
+      "general_balance_account_movements": 1,
+      "salary_weeks": 1,
+      "work_files": 293,
+      "salary_day_records": 1
+    },
+    "digest": "817af87381e75acff377609d4fca4748f6c14d3a71a942f7b9e8e0fad05e7a54"
+  },
+  "pedidos-list": {
+    "queries": 5,
+    "bytes": 4414594,
+    "tables": {
+      "works": 1,
+      "work_orders": 1,
+      "work_order_payments": 1,
+      "work_movements": 1,
+      "work_files": 1
+    },
+    "digest": "02aeeb2815031975cf2f050a8d116ed773d23a8d896c6b7e44eeb123d153c709"
+  }
+}

@@ -1,4 +1,6 @@
 "use server";
+import { requirePermission, requireUser } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -30,8 +32,8 @@ export type ActionResult<T = undefined> =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 // Phase 1: no auth yet. Once auth lands, resolve the current user id here.
-function currentUserId(): string | null {
-  return null;
+async function currentUserId(): Promise<string> {
+  return (await requireUser()).id;
 }
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -68,6 +70,8 @@ function areaBudget(project: Awaited<ReturnType<typeof getProject>>, area: Inter
 export async function createProjectAction(
   raw: unknown,
 ): Promise<ActionResult<{ projectId: string }>> {
+  await requirePermission("projects.edit");
+
   const parsed = createProjectSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -98,7 +102,7 @@ export async function createProjectAction(
             date: d.anticipoDate!,
           }
         : undefined,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/projects");
     return { ok: true, data: { projectId } };
@@ -114,6 +118,8 @@ export async function createProjectAction(
 export async function updateProjectAction(
   raw: unknown,
 ): Promise<ActionResult<{ projectId: string }>> {
+  await requirePermission("projects.edit");
+
   const parsed = updateProjectSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -194,7 +200,7 @@ export async function updateProjectAction(
         d.distributionMode === "amount" ? d.distributionAmounts : undefined,
       projectAmount: d.projectAmount,
       addons: d.addons,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/projects");
     revalidatePath(`/projects/${d.id}`);
@@ -211,6 +217,8 @@ export async function updateProjectAction(
 export async function registerMovementAction(
   raw: unknown,
 ): Promise<ActionResult<{ paymentId: string; receiptCode: string | null }>> {
+  await requirePermission("projects.edit");
+
   const parsed = registerMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -270,7 +278,7 @@ export async function registerMovementAction(
       paymentDate: d.paymentDate,
       paymentMethodId: d.paymentMethodId,
       internalArea: d.internalArea ?? null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/projects");
     revalidatePath(`/projects/${d.projectId}`);
@@ -283,6 +291,8 @@ export async function registerMovementAction(
 export async function editProjectMovementAction(
   raw: unknown,
 ): Promise<ActionResult<{ paymentId: string }>> {
+  await requirePermission("projects.edit");
+
   const parsed = editProjectMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -357,6 +367,8 @@ export async function editProjectMovementAction(
 }
 
 export async function deleteProjectMovementAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("projects.edit");
+
   const parsed = deleteProjectMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -378,6 +390,8 @@ export async function deleteProjectMovementAction(raw: unknown): Promise<ActionR
 export async function registerInternalTransferAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("projects.edit");
+
   const parsed = registerInternalTransferSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -394,7 +408,7 @@ export async function registerInternalTransferAction(
       transferDate: d.transferDate,
       fromPaymentMethodId: d.fromPaymentMethodId,
       toPaymentMethodId: d.toPaymentMethodId,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/projects");
     revalidatePath("/dashboard");
@@ -405,6 +419,8 @@ export async function registerInternalTransferAction(
 }
 
 export async function deleteProjectAction(id: string): Promise<ActionResult> {
+  await requirePermission("projects.edit");
+
   if (typeof id !== "string" || id.length < 10) {
     return { ok: false, error: "Identificador inválido." };
   }
@@ -419,6 +435,8 @@ export async function deleteProjectAction(id: string): Promise<ActionResult> {
 
 // Helper consumed by the detail page to recompute after server actions.
 export async function projectFinanceSnapshot(id: string) {
+  await requirePermission("projects.view");
+
   const payments = await listMovements(id);
   const project = await getProject(id);
   if (!project) return null;

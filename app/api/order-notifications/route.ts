@@ -1,3 +1,7 @@
+import { requirePermission, AccessDeniedError } from "@/lib/auth/authorize";
+import { limitPublicRequest, RateLimitError } from "@/lib/security/rate-limit";
+import { DatabaseRequestError } from "@/lib/supabase/transport";
+import { traceScreen } from "@/lib/supabase/telemetry";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 
@@ -29,7 +33,7 @@ function mapOrder(row: OrderNotificationRow, works: Map<string, WorkRow>) {
 }
 
 async function queryPublicOrders(since: string | null, includeSource: boolean) {
-  const client = createAdminClient();
+  const client = createAdminClient("notifications");
   let query = client
     .from("work_orders")
     .select("id, work_id, supplier, material, created_at")
@@ -46,26 +50,42 @@ async function queryPublicOrders(since: string | null, includeSource: boolean) {
 }
 
 export async function GET(request: NextRequest) {
+  const started = performance.now();
+  try {
+    const user = await requirePermission("orders.view");
+    await limitPublicRequest("notifications", 30);
+    return await traceScreen("order-notifications", user.id, () => getNotifications(request));
+  } catch (error) {
+    const status = error instanceof AccessDeniedError ? error.status : error instanceof RateLimitError ? 429 : error instanceof DatabaseRequestError && error.status === 402 ? 402 : 503;
+    return NextResponse.json({ orders: [], error: "Notificaciones no disponibles." }, { status, headers: { "Cache-Control": "private, no-store", ...(status === 429 ? { "Retry-After": "60" } : {}) } });
+  } finally {
+    if (process.env.DATA_TELEMETRY === "1") console.info(JSON.stringify({ event: "endpoint", endpoint: "order-notifications", durationMs: Math.round(performance.now() - started) }));
+  }
+}
+
+async function getNotifications(request: NextRequest) {
   if (!isAdminConfigured()) {
     return NextResponse.json({ orders: [] });
   }
 
   const since = request.nextUrl.searchParams.get("since");
+  if (since && (since.length > 40 || !/^\d{4}-\d{2}-\d{2}T/.test(since) || !Number.isFinite(Date.parse(since)))) return NextResponse.json({ error: "Fecha inválida." }, { status: 400 });
   const first = await queryPublicOrders(since, true);
-  const result = first.error ? await queryPublicOrders(since, false) : first;
+  const result = first.error && ["42703", "PGRST204"].includes(first.error.code) ? await queryPublicOrders(since, false) : first;
 
   if (result.error) {
-    return NextResponse.json({ orders: [], error: result.error.message }, { status: 500 });
+    return NextResponse.json({ orders: [], error: "No se pudieron consultar las notificaciones." }, { status: 500 });
   }
 
   const rows = (result.data ?? []) as OrderNotificationRow[];
   const workIds = Array.from(new Set(rows.map((row) => row.work_id)));
   const works = new Map<string, WorkRow>();
   if (workIds.length) {
-    const { data: workRows } = await createAdminClient()
+    const { data: workRows, error: workError } = await createAdminClient("notifications")
       .from("works")
       .select("id, name, client:clients(name)")
       .in("id", workIds);
+    if (workError) throw new Error("No se pudieron consultar las obras de las notificaciones.");
     for (const row of (workRows ?? []) as WorkRow[]) {
       works.set(row.id, row);
     }
@@ -73,5 +93,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     orders: rows.map((row) => mapOrder(row, works)),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

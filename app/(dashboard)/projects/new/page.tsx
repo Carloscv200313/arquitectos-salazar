@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { listClients, listPaymentMethods } from "@/lib/data/projects";
@@ -7,6 +9,8 @@ import { CreateProjectWizard } from "@/components/projects/create-project-wizard
 export const metadata = { title: "Nuevo proyecto" };
 
 export default async function NewProjectPage() {
+  await requirePermission("projects.view");
+
   const [clients, methods, employees] = await Promise.all([
     listClients(),
     listPaymentMethods(),

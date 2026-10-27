@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Pencil, Trash2 } from "lucide-react";
 import {
@@ -49,7 +48,6 @@ export function ProjectMovementActions({
   projectId: string;
   methods: PaymentMethod[];
 }) {
-  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -92,7 +90,6 @@ export function ProjectMovementActions({
       if (res.ok) {
         toast.success("Movimiento actualizado");
         setEditOpen(false);
-        router.refresh();
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);
@@ -111,7 +108,6 @@ export function ProjectMovementActions({
       if (res.ok) {
         toast.success("Movimiento eliminado");
         setDeleteOpen(false);
-        router.refresh();
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);

@@ -1,4 +1,7 @@
 import "server-only";
+import { cache } from "react";
+import { WORK_MOVEMENT_COLUMNS, PROJECT_PAYMENT_COLUMNS } from "./columns";
+import { listActiveWorkMovementFacts } from "./work-movement-facts";
 
 import { SALARY_PAYMENT_METHOD_NAMES, SEED_PAYMENT_METHODS } from "@/lib/constants";
 import { round2 } from "@/lib/calculations";
@@ -47,18 +50,18 @@ import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { getCurrentUserId } from "@/features/auth/get-user";
 import { deleteProjectMovement, getUtilityReport, listProjects } from "./projects";
 import { getWorksAdministrationUtilityReport, listWorks } from "./works";
-import { deleteWorkOrderPayment, listWorkOrders, updateWorkOrderPayment } from "./orders";
+import { deleteWorkOrderPayment, listLinkedPayableMovementIds, listOrdersForWorks, updateWorkOrderPayment } from "./orders";
 import { writeAudit } from "./audit";
 
 type Row = Record<string, unknown>;
 const SUPABASE_PAGE_SIZE = 1000;
 
 function sb() {
-  return createAdminClient();
+  return createAdminClient("finance");
 }
 
 async function listWorkMovementRows({
-  select = "*",
+  select = WORK_MOVEMENT_COLUMNS,
   paymentMethodId,
   movementType,
 }: {
@@ -68,7 +71,7 @@ async function listWorkMovementRows({
 } = {}): Promise<Row[]> {
   const rows: Row[] = [];
 
-  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+  for (let from = 0; ; ) {
     const to = from + SUPABASE_PAGE_SIZE - 1;
     let query = sb()
       .from("work_movements")
@@ -86,7 +89,8 @@ async function listWorkMovementRows({
 
     const page = (data ?? []) as unknown as Row[];
     rows.push(...page);
-    if (page.length < SUPABASE_PAGE_SIZE) break;
+    if (page.length === 0) break;
+    from += page.length;
   }
 
   return rows;
@@ -131,7 +135,7 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
   const client = sb();
   const [pp, wm, it, wt, debtorRows, debtorPayments, providerSettlements, manualProviderPayments, captures, salaryPayments] = await Promise.all([
     client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
-    listWorkMovementRows({ select: "payment_method_id, movement_type, category, amount" }),
+    listActiveWorkMovementFacts(),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
     client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
@@ -335,20 +339,13 @@ async function getAccountsPayableWorkMovementDebts(
   const payableMethodId = await accountsPayableMethodId();
   if (!payableMethodId) return [];
 
-  const [works, movementsRes, orderLinksRes] = await Promise.all([
+  const [works, movementsRes, orderPayableMovementIds] = await Promise.all([
     listWorks(),
     listWorkMovementRows({ paymentMethodId: payableMethodId, movementType: "expense" }),
-    sb()
-      .from("work_orders")
-      .select("payable_movement_id")
-      .eq("status", 1)
-      .not("payable_movement_id", "is", null),
+    listLinkedPayableMovementIds(),
   ]);
 
   const workById = new Map(works.map((work) => [work.id, work]));
-  const orderPayableMovementIds = new Set(
-    (orderLinksRes.data ?? []).map((row) => row.payable_movement_id as string).filter(Boolean),
-  );
 
   return movementsRes
     .filter((movement) => !orderPayableMovementIds.has(movement.id as string))
@@ -375,7 +372,7 @@ async function getAccountsPayableWorkMovementDebts(
     .filter((movement) => movement.pending > 0.001);
 }
 
-export async function getManualDebtorDetails(): Promise<ManualDebtorDetail[]> {
+async function getManualDebtorDetailsUncached(): Promise<ManualDebtorDetail[]> {
   if (!isAdminConfigured()) return [];
   const client = sb();
   const [debtorRes, paymentRes] = await Promise.all([
@@ -419,12 +416,14 @@ export async function getManualDebtorDetails(): Promise<ManualDebtorDetail[]> {
     .sort((a, b) => b.totalPending - a.totalPending || a.debtor.name.localeCompare(b.debtor.name, "es"));
 }
 
+export const getManualDebtorDetails = cache(getManualDebtorDetailsUncached);
+
 export async function getManualDebtorDetail(id: string): Promise<ManualDebtorDetail | null> {
   const details = await getManualDebtorDetails();
   return details.find((detail) => detail.debtor.id === id) ?? null;
 }
 
-export async function getManualProviderDebtDetails(): Promise<ManualProviderDebtDetail[]> {
+async function getManualProviderDebtDetailsUncached(): Promise<ManualProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const client = sb();
   const [debtRes, paymentRes] = await Promise.all([
@@ -468,12 +467,14 @@ export async function getManualProviderDebtDetails(): Promise<ManualProviderDebt
     .sort((a, b) => b.totalPending - a.totalPending || a.debt.provider.localeCompare(b.debt.provider, "es"));
 }
 
+export const getManualProviderDebtDetails = cache(getManualProviderDebtDetailsUncached);
+
 export async function getManualProviderDebtDetail(id: string): Promise<ManualProviderDebtDetail | null> {
   const details = await getManualProviderDebtDetails();
   return details.find((detail) => detail.debt.id === id) ?? null;
 }
 
-export async function getDebtReport(): Promise<DebtReportRow[]> {
+async function getDebtReportUncached(): Promise<DebtReportRow[]> {
   if (!isAdminConfigured()) return [];
   const [providerDetails, debtorDetails] = await Promise.all([
     getProviderDebtDetails(),
@@ -513,7 +514,9 @@ export async function getDebtReport(): Promise<DebtReportRow[]> {
   return [...debtors, ...providers];
 }
 
-export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
+export const getDebtReport = cache(getDebtReportUncached);
+
+async function getProviderDebtDetailsUncached(): Promise<ProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const groups = new Map<string, ProviderDebtDetail>();
   const [works, settlementData, manualDebts] = await Promise.all([
@@ -523,8 +526,9 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
   ]);
   const settledBySource = settlementData.totals;
 
+  const allOrders = await listOrdersForWorks(works);
   for (const work of works) {
-    const orders = await listWorkOrders(work.id);
+    const orders = allOrders.filter(order => order.work_id === work.id);
     for (const order of orders) {
       if (order.amount === null) continue;
       const settled = settledBySource.get(providerDebtKey("work_order", order.id)) ?? 0;
@@ -641,6 +645,8 @@ export async function getProviderDebtDetails(): Promise<ProviderDebtDetail[]> {
     .sort((a, b) => b.totalPending - a.totalPending);
 }
 
+export const getProviderDebtDetails = cache(getProviderDebtDetailsUncached);
+
 export async function getProviderDebtDetail(providerName: string): Promise<ProviderDebtDetail | null> {
   const decoded = (() => {
     try {
@@ -654,7 +660,7 @@ export async function getProviderDebtDetail(providerName: string): Promise<Provi
   return details.find((detail) => detail.provider.trim().toLowerCase() === normalized) ?? null;
 }
 
-export async function getGeneralBalanceReport(): Promise<GeneralBalanceReport> {
+async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> {
   if (!isAdminConfigured()) {
     return { rows: [], total: 0, totalWithoutDebtors: 0, debtorsTotal: 0, providersTotal: 0, worksReceivableTotal: 0 };
   }
@@ -735,6 +741,8 @@ export async function getGeneralBalanceReport(): Promise<GeneralBalanceReport> {
   };
 }
 
+export const getGeneralBalanceReport = cache(getGeneralBalanceReportUncached);
+
 export async function getGeneralBalanceAccountReport(
   accountId: string,
 ): Promise<GeneralBalanceAccountReport | null> {
@@ -781,7 +789,7 @@ export async function getGeneralBalanceAccountReport(
     } else {
       const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes, providerSettlementsRes, manualProviderPaymentsRes] = await Promise.all([
         listWorkMovementRows({ paymentMethodId: method.id }),
-        client.from("project_payments").select("*").eq("status", 1).eq("payment_method_id", method.id),
+        client.from("project_payments").select(PROJECT_PAYMENT_COLUMNS).eq("status", 1).eq("payment_method_id", method.id),
         client.from("projects").select("id, name"),
         client
           .from("manual_debtors")
@@ -1042,7 +1050,7 @@ export async function registerGeneralBalanceAccountMovement(
   if (error) throw new Error(error.message);
 }
 
-export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
+async function getFinanceUtilityReportUncached(): Promise<FinanceUtilityReport> {
   const [projectRows, workRows] = await Promise.all([
     getUtilityReport(),
     getWorksAdministrationUtilityReport(),
@@ -1063,6 +1071,8 @@ export async function getFinanceUtilityReport(): Promise<FinanceUtilityReport> {
   const workTotal = round2(rows.reduce((s, r) => s + r.workUtility, 0));
   return { rows, projectTotal, workTotal, total: round2(projectTotal + workTotal) };
 }
+
+export const getFinanceUtilityReport = cache(getFinanceUtilityReportUncached);
 
 export interface WorkFinancialMonthlyReport {
   income: Array<{ month: string; amount: number }>;
@@ -1207,6 +1217,32 @@ function mapFinanceCapture(r: Row, balanceAfter: number): FinanceCaptureRow {
     origin: "manual",
     origin_label: "Captura manual",
     is_editable: true,
+    receipt_href: `/recibo/finanzas/${String(r.id)}`,
+  };
+}
+
+export async function getFinanceCaptureReceipt(id: string): Promise<ReceiptData | null> {
+  if (!isAdminConfigured()) return null;
+  const { data, error } = await sb()
+    .from("finance_movement_captures")
+    .select("id, capture_date, movement_type, amount, description")
+    .eq("id", id)
+    .eq("status", 1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const isIncome = data.movement_type === "income";
+  return {
+    docType: isIncome ? "abono" : "egreso",
+    kind: "obra",
+    code: null,
+    amount: Number(data.amount),
+    concept: (data.description as string | null) || "Movimiento financiero",
+    date: data.capture_date as string,
+    clientName: isIncome ? "Cliente" : "Arquitectos Salazar",
+    subjectName: "Movimiento financiero",
+    subjectLabel: "del movimiento",
+    signature: null,
   };
 }
 
@@ -1317,7 +1353,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
     client
       .from("salary_payments")
       .select(
-        "id,employee_id,payment_type,concept,amount,payment_date,payment_method_id,project_id,work_id,created_at,created_by",
+        "id,employee_id,salary_week_id,payment_type,concept,amount,payment_date,payment_method_id,project_id,work_id,created_at,created_by",
       )
       .eq("status", 1),
     client.from("projects").select("id,name").eq("status", 1),
@@ -1381,6 +1417,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
     createdAt: unknown;
     createdBy: unknown;
     originLabel: string;
+    receiptHref?: string | null;
   }): FinanceCaptureRow {
     const concept = ensureConcept(data.conceptName, data.tagName);
     const accountId = String(data.accountId ?? "");
@@ -1402,6 +1439,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
       origin: data.scope,
       origin_label: data.originLabel,
       is_editable: false,
+      receipt_href: data.receiptHref ?? null,
     };
   }
 
@@ -1431,6 +1469,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
         createdAt: row.created_at,
         createdBy: row.created_by,
         originLabel: "Proyecto",
+        receiptHref: `/recibo/proyecto/${String(row.id)}`,
       }),
     );
   }
@@ -1453,6 +1492,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
         createdAt: row.created_at,
         createdBy: row.created_by,
         originLabel: "Obra",
+        receiptHref: `/recibo/obra/${String(row.id)}`,
       }),
     );
   }
@@ -1490,6 +1530,7 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
         createdAt: row.created_at,
         createdBy: row.created_by,
         originLabel: "Salario",
+        receiptHref: `/comprobante/${paymentType === "work" ? "obra" : "proyecto"}/${String(row.salary_week_id)}/${String(row.employee_id)}/${String(row.project_id ?? row.work_id ?? row.salary_week_id)}?preview=1`,
       }),
     );
   }
@@ -3141,16 +3182,21 @@ export async function setSalaryReceiptSignature(
   refId: string,
   signature: string,
 ): Promise<void> {
+  const receipt = await getSalaryReceipt(weekId, employeeId, "project", weekId);
+  if (!receipt) throw new Error("Comprobante no disponible.");
+  refType = "project";
+  refId = weekId;
   // Garantiza que exista la fila con su código antes de firmar.
   await getOrCreateSalaryReceiptCode(weekId, employeeId, refType, refId);
-  const { error } = await sb()
+  const { data, error } = await sb()
     .from("salary_receipts")
     .update({ signature, signed_at: new Date().toISOString() })
     .eq("salary_week_id", weekId)
     .eq("employee_id", employeeId)
     .eq("ref_type", refType)
-    .eq("ref_id", refId);
-  if (error) throw new Error(error.message);
+    .eq("ref_id", refId).is("signature", null).select("id").maybeSingle();
+  if (error) throw new Error("No se pudo guardar la firma.");
+  if (!data) throw new Error("El comprobante ya está firmado o no está disponible.");
 }
 
 /** Comprobante de pago semanal a un empleado por el total pagado en la semana. */
@@ -3188,12 +3234,12 @@ export async function getSalaryReceipt(
   if (amount <= 0) return null;
   const stableRefType: SalaryRefType = "project";
   const stableRefId = weekId;
-  const { code, signature } = await getOrCreateSalaryReceiptCode(
-    weekId,
-    employeeId,
-    stableRefType,
-    stableRefId,
-  );
+  const { data: receipt, error: receiptError } = await client.from("salary_receipts")
+    .select("code, signature").eq("salary_week_id", weekId).eq("employee_id", employeeId)
+    .eq("ref_type", stableRefType).eq("ref_id", stableRefId).maybeSingle();
+  if (receiptError) throw new Error("No se pudo consultar el comprobante.");
+  const code = (receipt?.code as string) ?? null;
+  const signature = (receipt?.signature as string) ?? null;
 
   return {
     docType: "pago",
@@ -3208,4 +3254,10 @@ export async function getSalaryReceipt(
     subjectName: null,
     signature,
   };
+}
+
+export async function issueSalaryReceipt(weekId: string, employeeId: string) {
+  const receipt = await getSalaryReceipt(weekId, employeeId, "project", weekId);
+  if (!receipt) throw new Error("Comprobante no disponible.");
+  return getOrCreateSalaryReceiptCode(weekId, employeeId, "project", weekId);
 }

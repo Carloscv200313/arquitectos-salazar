@@ -85,7 +85,7 @@ export function UtilitiesView({ report }: { report: FinanceUtilityReport }) {
         <Metric
           label="Utilidad de obras"
           value={formatCurrency(report.workTotal)}
-          hint="Categoría Honorarios"
+          hint="Categoría Cuenta de oficina"
           icon={<Building2 className="size-5" />}
         />
         <Metric

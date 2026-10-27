@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   BadgeDollarSign,
@@ -144,7 +143,6 @@ function NewOrderSheet({
   work: WorkWithFinance;
   providers: string[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [orderDate, setOrderDate] = useState(todayISODate());
   const [supplier, setSupplier] = useState("");
@@ -175,7 +173,6 @@ function NewOrderSheet({
         toast.success("Pedido registrado", { description: material });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -275,7 +272,6 @@ function QuoteOrderSheet({
   methods: PaymentMethod[];
   categories: string[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [quoteDate, setQuoteDate] = useState(todayISODate());
   const [category, setCategory] = useState("Material de construcción");
@@ -318,7 +314,6 @@ function QuoteOrderSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -420,7 +415,6 @@ function PaymentSheet({
   order: WorkOrderWithRelations;
   methods: PaymentMethod[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [paymentDate, setPaymentDate] = useState(todayISODate());
   const [description, setDescription] = useState("");
@@ -456,7 +450,6 @@ function PaymentSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -528,7 +521,6 @@ function EditOrderSheet({
   order: WorkOrderWithRelations;
   providers: string[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [supplier, setSupplier] = useState(order.supplier);
   const [material, setMaterial] = useState(order.material);
@@ -562,7 +554,6 @@ function EditOrderSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -830,7 +821,6 @@ export function WorkOrdersView({
   providers: string[];
   categories: string[];
 }) {
-  const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
   const [quoteTarget, setQuoteTarget] = useState<WorkOrderWithRelations | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<WorkOrderWithRelations | null>(null);
@@ -853,7 +843,6 @@ export function WorkOrdersView({
         return;
       }
       toast.success(isRequested ? "Pedido marcado como solicitado" : "Pedido marcado como pendiente");
-      router.refresh();
     });
   }
 

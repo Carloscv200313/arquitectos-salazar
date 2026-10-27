@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Banknote,
@@ -108,10 +107,11 @@ function EditorDialog({
   onSave: (values: Row) => void;
 }) {
   const [values, setValues] = useState<Row>(initial);
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) setValues(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -235,7 +235,6 @@ function CrudSection<T extends { id: string }>({
   saveAction: (raw: unknown) => Promise<ActionResult>;
   hideAction: (id: string) => Promise<ActionResult>;
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<{ id?: string; initial: Row } | null>(null);
   const [hideId, setHideId] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -246,7 +245,6 @@ function CrudSection<T extends { id: string }>({
       if (result.ok) {
         toast.success("Guardado");
         setEditing(null);
-        router.refresh();
       } else {
         toast.error(result.error);
       }
@@ -260,7 +258,6 @@ function CrudSection<T extends { id: string }>({
       if (result.ok) {
         toast.success("Registro ocultado");
         setHideId(null);
-        router.refresh();
       } else {
         toast.error(result.error);
       }
@@ -352,7 +349,6 @@ function CrudSection<T extends { id: string }>({
 }
 
 function ProfileSection({ profile }: { profile: CurrentUser | null }) {
-  const router = useRouter();
   const [name, setName] = useState(profile?.fullName ?? "");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -364,7 +360,6 @@ function ProfileSection({ profile }: { profile: CurrentUser | null }) {
       const r = await updateProfileNameAction({ fullName: name });
       if (r.ok) {
         toast.success("Nombre actualizado");
-        router.refresh();
       } else toast.error(r.error);
     });
   }

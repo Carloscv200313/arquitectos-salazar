@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { KeyRound, Loader2, Pencil, Plus, ShieldCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -121,7 +120,6 @@ function PermissionGrid({
 }
 
 export function UsersSection({ users, roles }: { users: AppUser[]; roles: Role[] }) {
-  const router = useRouter();
   const [edit, setEdit] = useState<EditState>(null);
   const [pwdUser, setPwdUser] = useState<AppUser | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
@@ -163,7 +161,6 @@ export function UsersSection({ users, roles }: { users: AppUser[]; roles: Role[]
       if (result.ok) {
         toast.success(editing ? "Usuario actualizado" : "Usuario creado");
         setEdit(null);
-        router.refresh();
       } else {
         toast.error(result.error);
       }
@@ -191,7 +188,6 @@ export function UsersSection({ users, roles }: { users: AppUser[]; roles: Role[]
       if (result.ok) {
         toast.success("Usuario desactivado");
         setDeactivateId(null);
-        router.refresh();
       } else {
         toast.error(result.error);
       }

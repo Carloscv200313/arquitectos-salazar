@@ -1,8 +1,9 @@
+import { authorizeDocument, salaryResource } from "@/lib/security/documents";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getSalaryReceipt } from "@/lib/data/finance";
 import { ReceiptDocument } from "@/components/receipt/receipt-document";
-import { signPagoAction } from "@/app/recibo/signature-actions";
+import { signPagoAction, issueSalaryReceiptAction } from "@/app/recibo/signature-actions";
 
 export const metadata: Metadata = {
   title: "Comprobante de pago",
@@ -14,12 +15,13 @@ export default async function SalaryReceiptPage({
   searchParams,
 }: {
   params: Promise<{ kind: string; weekId: string; employeeId: string; refId: string }>;
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: Promise<{ preview?: string; token?: string }>;
 }) {
   const { kind, weekId, employeeId, refId } = await params;
   const { preview } = await searchParams;
   if (kind !== "proyecto" && kind !== "obra") notFound();
 
+  const token = await authorizeDocument(salaryResource(weekId, employeeId), "salary.view", (await searchParams).token);
   const refType = kind === "proyecto" ? "project" : "work";
   const data = await getSalaryReceipt(weekId, employeeId, refType, refId);
   if (!data) notFound();
@@ -28,8 +30,9 @@ export default async function SalaryReceiptPage({
     <ReceiptDocument
       data={data}
       autoPrint={preview !== "1"}
+      prepareAction={issueSalaryReceiptAction.bind(null, { weekId, employeeId, token })}
       signAction={signPagoAction}
-      signPayload={{ kind, weekId, employeeId, refId }}
+      signPayload={{ kind: "proyecto", weekId, employeeId, refId: weekId, token }}
     />
   );
 }

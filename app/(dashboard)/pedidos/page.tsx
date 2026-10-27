@@ -1,3 +1,6 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
+import { traceScreen } from "@/lib/supabase/telemetry";
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +10,9 @@ import { listOrderWorks } from "@/lib/data/orders";
 export const metadata = { title: "Pedidos" };
 
 export default async function OrdersPage() {
+  const user = await requirePermission("orders.view");
+  return traceScreen("orders-list", user.id, async () => {
+
   const works = await listOrderWorks();
 
   return (
@@ -26,4 +32,5 @@ export default async function OrdersPage() {
       <OrderWorksList works={works} />
     </div>
   );
+  });
 }

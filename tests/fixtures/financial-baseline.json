@@ -1,0 +1,4853 @@
+{
+  "deudas": {
+    "result": [
+      {
+        "id": "d1",
+        "name": "Deudor sintético",
+        "amount": 80.1,
+        "type": "debtor",
+        "source": "manual",
+        "totalAmount": 90.15,
+        "totalPaid": 10.05,
+        "sourceAccountName": "Caja",
+        "loanDate": "2026-10-01"
+      },
+      {
+        "id": "provider-Proveedor sintético",
+        "name": "Proveedor sintético",
+        "amount": 2006.28,
+        "type": "provider",
+        "source": "mixed",
+        "totalAmount": 2255.88,
+        "totalPaid": 249.6
+      }
+    ],
+    "metrics": {
+      "queries": 63,
+      "bytes": 2589749,
+      "tables": {
+        "works": 14,
+        "provider_debt_settlements": 1,
+        "manual_provider_debts": 1,
+        "manual_provider_debt_payments": 1,
+        "manual_debtors": 1,
+        "manual_debtor_payments": 1,
+        "work_movements": 15,
+        "work_files": 14,
+        "work_orders": 2,
+        "work_order_payments": 12,
+        "payment_accounts": 1
+      },
+      "durationMs": 16.722865000000013
+    }
+  },
+  "balance": {
+    "result": {
+      "rows": [
+        {
+          "id": "accounts-payable",
+          "label": "Cuentas por pagar",
+          "amount": 2006.28,
+          "source": "providers",
+          "description": "Saldo pendiente de pedidos a proveedores."
+        },
+        {
+          "id": "efectivo",
+          "label": "Efectivo",
+          "amount": 0,
+          "source": "works-payment-method",
+          "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+        },
+        {
+          "id": "caja",
+          "label": "Caja",
+          "amount": -583.29,
+          "source": "works-payment-method",
+          "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+        },
+        {
+          "id": "cuenta-de-rosa",
+          "label": "Cuenta de Rosa",
+          "amount": 34.95,
+          "source": "works-payment-method",
+          "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+        },
+        {
+          "id": "cuenta-de-silvia",
+          "label": "Cuenta de Silvia",
+          "amount": 0,
+          "source": "works-payment-method",
+          "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+        },
+        {
+          "id": "cuenta-fiscal",
+          "label": "Cuenta fiscal",
+          "amount": 0,
+          "source": "works-payment-method",
+          "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+        },
+        {
+          "id": "accounts-receivable",
+          "label": "Cuentas por cobrar",
+          "amount": 2160.19,
+          "source": "receivable",
+          "description": "Deudores, obras por cobrar y proyectos pendientes de cobro."
+        }
+      ],
+      "total": 3618.13,
+      "totalWithoutDebtors": 3538.03,
+      "debtorsTotal": 80.1,
+      "providersTotal": 2006.28,
+      "worksReceivableTotal": 1205.34
+    },
+    "metrics": {
+      "queries": 80,
+      "bytes": 2783780,
+      "tables": {
+        "works": 15,
+        "projects": 1,
+        "provider_debt_settlements": 2,
+        "manual_provider_debts": 1,
+        "manual_provider_debt_payments": 2,
+        "manual_debtors": 2,
+        "manual_debtor_payments": 2,
+        "work_movements": 17,
+        "project_payments": 1,
+        "internal_transfers": 1,
+        "work_internal_transfers": 1,
+        "finance_movement_captures": 1,
+        "salary_payments": 1,
+        "payment_accounts": 2,
+        "general_balance_entries": 1,
+        "general_balance_account_movements": 1,
+        "work_files": 15,
+        "work_orders": 2,
+        "work_order_payments": 12
+      },
+      "durationMs": 7.945039000000065
+    }
+  },
+  "utilidades": {
+    "result": {
+      "rows": [
+        {
+          "month": "2026-10",
+          "projectUtility": 37.57,
+          "workUtility": 0,
+          "totalUtility": 37.57
+        },
+        {
+          "month": "2026-09",
+          "projectUtility": 0,
+          "workUtility": 803.6,
+          "totalUtility": 803.6
+        }
+      ],
+      "projectTotal": 37.57,
+      "workTotal": 803.6,
+      "total": 841.17
+    },
+    "metrics": {
+      "queries": 2,
+      "bytes": 3943,
+      "tables": {
+        "project_payments": 1,
+        "work_movements": 1
+      },
+      "durationMs": 0.6529150000000072
+    }
+  },
+  "estados": {
+    "result": [
+      {
+        "income": [
+          {
+            "month": "2026-09",
+            "amount": 1305.79
+          },
+          {
+            "month": "2026-10",
+            "amount": 1305.78
+          }
+        ],
+        "expenses": [
+          {
+            "month": "2026-09",
+            "amount": 1104.99
+          },
+          {
+            "month": "2026-10",
+            "amount": 1004.38
+          }
+        ]
+      },
+      [],
+      []
+    ],
+    "metrics": {
+      "queries": 4,
+      "bytes": 1923,
+      "tables": {
+        "work_movements": 1,
+        "salary_payments": 2,
+        "project_payments": 1
+      },
+      "durationMs": 0.5284080000000131
+    }
+  },
+  "salarios": {
+    "result": {
+      "months": [
+        {
+          "year": 2026,
+          "month": 10,
+          "label": "octubre de 2026"
+        }
+      ],
+      "selected": {
+        "year": 2026,
+        "month": 10
+      },
+      "employees": [
+        {
+          "id": "e1",
+          "full_name": "Empleado sintético",
+          "is_active": true,
+          "default_work_type": "work",
+          "created_at": "",
+          "updated_at": "",
+          "created_by": null
+        }
+      ],
+      "taskTypes": [
+        {
+          "id": "t1",
+          "name": "Propuesta",
+          "module_type": "project",
+          "is_active": true,
+          "created_at": ""
+        }
+      ],
+      "weeks": [
+        {
+          "id": "sw",
+          "year": 2026,
+          "month": 10,
+          "week_start_date": "2026-10-05",
+          "week_end_date": "2026-10-11",
+          "payment_date": "2026-10-10",
+          "status": "paid",
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "employees": [
+            {
+              "employee": {
+                "id": "e1",
+                "full_name": "Empleado sintético",
+                "is_active": true,
+                "default_work_type": "work",
+                "created_at": "",
+                "updated_at": "",
+                "created_by": null
+              },
+              "dayRecords": {
+                "monday": [
+                  {
+                    "id": "sd",
+                    "salary_week_id": "sw",
+                    "employee_id": "e1",
+                    "work_date": "2026-10-05",
+                    "day_name": "monday",
+                    "activity_type": "work",
+                    "project_id": null,
+                    "work_id": "w1",
+                    "task_type_id": null,
+                    "notes": null,
+                    "status": "draft",
+                    "created_at": "2026-10-01T12:00:00Z",
+                    "updated_at": "2026-10-01T12:00:00Z",
+                    "created_by": null,
+                    "employee": {
+                      "id": "e1",
+                      "full_name": "Empleado sintético",
+                      "is_active": true,
+                      "default_work_type": "work",
+                      "created_at": "",
+                      "updated_at": "",
+                      "created_by": null
+                    },
+                    "project": null,
+                    "work": {
+                      "id": "w1",
+                      "name": "Obra sintética"
+                    },
+                    "taskType": null
+                  }
+                ]
+              },
+              "payments": [
+                {
+                  "id": "sp",
+                  "salary_week_id": "sw",
+                  "employee_id": "e1",
+                  "payment_type": "administrative",
+                  "concept": "Salario sintético",
+                  "amount": 150.25,
+                  "payment_method_id": "a0",
+                  "payment_date": "2026-10-10",
+                  "project_id": null,
+                  "work_id": null,
+                  "task_type_id": null,
+                  "notes": null,
+                  "status": "paid",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "employee": {
+                    "id": "e1",
+                    "full_name": "Empleado sintético",
+                    "is_active": true,
+                    "default_work_type": "work",
+                    "created_at": "",
+                    "updated_at": "",
+                    "created_by": null
+                  },
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  },
+                  "project": null,
+                  "work": null,
+                  "taskType": null
+                }
+              ],
+              "totals": {
+                "cash": 150.25,
+                "account": 0,
+                "projectOrWork": 0,
+                "total": 150.25
+              }
+            }
+          ],
+          "totals": {
+            "total": 150.25,
+            "byMethod": [
+              {
+                "methodId": "a0",
+                "methodName": "Caja",
+                "total": 150.25
+              }
+            ],
+            "byPaymentType": [
+              {
+                "paymentType": "administrative",
+                "total": 150.25
+              }
+            ],
+            "pendingPayments": 0
+          }
+        }
+      ],
+      "paymentMethods": [
+        {
+          "id": "a0",
+          "name": "Caja",
+          "is_active": true,
+          "created_at": "2026-10-01T12:00:00Z"
+        },
+        {
+          "id": "a1",
+          "name": "Cuenta de Rosa",
+          "is_active": true,
+          "created_at": "2026-10-01T12:00:00Z"
+        }
+      ],
+      "totals": {
+        "totalPaid": 150.25,
+        "totalPending": 0,
+        "totalCash": 150.25,
+        "totalAccount": 0,
+        "totalProject": 0,
+        "totalWork": 0
+      },
+      "taskRates": [],
+      "recentPayments": [
+        {
+          "id": "sp",
+          "salary_week_id": "sw",
+          "employee_id": "e1",
+          "payment_type": "administrative",
+          "concept": "Salario sintético",
+          "amount": 150.25,
+          "payment_method_id": "a0",
+          "payment_date": "2026-10-10",
+          "project_id": null,
+          "work_id": null,
+          "task_type_id": null,
+          "notes": null,
+          "status": "paid",
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "employee": {
+            "id": "e1",
+            "full_name": "Empleado sintético",
+            "is_active": true,
+            "default_work_type": "work",
+            "created_at": "",
+            "updated_at": "",
+            "created_by": null
+          },
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          },
+          "project": null,
+          "work": null,
+          "taskType": null
+        }
+      ]
+    },
+    "metrics": {
+      "queries": 8,
+      "bytes": 1213,
+      "tables": {
+        "payment_accounts": 1,
+        "employees": 1,
+        "task_types": 1,
+        "projects": 1,
+        "works": 1,
+        "salary_weeks": 1,
+        "salary_day_records": 1,
+        "salary_payments": 1
+      },
+      "durationMs": 24.37301100000002
+    }
+  },
+  "pedidos": {
+    "result": [
+      {
+        "id": "o0",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": null,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [],
+        "paid": 0,
+        "pending": 0,
+        "status": "pending_quote"
+      },
+      {
+        "id": "o1",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op0",
+            "order_id": "o1",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o2",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op1",
+            "order_id": "o2",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o3",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op2",
+            "order_id": "o3",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o4",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op3",
+            "order_id": "o4",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o5",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op4",
+            "order_id": "o5",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o6",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op5",
+            "order_id": "o6",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o7",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op6",
+            "order_id": "o7",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o8",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op7",
+            "order_id": "o8",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o9",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op8",
+            "order_id": "o9",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o10",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": true,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op9",
+            "order_id": "o10",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      },
+      {
+        "id": "o11",
+        "work_id": "w1",
+        "source": "internal",
+        "order_date": "2026-10-01",
+        "supplier": "Proveedor sintético",
+        "material": "Material sintético",
+        "description": null,
+        "category": null,
+        "amount": 75.15,
+        "quoted_at": null,
+        "payable_movement_id": null,
+        "is_requested": false,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "work": {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        },
+        "payments": [
+          {
+            "id": "op10",
+            "order_id": "o11",
+            "payment_date": "2026-10-01",
+            "description": "Pago sintético",
+            "amount": 20.1,
+            "payment_method_id": "a0",
+            "work_movement_id": null,
+            "internal_transfer_id": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          }
+        ],
+        "paid": 20.1,
+        "pending": 55.05,
+        "status": "partial"
+      }
+    ],
+    "metrics": {
+      "queries": 49,
+      "bytes": 2169444,
+      "tables": {
+        "work_orders": 1,
+        "work_movements": 12,
+        "works": 12,
+        "work_files": 12,
+        "work_order_payments": 12
+      },
+      "durationMs": 3.272373000000016
+    }
+  },
+  "detalle": {
+    "result": [
+      {
+        "id": "w1",
+        "client_id": "c1",
+        "name": "Obra sintética",
+        "address": "Dirección sintética",
+        "status": "active",
+        "description": null,
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "client": {
+          "id": "c1",
+          "name": "Cliente sintético",
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null
+        },
+        "finance": {
+          "income": 1406.23,
+          "expense": 2611.57,
+          "balance": -1205.34,
+          "movementsCount": 40,
+          "lastMovementDate": "2026-10-01"
+        },
+        "files": []
+      },
+      [
+        {
+          "id": "m00000",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.25,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": 100.25,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00002",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.27,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -0.02,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00004",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.29,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.31,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00006",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.31,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": 0,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00008",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.33,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.33,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00010",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.35,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.68,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00012",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.37,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.31,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00014",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.39,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.7,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00016",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.41,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.11,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00018",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.43,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.68,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00020",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.45,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.13,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00022",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.47,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.6,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00024",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.49,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.11,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00026",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.51,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.62,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00028",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.53,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.15,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00030",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.55,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.6,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00032",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.57,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.17,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00034",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.59,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.76,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00036",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.61,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.15,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00038",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.63,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.78,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00001",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.26,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.04,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00003",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.28,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00005",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.3,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.06,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00007",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.32,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.38,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00009",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.34,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.04,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00011",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.36,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.4,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00013",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.38,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00015",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.4,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.38,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00017",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.42,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.8,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00019",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.44,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.24,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00021",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.46,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00023",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.48,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.26,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00025",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.5,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00027",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.52,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.24,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00029",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.54,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00031",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.56,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.34,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00033",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.58,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00035",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.6,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.36,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00037",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.62,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1305.98,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00039",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.64,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.34,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        }
+      ],
+      [
+        {
+          "category": "Material",
+          "budget": 10000,
+          "income": 803.56,
+          "expense": 1607.24,
+          "balance": -803.68,
+          "executedAmount": 150,
+          "incomePercent": 8.04,
+          "expensePercent": 16.07,
+          "executedPercent": 1.5
+        },
+        {
+          "category": "Cuenta de oficina",
+          "budget": null,
+          "income": 301.2,
+          "expense": 502.2,
+          "balance": -201,
+          "executedAmount": null,
+          "incomePercent": null,
+          "expensePercent": null,
+          "executedPercent": null
+        },
+        {
+          "category": "Honorarios",
+          "budget": null,
+          "income": 301.47,
+          "expense": 502.13,
+          "balance": -200.66,
+          "executedAmount": null,
+          "incomePercent": null,
+          "expensePercent": null,
+          "executedPercent": null
+        }
+      ],
+      [
+        {
+          "month": "2026-09",
+          "amount": 803.6
+        }
+      ]
+    ],
+    "metrics": {
+      "queries": 8,
+      "bytes": 717410,
+      "tables": {
+        "work_movements": 4,
+        "works": 1,
+        "work_categories": 1,
+        "work_category_budgets": 1,
+        "work_files": 1
+      },
+      "durationMs": 2.205691999999999
+    }
+  },
+  "proyectos": {
+    "result": [
+      {
+        "id": "p1",
+        "client_id": "c1",
+        "name": "Proyecto sintético",
+        "address": null,
+        "template": "diamante",
+        "project_amount": 800,
+        "office_amount": 100,
+        "utility_amount": 100,
+        "addons_total": 0,
+        "total_amount": 1000,
+        "proposal_amount": 200,
+        "modeling_3d_amount": 200,
+        "plans_amount": 200,
+        "render_amount": 200,
+        "proposal_responsible": "Alejandra",
+        "modeling_3d_responsible": "Alejandra",
+        "plans_responsible": "Alejandra",
+        "render_responsible": "Alejandra",
+        "created_at": "2026-10-01T12:00:00Z",
+        "updated_at": "2026-10-01T12:00:00Z",
+        "created_by": null,
+        "client": {
+          "id": "c1",
+          "name": "Cliente sintético",
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null
+        },
+        "finance": {
+          "total": 1000,
+          "income": 125.25,
+          "expense": 25.1,
+          "paid": 125.25,
+          "pending": 874.75,
+          "net": 100.15,
+          "collectionPercentage": 12.53,
+          "paidPercentage": 12.53,
+          "status": "partial"
+        },
+        "payments_count": 2,
+        "addons": []
+      }
+    ],
+    "metrics": {
+      "queries": 1,
+      "bytes": 9332,
+      "tables": {
+        "projects": 1
+      },
+      "durationMs": 0.15759299999990617
+    }
+  },
+  "deudas-pantalla": {
+    "result": [
+      [
+        {
+          "id": "d1",
+          "name": "Deudor sintético",
+          "amount": 80.1,
+          "type": "debtor",
+          "source": "manual",
+          "totalAmount": 90.15,
+          "totalPaid": 10.05,
+          "sourceAccountName": "Caja",
+          "loanDate": "2026-10-01"
+        },
+        {
+          "id": "provider-Proveedor sintético",
+          "name": "Proveedor sintético",
+          "amount": 2006.28,
+          "type": "provider",
+          "source": "mixed",
+          "totalAmount": 2255.88,
+          "totalPaid": 249.6
+        }
+      ],
+      [
+        {
+          "provider": "Proveedor sintético",
+          "totalAmount": 2255.88,
+          "totalPaid": 249.6,
+          "totalPending": 2006.28,
+          "orders": [
+            {
+              "id": "o2",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": true,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op1",
+                  "order_id": "o2",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o3",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op2",
+                  "order_id": "o3",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o4",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": true,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op3",
+                  "order_id": "o4",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o5",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op4",
+                  "order_id": "o5",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o6",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": true,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op5",
+                  "order_id": "o6",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o7",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op6",
+                  "order_id": "o7",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o8",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": true,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op7",
+                  "order_id": "o8",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o9",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op8",
+                  "order_id": "o9",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o10",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": true,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op9",
+                  "order_id": "o10",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o11",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op10",
+                  "order_id": "o11",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 20.1,
+              "pending": 55.05,
+              "status": "partial"
+            },
+            {
+              "id": "o1",
+              "work_id": "w1",
+              "source": "internal",
+              "order_date": "2026-10-01",
+              "supplier": "Proveedor sintético",
+              "material": "Material sintético",
+              "description": null,
+              "category": null,
+              "amount": 75.15,
+              "quoted_at": null,
+              "payable_movement_id": null,
+              "is_requested": false,
+              "created_at": "2026-10-01T12:00:00Z",
+              "updated_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "work": {
+                "id": "w1",
+                "client_id": "c1",
+                "name": "Obra sintética",
+                "address": "Dirección sintética",
+                "status": "active",
+                "description": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null,
+                "client": {
+                  "id": "c1",
+                  "name": "Cliente sintético",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "updated_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                },
+                "finance": {
+                  "income": 1406.23,
+                  "expense": 2611.57,
+                  "balance": -1205.34,
+                  "movementsCount": 40,
+                  "lastMovementDate": "2026-10-01"
+                },
+                "files": []
+              },
+              "payments": [
+                {
+                  "id": "op0",
+                  "order_id": "o1",
+                  "payment_date": "2026-10-01",
+                  "description": "Pago sintético",
+                  "amount": 20.1,
+                  "payment_method_id": "a0",
+                  "work_movement_id": null,
+                  "internal_transfer_id": null,
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null,
+                  "method": {
+                    "id": "a0",
+                    "name": "Caja",
+                    "is_active": true,
+                    "created_at": "2026-10-01T12:00:00Z"
+                  }
+                }
+              ],
+              "paid": 25.15,
+              "pending": 50,
+              "status": "partial"
+            }
+          ],
+          "workMovements": [
+            {
+              "id": "m00037",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.62,
+              "settled": 0,
+              "pending": 100.62,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00035",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Cuenta de oficina",
+              "amount": 100.6,
+              "settled": 0,
+              "pending": 100.6,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00031",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.56,
+              "settled": 0,
+              "pending": 100.56,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00029",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.54,
+              "settled": 0,
+              "pending": 100.54,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00025",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Cuenta de oficina",
+              "amount": 100.5,
+              "settled": 0,
+              "pending": 100.5,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00023",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.48,
+              "settled": 0,
+              "pending": 100.48,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00019",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.44,
+              "settled": 0,
+              "pending": 100.44,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00017",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.42,
+              "settled": 0,
+              "pending": 100.42,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00013",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.38,
+              "settled": 0,
+              "pending": 100.38,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00011",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.36,
+              "settled": 0,
+              "pending": 100.36,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00007",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.32,
+              "settled": 0,
+              "pending": 100.32,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00005",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Cuenta de oficina",
+              "amount": 100.3,
+              "settled": 0,
+              "pending": 100.3,
+              "sourceType": "work_movement"
+            },
+            {
+              "id": "m00001",
+              "workId": "w1",
+              "workName": "Obra sintética",
+              "clientName": "Cliente sintético",
+              "movementDate": "2026-10-01",
+              "concept": "Concepto sintético",
+              "provider": "Proveedor sintético",
+              "category": "Material",
+              "amount": 100.26,
+              "settled": 0,
+              "pending": 100.26,
+              "sourceType": "work_movement"
+            }
+          ],
+          "manualDebts": [
+            {
+              "debt": {
+                "id": "md",
+                "provider": "Proveedor sintético",
+                "amount": 123.45,
+                "debt_date": "2026-10-01",
+                "note": null,
+                "created_at": "2026-10-01T12:00:00Z",
+                "updated_at": "2026-10-01T12:00:00Z",
+                "created_by": null
+              },
+              "totalAmount": 123.45,
+              "totalPaid": 23.45,
+              "totalPending": 100,
+              "payments": [
+                {
+                  "id": "mp",
+                  "debt_id": "md",
+                  "payment_date": "2026-10-01",
+                  "amount": 23.45,
+                  "note": null,
+                  "accountName": "Caja",
+                  "created_at": "2026-10-01T12:00:00Z",
+                  "created_by": null
+                }
+              ]
+            }
+          ],
+          "payments": [
+            {
+              "id": "op0",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o1",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "ps",
+              "kind": "settlement",
+              "sourceType": "work_order",
+              "sourceId": "o1",
+              "paymentDate": "2026-10-01",
+              "amount": 5.05,
+              "note": null,
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": "Caja"
+            },
+            {
+              "id": "op1",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o2",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op2",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o3",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op3",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o4",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op4",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o5",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op5",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o6",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op6",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o7",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op7",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o8",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op8",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o9",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op9",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o10",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "op10",
+              "kind": "order_payment",
+              "sourceType": "work_order",
+              "sourceId": "o11",
+              "paymentDate": "2026-10-01",
+              "amount": 20.1,
+              "note": "Pago sintético",
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": null
+            },
+            {
+              "id": "mp",
+              "kind": "manual",
+              "sourceType": "manual_provider_debt",
+              "sourceId": "md",
+              "paymentDate": "2026-10-01",
+              "amount": 23.45,
+              "note": null,
+              "createdAt": "2026-10-01T12:00:00Z",
+              "accountName": "Caja"
+            }
+          ]
+        }
+      ],
+      [
+        {
+          "debtor": {
+            "id": "d1",
+            "name": "Deudor sintético",
+            "amount": 90.15,
+            "source_account_id": "a0",
+            "project_id": null,
+            "loan_date": "2026-10-01",
+            "note": null,
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "account": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            }
+          },
+          "totalAmount": 90.15,
+          "totalPaid": 10.05,
+          "totalPending": 80.1,
+          "payments": [
+            {
+              "id": "dp",
+              "debtor_id": "d1",
+              "project_payment_id": null,
+              "payment_date": "2026-10-01",
+              "amount": 10.05,
+              "to_account_id": "a1",
+              "note": null,
+              "created_at": "2026-10-01T12:00:00Z",
+              "created_by": null,
+              "account": {
+                "id": "a1",
+                "name": "Cuenta de Rosa",
+                "is_active": true,
+                "created_at": "2026-10-01T12:00:00Z"
+              }
+            }
+          ]
+        }
+      ]
+    ],
+    "metrics": {
+      "queries": 126,
+      "bytes": 5179498,
+      "tables": {
+        "works": 28,
+        "provider_debt_settlements": 2,
+        "manual_provider_debts": 2,
+        "manual_provider_debt_payments": 2,
+        "manual_debtors": 2,
+        "manual_debtor_payments": 2,
+        "work_movements": 30,
+        "work_files": 28,
+        "work_orders": 4,
+        "work_order_payments": 24,
+        "payment_accounts": 2
+      },
+      "durationMs": 8.2975899999999
+    }
+  },
+  "dashboard": {
+    "result": {
+      "ps": [
+        {
+          "id": "p1",
+          "client_id": "c1",
+          "name": "Proyecto sintético",
+          "address": null,
+          "template": "diamante",
+          "project_amount": 800,
+          "office_amount": 100,
+          "utility_amount": 100,
+          "addons_total": 0,
+          "total_amount": 1000,
+          "proposal_amount": 200,
+          "modeling_3d_amount": 200,
+          "plans_amount": 200,
+          "render_amount": 200,
+          "proposal_responsible": "Alejandra",
+          "modeling_3d_responsible": "Alejandra",
+          "plans_responsible": "Alejandra",
+          "render_responsible": "Alejandra",
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "total": 1000,
+            "income": 125.25,
+            "expense": 25.1,
+            "paid": 125.25,
+            "pending": 874.75,
+            "net": 100.15,
+            "collectionPercentage": 12.53,
+            "paidPercentage": 12.53,
+            "status": "partial"
+          },
+          "payments_count": 2,
+          "addons": []
+        }
+      ],
+      "ws": [
+        {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": []
+        }
+      ],
+      "os": [
+        {
+          "id": "w1",
+          "client_id": "c1",
+          "name": "Obra sintética",
+          "address": "Dirección sintética",
+          "status": "active",
+          "description": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "updated_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "client": {
+            "id": "c1",
+            "name": "Cliente sintético",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null
+          },
+          "finance": {
+            "income": 1406.23,
+            "expense": 2611.57,
+            "balance": -1205.34,
+            "movementsCount": 40,
+            "lastMovementDate": "2026-10-01"
+          },
+          "files": [],
+          "ordersCount": 12,
+          "pendingOrdersCount": 6,
+          "ordersAmount": 826.65,
+          "ordersPaid": 221.1,
+          "ordersPending": 605.55
+        }
+      ],
+      "ut": {
+        "rows": [
+          {
+            "month": "2026-10",
+            "projectUtility": 37.57,
+            "workUtility": 0,
+            "totalUtility": 37.57
+          },
+          {
+            "month": "2026-09",
+            "projectUtility": 0,
+            "workUtility": 803.6,
+            "totalUtility": 803.6
+          }
+        ],
+        "projectTotal": 37.57,
+        "workTotal": 803.6,
+        "total": 841.17
+      },
+      "sal": {
+        "months": [
+          {
+            "year": 2026,
+            "month": 10,
+            "label": "octubre de 2026"
+          }
+        ],
+        "selected": {
+          "year": 2026,
+          "month": 10
+        },
+        "employees": [
+          {
+            "id": "e1",
+            "full_name": "Empleado sintético",
+            "is_active": true,
+            "default_work_type": "work",
+            "created_at": "",
+            "updated_at": "",
+            "created_by": null
+          }
+        ],
+        "taskTypes": [
+          {
+            "id": "t1",
+            "name": "Propuesta",
+            "module_type": "project",
+            "is_active": true,
+            "created_at": ""
+          }
+        ],
+        "weeks": [
+          {
+            "id": "sw",
+            "year": 2026,
+            "month": 10,
+            "week_start_date": "2026-10-05",
+            "week_end_date": "2026-10-11",
+            "payment_date": "2026-10-10",
+            "status": "paid",
+            "created_at": "2026-10-01T12:00:00Z",
+            "updated_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "employees": [
+              {
+                "employee": {
+                  "id": "e1",
+                  "full_name": "Empleado sintético",
+                  "is_active": true,
+                  "default_work_type": "work",
+                  "created_at": "",
+                  "updated_at": "",
+                  "created_by": null
+                },
+                "dayRecords": {
+                  "monday": [
+                    {
+                      "id": "sd",
+                      "salary_week_id": "sw",
+                      "employee_id": "e1",
+                      "work_date": "2026-10-05",
+                      "day_name": "monday",
+                      "activity_type": "work",
+                      "project_id": null,
+                      "work_id": "w1",
+                      "task_type_id": null,
+                      "notes": null,
+                      "status": "draft",
+                      "created_at": "2026-10-01T12:00:00Z",
+                      "updated_at": "2026-10-01T12:00:00Z",
+                      "created_by": null,
+                      "employee": {
+                        "id": "e1",
+                        "full_name": "Empleado sintético",
+                        "is_active": true,
+                        "default_work_type": "work",
+                        "created_at": "",
+                        "updated_at": "",
+                        "created_by": null
+                      },
+                      "project": null,
+                      "work": {
+                        "id": "w1",
+                        "name": "Obra sintética"
+                      },
+                      "taskType": null
+                    }
+                  ]
+                },
+                "payments": [
+                  {
+                    "id": "sp",
+                    "salary_week_id": "sw",
+                    "employee_id": "e1",
+                    "payment_type": "administrative",
+                    "concept": "Salario sintético",
+                    "amount": 150.25,
+                    "payment_method_id": "a0",
+                    "payment_date": "2026-10-10",
+                    "project_id": null,
+                    "work_id": null,
+                    "task_type_id": null,
+                    "notes": null,
+                    "status": "paid",
+                    "created_at": "2026-10-01T12:00:00Z",
+                    "created_by": null,
+                    "employee": {
+                      "id": "e1",
+                      "full_name": "Empleado sintético",
+                      "is_active": true,
+                      "default_work_type": "work",
+                      "created_at": "",
+                      "updated_at": "",
+                      "created_by": null
+                    },
+                    "method": {
+                      "id": "a0",
+                      "name": "Caja",
+                      "is_active": true,
+                      "created_at": "2026-10-01T12:00:00Z"
+                    },
+                    "project": null,
+                    "work": null,
+                    "taskType": null
+                  }
+                ],
+                "totals": {
+                  "cash": 150.25,
+                  "account": 0,
+                  "projectOrWork": 0,
+                  "total": 150.25
+                }
+              }
+            ],
+            "totals": {
+              "total": 150.25,
+              "byMethod": [
+                {
+                  "methodId": "a0",
+                  "methodName": "Caja",
+                  "total": 150.25
+                }
+              ],
+              "byPaymentType": [
+                {
+                  "paymentType": "administrative",
+                  "total": 150.25
+                }
+              ],
+              "pendingPayments": 0
+            }
+          }
+        ],
+        "paymentMethods": [
+          {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          },
+          {
+            "id": "a1",
+            "name": "Cuenta de Rosa",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        ],
+        "totals": {
+          "totalPaid": 150.25,
+          "totalPending": 0,
+          "totalCash": 150.25,
+          "totalAccount": 0,
+          "totalProject": 0,
+          "totalWork": 0
+        },
+        "taskRates": [],
+        "recentPayments": [
+          {
+            "id": "sp",
+            "salary_week_id": "sw",
+            "employee_id": "e1",
+            "payment_type": "administrative",
+            "concept": "Salario sintético",
+            "amount": 150.25,
+            "payment_method_id": "a0",
+            "payment_date": "2026-10-10",
+            "project_id": null,
+            "work_id": null,
+            "task_type_id": null,
+            "notes": null,
+            "status": "paid",
+            "created_at": "2026-10-01T12:00:00Z",
+            "created_by": null,
+            "employee": {
+              "id": "e1",
+              "full_name": "Empleado sintético",
+              "is_active": true,
+              "default_work_type": "work",
+              "created_at": "",
+              "updated_at": "",
+              "created_by": null
+            },
+            "method": {
+              "id": "a0",
+              "name": "Caja",
+              "is_active": true,
+              "created_at": "2026-10-01T12:00:00Z"
+            },
+            "project": null,
+            "work": null,
+            "taskType": null
+          }
+        ]
+      },
+      "bal": {
+        "rows": [
+          {
+            "id": "accounts-payable",
+            "label": "Cuentas por pagar",
+            "amount": 2006.28,
+            "source": "providers",
+            "description": "Saldo pendiente de pedidos a proveedores."
+          },
+          {
+            "id": "efectivo",
+            "label": "Efectivo",
+            "amount": 0,
+            "source": "works-payment-method",
+            "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+          },
+          {
+            "id": "caja",
+            "label": "Caja",
+            "amount": -583.29,
+            "source": "works-payment-method",
+            "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+          },
+          {
+            "id": "cuenta-de-rosa",
+            "label": "Cuenta de Rosa",
+            "amount": 34.95,
+            "source": "works-payment-method",
+            "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+          },
+          {
+            "id": "cuenta-de-silvia",
+            "label": "Cuenta de Silvia",
+            "amount": 0,
+            "source": "works-payment-method",
+            "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+          },
+          {
+            "id": "cuenta-fiscal",
+            "label": "Cuenta fiscal",
+            "amount": 0,
+            "source": "works-payment-method",
+            "description": "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta."
+          },
+          {
+            "id": "accounts-receivable",
+            "label": "Cuentas por cobrar",
+            "amount": 2160.19,
+            "source": "receivable",
+            "description": "Deudores, obras por cobrar y proyectos pendientes de cobro."
+          }
+        ],
+        "total": 3618.13,
+        "totalWithoutDebtors": 3538.03,
+        "debtorsTotal": 80.1,
+        "providersTotal": 2006.28,
+        "worksReceivableTotal": 1205.34
+      },
+      "pm": [
+        {
+          "id": "pp1",
+          "project_id": "p1",
+          "movement_type": "income",
+          "amount": 125.25,
+          "payment_date": "2026-10-01",
+          "payment_method_id": "a0",
+          "internal_area": null,
+          "receipt_code": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "pp2",
+          "project_id": "p1",
+          "movement_type": "expense",
+          "amount": 25.1,
+          "payment_date": "2026-10-01",
+          "payment_method_id": "a1",
+          "internal_area": "proposal",
+          "receipt_code": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "method": {
+            "id": "a1",
+            "name": "Cuenta de Rosa",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        }
+      ],
+      "wm": [
+        {
+          "id": "m00000",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.25,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": 100.25,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00002",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.27,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -0.02,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00004",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.29,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.31,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00006",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.31,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": 0,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00008",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.33,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.33,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00010",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.35,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.68,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00012",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.37,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -100.31,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00014",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.39,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.7,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00016",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.41,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.11,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00018",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.43,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -200.68,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00020",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.45,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.13,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00022",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.47,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.6,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00024",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.49,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -301.11,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00026",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.51,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.62,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00028",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.53,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.15,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00030",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.55,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -401.6,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00032",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "expense",
+          "amount": 100.57,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.17,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00034",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.59,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.76,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00036",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Honorarios",
+          "movement_type": "income",
+          "amount": 100.61,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -502.15,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00038",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-09-30",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.63,
+          "payment_method_id": "a0",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.78,
+          "method": {
+            "id": "a0",
+            "name": "Caja",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00001",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.26,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.04,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00003",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.28,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -602.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00005",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.3,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.06,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00007",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.32,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.38,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00009",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.34,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -703.04,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00011",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.36,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.4,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00013",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.38,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00015",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "income",
+          "amount": 100.4,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -803.38,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00017",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.42,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.8,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00019",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.44,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.24,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00021",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.46,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -903.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00023",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.48,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.26,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00025",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.5,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00027",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.52,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1004.24,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00029",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.54,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.78,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00031",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.56,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.34,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00033",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.58,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1104.76,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00035",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Cuenta de oficina",
+          "movement_type": "expense",
+          "amount": 100.6,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.36,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00037",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "expense",
+          "amount": 100.62,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1305.98,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        },
+        {
+          "id": "m00039",
+          "work_id": "w1",
+          "folio": null,
+          "receipt": "",
+          "movement_date": "2026-10-01",
+          "concept": "Concepto sintético",
+          "supplier": "Proveedor sintético",
+          "category": "Material",
+          "movement_type": "income",
+          "amount": 100.64,
+          "payment_method_id": "a2",
+          "observations": null,
+          "created_at": "2026-10-01T12:00:00Z",
+          "created_by": null,
+          "balance": -1205.34,
+          "method": {
+            "id": "a2",
+            "name": "Cuentas por pagar",
+            "is_active": true,
+            "created_at": "2026-10-01T12:00:00Z"
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "queries": 101,
+      "bytes": 3348167,
+      "tables": {
+        "projects": 3,
+        "works": 18,
+        "work_orders": 3,
+        "work_order_payments": 13,
+        "project_payments": 3,
+        "work_movements": 21,
+        "payment_accounts": 3,
+        "employees": 1,
+        "task_types": 1,
+        "provider_debt_settlements": 2,
+        "manual_provider_debts": 1,
+        "manual_provider_debt_payments": 2,
+        "manual_debtors": 2,
+        "manual_debtor_payments": 2,
+        "internal_transfers": 1,
+        "work_internal_transfers": 1,
+        "finance_movement_captures": 1,
+        "salary_payments": 2,
+        "general_balance_entries": 1,
+        "general_balance_account_movements": 1,
+        "salary_weeks": 1,
+        "work_files": 17,
+        "salary_day_records": 1
+      },
+      "durationMs": 7.213127000000213
+    }
+  }
+}

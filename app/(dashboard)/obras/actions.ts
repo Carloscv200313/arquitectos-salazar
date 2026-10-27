@@ -1,4 +1,6 @@
 "use server";
+import { requirePermission, requireUser } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -30,8 +32,8 @@ export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
-function currentUserId(): string | null {
-  return null;
+async function currentUserId(): Promise<string> {
+  return (await requireUser()).id;
 }
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -46,6 +48,8 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
 export async function createWorkAction(
   raw: unknown,
 ): Promise<ActionResult<{ workId: string }>> {
+  await requirePermission("works.edit");
+
   const parsed = createWorkSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -64,7 +68,7 @@ export async function createWorkAction(
       clientName: d.clientName || undefined,
       status: d.status,
       description: d.description || undefined,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/obras");
     return { ok: true, data: { workId } };
@@ -76,6 +80,8 @@ export async function createWorkAction(
 export async function updateWorkAction(
   raw: unknown,
 ): Promise<ActionResult<{ workId: string }>> {
+  await requirePermission("works.edit");
+
   const parsed = updateWorkSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -95,7 +101,7 @@ export async function updateWorkAction(
       clientName: d.clientName || undefined,
       status: d.status,
       description: d.description || undefined,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.id}`);
@@ -108,6 +114,8 @@ export async function updateWorkAction(
 export async function registerWorkMovementAction(
   raw: unknown,
 ): Promise<ActionResult<{ movementId: string; receiptCode: string | null; isIncome: boolean }>> {
+  await requirePermission("works.edit");
+
   const parsed = registerWorkMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -130,7 +138,7 @@ export async function registerWorkMovementAction(
       amount: d.amount,
       paymentMethodId: d.paymentMethodId,
       observations: d.observations || undefined,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
@@ -148,6 +156,8 @@ export async function registerWorkMovementAction(
 }
 
 export async function editWorkMovementAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("works.edit");
+
   const parsed = editWorkMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -181,6 +191,8 @@ export async function editWorkMovementAction(raw: unknown): Promise<ActionResult
 }
 
 export async function deleteWorkMovementAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("works.edit");
+
   const parsed = deleteWorkMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -203,6 +215,8 @@ export async function deleteWorkMovementAction(raw: unknown): Promise<ActionResu
 export async function registerWorkInternalTransferAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("works.edit");
+
   const parsed = registerInternalTransferSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -220,7 +234,7 @@ export async function registerWorkInternalTransferAction(
       transferDate: d.transferDate,
       fromPaymentMethodId: d.fromPaymentMethodId,
       toPaymentMethodId: d.toPaymentMethodId,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/obras");
     revalidatePath("/obras/reports");
@@ -232,6 +246,8 @@ export async function registerWorkInternalTransferAction(
 }
 
 export async function deleteWorkAction(id: string): Promise<ActionResult> {
+  await requirePermission("works.edit");
+
   if (typeof id !== "string" || id.length < 10) {
     return { ok: false, error: "Identificador inválido." };
   }
@@ -248,6 +264,8 @@ export async function uploadWorkFileAction(
   workId: string,
   formData: FormData,
 ): Promise<ActionResult<{ file: WorkFile }>> {
+  await requirePermission("works.edit");
+
   if (typeof workId !== "string" || workId.length < 10) {
     return { ok: false, error: "Identificador de obra inválido." };
   }
@@ -271,6 +289,8 @@ export async function deleteWorkFileAction(
   workId: string,
   fileId: string,
 ): Promise<ActionResult> {
+  await requirePermission("works.edit");
+
   if (
     typeof workId !== "string" ||
     workId.length < 10 ||
@@ -293,6 +313,8 @@ export async function deleteWorkFileAction(
 export async function getWorkFileViewUrlAction(
   fileId: string,
 ): Promise<ActionResult<{ url: string }>> {
+  await requirePermission("works.view");
+
   if (typeof fileId !== "string" || fileId.length < 10) {
     return { ok: false, error: "Identificador inválido." };
   }
@@ -308,6 +330,8 @@ export async function getWorkFileViewUrlAction(
 export async function saveWorkCategoryBudgetAction(
   raw: unknown,
 ): Promise<ActionResult<{ rows: import("@/lib/types").WorkCategorySummary[] }>> {
+  await requirePermission("works.edit");
+
   const parsed = saveWorkCategoryBudgetSchema.safeParse(raw);
   if (!parsed.success) {
     return {

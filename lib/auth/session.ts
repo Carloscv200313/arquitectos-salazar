@@ -2,7 +2,11 @@
 // in the proxy and in server actions. The cookie is httpOnly; the signature
 // prevents tampering. Payload is small (id, email, role, exp).
 
-const SECRET = process.env.AUTH_SECRET ?? "dev-insecure-secret-change-me";
+function sessionSecret() {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret || secret === "dev-insecure-secret-change-me") throw new Error("AUTH_SECRET no está configurado de forma segura.");
+  return secret;
+}
 export const SESSION_COOKIE = "as_session";
 export const SESSION_MAX_AGE = 60 * 60 * 8; // 8 hours
 
@@ -34,7 +38,7 @@ function bytes(input: string): BufferSource {
 async function hmacKey() {
   return crypto.subtle.importKey(
     "raw",
-    bytes(SECRET),
+    bytes(sessionSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"],
@@ -50,7 +54,9 @@ export async function signSession(payload: SessionPayload): Promise<string> {
 
 export async function verifySession(token: string | undefined): Promise<SessionPayload | null> {
   if (!token) return null;
-  const [data, sig] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2 || token.length > 8192) return null;
+  const [data, sig] = parts;
   if (!data || !sig) return null;
   try {
     const key = await hmacKey();
@@ -62,7 +68,7 @@ export async function verifySession(token: string | undefined): Promise<SessionP
     );
     if (!valid) return null;
     const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(data))) as SessionPayload;
-    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    if (typeof payload.sub !== "string" || !payload.sub || typeof payload.email !== "string" || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
     return null;

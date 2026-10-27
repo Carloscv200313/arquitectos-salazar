@@ -1,13 +1,13 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { getCurrentAppUser } from "@/features/auth/get-user";
+import { requireUser } from "@/lib/auth/authorize";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentAppUser();
+  const user = await requireUser();
   const permissions = user ? user.permissions : null;
   const name = user?.fullName ?? "Administrador";
   const subtitle = user?.roleName ?? "Cuenta interna";

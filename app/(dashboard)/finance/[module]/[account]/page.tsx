@@ -1,3 +1,5 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -20,6 +22,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ module: string; account: string }>;
 }) {
+  await requirePermission((await params).module === "salario" ? "salary.view" : "finance.view");
+
   const { module, account } = await params;
   if (module === "balance-general") {
     const report = await getGeneralBalanceAccountReport(account);
@@ -42,6 +46,8 @@ export default async function FinanceAccountPage({
 }: {
   params: Promise<{ module: string; account: string }>;
 }) {
+  await requirePermission((await params).module === "salario" ? "salary.view" : "finance.view");
+
   const { module, account } = await params;
   if (module === "balance-general") {
     const report = await getGeneralBalanceAccountReport(account);

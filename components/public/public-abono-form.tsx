@@ -43,23 +43,21 @@ export function PublicAbonoForm({ methods }: { methods: PaymentMethod[] }) {
 
   // Debounced search.
   useEffect(() => {
-    if (selected) return;
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
     const id = ++reqId.current;
-    const t = setTimeout(async () => {
-      const hits = await searchPayables(q);
-      if (id === reqId.current) {
-        setResults(hits);
-        setSearching(false);
+    if (selected || query.trim().length < 2) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const hits = await searchPayables(query.trim());
+        if (active && id === reqId.current) setResults(hits);
+      } catch {
+        if (active) toast.error("No se pudo realizar la búsqueda. Intenta nuevamente.");
+      } finally {
+        if (active) setSearching(false);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => { active = false; clearTimeout(timer); };
   }, [query, selected]);
 
   const amountNum = Number(amount);
@@ -103,7 +101,7 @@ export function PublicAbonoForm({ methods }: { methods: PaymentMethod[] }) {
         });
         // Navega en la misma pestaña al recibo para firmar e imprimir
         // (window.open tras await suele bloquearse como popup).
-        window.location.assign(`/recibo/${res.receiptKind}/${res.receiptId}`);
+        window.location.assign(`/recibo/${res.receiptKind}/${res.receiptId}?token=${encodeURIComponent(res.receiptToken)}`);
       } else {
         if (res.fieldErrors) setErrors(res.fieldErrors);
         toast.error(res.error);
@@ -123,7 +121,7 @@ export function PublicAbonoForm({ methods }: { methods: PaymentMethod[] }) {
           <Input
             id="q"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setResults([]); setSearching(false); }}
             placeholder="Nombre, cliente o domicilio…"
             className="pl-9"
             autoFocus

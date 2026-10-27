@@ -38,23 +38,21 @@ export function PublicOrderForm({ providers }: { providers: string[] }) {
   const reqId = useRef(0);
 
   useEffect(() => {
-    if (selected) return;
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
     const id = ++reqId.current;
-    const t = setTimeout(async () => {
-      const hits = await searchWorks(q);
-      if (id === reqId.current) {
-        setResults(hits);
-        setSearching(false);
+    if (selected || query.trim().length < 2) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const hits = await searchWorks(query.trim());
+        if (active && id === reqId.current) setResults(hits);
+      } catch {
+        if (active) toast.error("No se pudo realizar la búsqueda. Intenta nuevamente.");
+      } finally {
+        if (active) setSearching(false);
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => { active = false; clearTimeout(timer); };
   }, [query, selected]);
 
   function pick(hit: WorkHit) {
@@ -108,7 +106,7 @@ export function PublicOrderForm({ providers }: { providers: string[] }) {
           <Input
             id="q"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setResults([]); setSearching(false); }}
             placeholder="Nombre de la obra o cliente…"
             className="pl-9"
             autoFocus

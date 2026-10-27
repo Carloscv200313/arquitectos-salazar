@@ -1,8 +1,12 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
+import { traceScreen } from "@/lib/supabase/telemetry";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CalendarDays, User, MapPin } from "lucide-react";
 import {
   getWork,
+  getWorkName,
   getWorkAdministrationUtilities,
   getWorkCategorySummary,
   listWorkMovementConceptNames,
@@ -24,9 +28,10 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("works.view");
+
   const { id } = await params;
-  const work = await getWork(id);
-  return { title: work?.name ?? "Obra" };
+  return { title: (await getWorkName(id)) ?? "Obra" };
 }
 
 export default async function WorkDetailPage({
@@ -34,7 +39,10 @@ export default async function WorkDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requirePermission("works.view");
+
   const { id } = await params;
+  return traceScreen("work-detail", user.id, async () => {
   const [
     work,
     movements,
@@ -126,4 +134,5 @@ export default async function WorkDetailPage({
       />
     </div>
   );
+  });
 }

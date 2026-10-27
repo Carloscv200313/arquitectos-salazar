@@ -1,4 +1,5 @@
 "use server";
+import { limitPublicRequest } from "@/lib/security/rate-limit";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -23,6 +24,7 @@ export async function signInAction(raw: {
   email: string;
   password: string;
 }): Promise<AuthResult> {
+  try { await limitPublicRequest("login", 10); } catch { return { ok: false, error: "Demasiados intentos. Espera un minuto." }; }
   if (!isAdminConfigured()) {
     return { ok: false, error: "Supabase no está configurado todavía." };
   }
@@ -32,14 +34,14 @@ export async function signInAction(raw: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? INVALID };
   }
 
-  const admin = createAdminClient();
+  const admin = createAdminClient("auth");
   const { data, error } = await admin.rpc("verify_login", {
     p_email: parsed.data.email,
     p_password: parsed.data.password,
   });
 
   const user = (Array.isArray(data) ? data[0] : data) as VerifiedUser | undefined;
-  if (error || !user) return { ok: false, error: INVALID };
+  if (error || !user || user.status !== 1) return { ok: false, error: INVALID };
 
   await admin
     .from("users")

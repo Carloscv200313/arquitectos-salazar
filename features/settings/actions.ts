@@ -1,4 +1,6 @@
 "use server";
+import { requirePermission, requireUser } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import {
@@ -36,6 +38,8 @@ import {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 export async function getHelpItemsAction(): Promise<HelpItem[]> {
+  await requireUser();
+
   return listHelpItems();
 }
 
@@ -62,6 +66,8 @@ async function run(fn: () => Promise<void>, paths = ["/configuracion"]): Promise
 
 /* Employees */
 export async function saveEmployeeAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   const parsed = employeeSchema.safeParse(raw);
@@ -74,6 +80,8 @@ export async function saveEmployeeAction(raw: unknown): Promise<ActionResult> {
   );
 }
 export async function hideEmployeeAction(id: string): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   return run(() => hideEmployee(id));
@@ -81,6 +89,8 @@ export async function hideEmployeeAction(id: string): Promise<ActionResult> {
 
 /* Payment accounts */
 export async function savePaymentAccountAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   const parsed = paymentAccountSchema.safeParse(raw);
@@ -93,6 +103,8 @@ export async function savePaymentAccountAction(raw: unknown): Promise<ActionResu
   );
 }
 export async function hidePaymentAccountAction(id: string): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   return run(() => hidePaymentAccount(id));
@@ -100,6 +112,8 @@ export async function hidePaymentAccountAction(id: string): Promise<ActionResult
 
 /* Task types */
 export async function saveTaskTypeAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   const parsed = taskTypeSchema.safeParse(raw);
@@ -112,6 +126,8 @@ export async function saveTaskTypeAction(raw: unknown): Promise<ActionResult> {
   );
 }
 export async function hideTaskTypeAction(id: string): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   return run(() => hideTaskType(id));
@@ -135,6 +151,8 @@ async function runProviderChange(fn: () => Promise<void>): Promise<ActionResult>
 }
 
 export async function saveProviderAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   const parsed = providerSchema.safeParse(raw);
@@ -145,6 +163,8 @@ export async function saveProviderAction(raw: unknown): Promise<ActionResult> {
   );
 }
 export async function hideProviderAction(id: string): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   return runProviderChange(() => hideProvider(id));
@@ -152,6 +172,8 @@ export async function hideProviderAction(id: string): Promise<ActionResult> {
 
 /* Work categories */
 export async function saveWorkCategoryAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   const parsed = workCategorySchema.safeParse(raw);
@@ -172,6 +194,8 @@ export async function saveWorkCategoryAction(raw: unknown): Promise<ActionResult
   );
 }
 export async function hideWorkCategoryAction(id: string): Promise<ActionResult> {
+  await requirePermission("settings.edit");
+
   const g = guard();
   if (g) return g;
   return run(() => hideWorkCategory(id));
@@ -179,6 +203,8 @@ export async function hideWorkCategoryAction(id: string): Promise<ActionResult> 
 
 /* Profile */
 export async function updateProfileNameAction(raw: unknown): Promise<ActionResult> {
+  await requireUser();
+
   const g = guard();
   if (g) return g;
   const parsed = profileNameSchema.safeParse(raw);
@@ -186,6 +212,8 @@ export async function updateProfileNameAction(raw: unknown): Promise<ActionResul
   return run(() => updateProfileName(parsed.data.fullName));
 }
 export async function changePasswordAction(raw: unknown): Promise<ActionResult> {
+  await requireUser();
+
   const g = guard();
   if (g) return g;
   const parsed = passwordSchema.safeParse(raw);

@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth/session";
@@ -16,21 +17,22 @@ export interface CurrentUser {
 
 // Resolves the current user from the signed session cookie. Null when not
 // logged in or while Supabase is not configured.
-export async function getCurrentAppUser(): Promise<CurrentUser | null> {
+async function getCurrentAppUserUncached(): Promise<CurrentUser | null> {
   if (!isAdminConfigured()) return null;
 
   const cookieStore = await cookies();
   const session = await verifySession(cookieStore.get(SESSION_COOKIE)?.value);
   if (!session) return null;
 
-  const admin = createAdminClient();
-  const { data } = await admin
+  const admin = createAdminClient("session");
+  const { data, error } = await admin
     .from("users")
     .select("id, email, full_name, permissions, avatar_url, status, roles(name)")
     .eq("id", session.sub)
     .eq("status", 1)
     .maybeSingle();
 
+  if (error) throw new Error("No se pudo validar la sesión. Intenta nuevamente.");
   if (!data) return null;
 
   const role = Array.isArray(data.roles) ? data.roles[0] : data.roles;
@@ -54,9 +56,8 @@ export async function getCurrentAppUser(): Promise<CurrentUser | null> {
   };
 }
 
+export const getCurrentAppUser = cache(getCurrentAppUserUncached);
+
 export async function getCurrentUserId(): Promise<string | null> {
-  if (!isAdminConfigured()) return null;
-  const cookieStore = await cookies();
-  const session = await verifySession(cookieStore.get(SESSION_COOKIE)?.value);
-  return session?.sub ?? null;
+  return (await getCurrentAppUser())?.id ?? null;
 }

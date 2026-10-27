@@ -50,7 +50,7 @@ export function Header({
       <AppBrand className="lg:hidden" />
 
       <div className="ml-auto flex items-center gap-3">
-        <OrderNotifications />
+        {permissions?.includes("orders.view") ? <OrderNotifications /> : null}
         <div className="hidden text-right sm:block">
           <p className="text-sm font-medium leading-tight">Arquitectos Salazar</p>
           <p className="text-xs text-muted-foreground">Gestión de proyectos</p>

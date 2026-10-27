@@ -3,6 +3,8 @@
 // actions import from here; signatures and return shapes are stable.
 
 import "server-only";
+import { cache } from "react";
+import { PROJECT_PAYMENT_COLUMNS } from "./columns";
 
 import {
   computeBreakdown,
@@ -47,7 +49,7 @@ export interface ProjectFilters {
 }
 
 function sb() {
-  return createAdminClient();
+  return createAdminClient("projects");
 }
 
 /* --------------------------------------------------------------- mappers */
@@ -135,7 +137,30 @@ function enrichRow(r: Row): ProjectWithFinance | null {
 }
 
 const PROJECT_SELECT =
-  "*, client:clients(*), payments:project_payments(*), addons:project_addons(*)";
+  "*, client:clients(*)";
+
+// Related collections are read independently: embedded relations can be capped
+// by PostgREST even when the outer project query returns every project.
+async function loadProjectRelations(rows: Row[]): Promise<Row[]> {
+  const payments = new Map<string, Row[]>();
+  const addons = new Map<string, Row[]>();
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    const ids = rows.slice(offset, offset + 100).map(row => String(row.id));
+    const [paymentResult, addonResult] = await Promise.all([
+      sb().from("project_payments").select(PROJECT_PAYMENT_COLUMNS).in("project_id", ids),
+      sb().from("project_addons").select("id,project_id,concept,amount,status,created_at").in("project_id", ids),
+    ]);
+    if (paymentResult.error || addonResult.error) throw new Error("No se pudieron consultar los movimientos del proyecto.");
+    for (const [target, records] of [[payments, paymentResult.data], [addons, addonResult.data]] as const) {
+      for (const row of records ?? []) {
+        const id = String(row.project_id);
+        const bucket = target.get(id) ?? [];
+        bucket.push(row); target.set(id, bucket);
+      }
+    }
+  }
+  return rows.map(row => ({ ...row, payments: payments.get(String(row.id)) ?? [], addons: addons.get(String(row.id)) ?? [] }));
+}
 
 /* ----------------------------------------------------------------- reads */
 
@@ -160,7 +185,7 @@ export async function listPaymentMethods(): Promise<PaymentMethod[]> {
   }));
 }
 
-export async function listProjects(filters: ProjectFilters = {}): Promise<ProjectWithFinance[]> {
+async function listProjectsUncached(filters: ProjectFilters): Promise<ProjectWithFinance[]> {
   if (!isAdminConfigured()) return [];
   const { data } = await sb().from("projects").select(PROJECT_SELECT).eq("status", 1);
 
@@ -169,7 +194,7 @@ export async function listProjects(filters: ProjectFilters = {}): Promise<Projec
   const from = filters.dateFrom ? new Date(filters.dateFrom).getTime() : null;
   const to = filters.dateTo ? new Date(filters.dateTo + "T23:59:59").getTime() : null;
 
-  const rows = (data ?? [])
+  const rows = (await loadProjectRelations((data ?? []) as Row[]))
     .map(enrichRow)
     .filter((p): p is ProjectWithFinance => p !== null)
     .filter((p) => {
@@ -193,21 +218,38 @@ export async function listProjects(filters: ProjectFilters = {}): Promise<Projec
   );
 }
 
-export async function getProject(id: string): Promise<ProjectWithFinance | null> {
+async function getProjectUncached(id: string): Promise<ProjectWithFinance | null> {
   if (!isAdminConfigured()) return null;
   const { data } = await sb()
     .from("projects")
     .select(PROJECT_SELECT)
     .eq("id", id)
     .maybeSingle();
-  return data ? enrichRow(data) : null;
+  return data ? enrichRow((await loadProjectRelations([data as Row]))[0]) : null;
 }
 
-export async function listMovements(projectId: string): Promise<PaymentWithMethod[]> {
+export const getProject = cache(getProjectUncached);
+
+/** Public abono validation needs only the active project's outstanding balance. */
+export async function getPublicProjectPending(id: string): Promise<number | null> {
+  if (!isAdminConfigured()) return null;
+  const { data: project, error } = await sb().from("projects")
+    .select("id,total_amount").eq("id", id).eq("status", 1).maybeSingle();
+  if (error) throw new Error("No se pudo consultar el proyecto.");
+  if (!project) return null;
+  const { data: payments, error: paymentError } = await sb().from("project_payments")
+    .select("amount").eq("project_id", id).eq("status", 1).eq("movement_type", "income");
+  if (paymentError) throw new Error("No se pudo consultar el saldo del proyecto.");
+  return computeFinance(Number(project.total_amount), (payments ?? []).map(payment => ({
+    amount: Number(payment.amount), movement_type: "income" as const,
+  }))).pending;
+}
+
+async function listMovementsUncached(projectId: string): Promise<PaymentWithMethod[]> {
   if (!isAdminConfigured()) return [];
   const { data } = await sb()
     .from("project_payments")
-    .select("*, method:payment_accounts(id, name, created_at)")
+    .select(`${PROJECT_PAYMENT_COLUMNS}, method:payment_accounts(id, name, created_at)`)
     .eq("project_id", projectId)
     .eq("status", 1)
     .order("payment_date", { ascending: false });
@@ -215,13 +257,48 @@ export async function listMovements(projectId: string): Promise<PaymentWithMetho
     ...mapPayment(r),
     method: r.method
       ? {
-          id: (r.method as Row).id as string,
-          name: (r.method as Row).name as string,
+          id: (r.method as unknown as Row).id as string,
+          name: (r.method as unknown as Row).name as string,
           is_active: true,
-          created_at: (r.method as Row).created_at as string,
+          created_at: (r.method as unknown as Row).created_at as string,
         }
       : null,
   }));
+}
+
+export const listMovements = cache(listMovementsUncached);
+
+/** Dashboard reads project movements in batches, retaining each project's order. */
+export async function listDashboardProjectMovements(projects: ProjectWithFinance[]) {
+  if (!isAdminConfigured() || projects.length === 0) return [];
+  const grouped = new Map<string, PaymentWithMethod[]>();
+  for (let offset = 0; offset < projects.length; offset += 100) {
+    const ids = projects.slice(offset, offset + 100).map(project => project.id);
+    const { data, error } = await sb().from("project_payments")
+      .select(`${PROJECT_PAYMENT_COLUMNS}, method:payment_accounts(id, name, created_at)`)
+      .in("project_id", ids).eq("status", 1)
+      .order("payment_date", { ascending: false });
+    if (error) throw new Error("No se pudieron consultar los movimientos de proyectos.");
+    for (const row of data ?? []) {
+      const payment: PaymentWithMethod = {
+        ...mapPayment(row),
+        method: row.method ? {
+          id: (row.method as unknown as Row).id as string,
+          name: (row.method as unknown as Row).name as string,
+          is_active: true,
+          created_at: (row.method as unknown as Row).created_at as string,
+        } : null,
+      };
+      const bucket = grouped.get(payment.project_id) ?? [];
+      bucket.push(payment);
+      grouped.set(payment.project_id, bucket);
+    }
+  }
+  return projects.flatMap(project => (grouped.get(project.id) ?? []).map(movement => ({
+    ...movement,
+    projectName: project.name,
+    clientName: project.client.name,
+  })));
 }
 
 export async function listInternalTransfers(): Promise<InternalTransferWithMethods[]> {
@@ -948,11 +1025,12 @@ export async function getProjectPaymentReceipt(id: string): Promise<ReceiptData 
 
 /** Guarda la firma dibujada del movimiento de proyecto. */
 export async function setProjectPaymentSignature(id: string, signature: string): Promise<void> {
-  const { error } = await sb()
+  const { data, error } = await sb()
     .from("project_payments")
     .update({ signature, signed_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+    .eq("id", id).eq("status", 1).is("signature", null).select("id").maybeSingle();
+  if (error) throw new Error("No se pudo guardar la firma.");
+  if (!data) throw new Error("El documento ya está firmado o no está disponible.");
 }
 
 export interface RegisterInternalTransferData {
@@ -990,4 +1068,9 @@ export async function deleteProject(id: string): Promise<void> {
     .update({ status: 0 })
     .eq("project_id", id);
   if (debtorError) throw new Error(debtorError.message);
+}
+
+const cachedlistProjects = cache((key: string) => listProjectsUncached(JSON.parse(key) as ProjectFilters));
+export async function listProjects(filters: ProjectFilters = {}): Promise<ProjectWithFinance[]> {
+  return cachedlistProjects(JSON.stringify(filters));
 }

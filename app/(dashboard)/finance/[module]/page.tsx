@@ -1,3 +1,6 @@
+
+import { requirePermission } from "@/lib/auth/authorize";
+import { traceScreen } from "@/lib/supabase/telemetry";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { DebtsView } from "@/components/finance/debts-view";
@@ -38,6 +41,8 @@ export async function generateMetadata({
 }: {
   params: Promise<{ module: string }>;
 }) {
+  await requirePermission((await params).module === "salario" ? "salary.view" : "finance.view");
+
   const { module } = await params;
   const item = FINANCE_MODULES.find((entry) => entry.slug === module);
   return { title: item?.title ?? "Finanzas" };
@@ -51,9 +56,11 @@ export default async function FinanceModulePage({
   searchParams: Promise<{ year?: string; month?: string }>;
 }) {
   const { module } = await params;
+  const user = await requirePermission(module === "salario" ? "salary.view" : "finance.view");
   const filters = await searchParams;
   const item = FINANCE_MODULES.find((entry) => entry.slug === module);
   if (!item) notFound();
+  return traceScreen(`finance/${item.slug}`, user.id, async () => {
   const Icon = item.icon;
   const [balance, movements, statements, debts, utilities, internalTransferData, salaryData] = await Promise.all([
     item.slug === "balance-general" ? getGeneralBalanceReport() : Promise.resolve(null),
@@ -174,4 +181,5 @@ export default async function FinanceModulePage({
       )}
     </div>
   );
+  });
 }

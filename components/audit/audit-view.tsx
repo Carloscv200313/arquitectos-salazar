@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { ChevronDown, ScrollText, Search } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,8 +18,9 @@ import {
   TableHeader,
   TablePagination,
   TableRow,
-  useTablePagination,
 } from "@/components/ui/table";
+import { getAuditPageAction } from "@/app/(dashboard)/auditoria/actions";
+import { toast } from "sonner";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { PROJECT_SLICE_LABELS } from "@/lib/constants";
 import { ArrowRight } from "lucide-react";
@@ -42,7 +43,7 @@ const OPERATION_OPTIONS: { value: AuditOperation | "all"; label: string }[] = [
   { value: "delete", label: "Eliminó" },
 ];
 
-const HIDDEN_AUDIT_USERS = new Set(["administrador", "sistema"]);
+
 
 function operationClass(op: AuditOperation) {
   switch (op) {
@@ -218,9 +219,11 @@ function SnapshotDiff({
 
 export function AuditView({
   logs,
+  total,
   methodNames,
 }: {
   logs: AuditLogRow[];
+  total: number;
   methodNames: Record<string, string>;
 }) {
   const [entity, setEntity] = useState<AuditEntityType | "all">("all");
@@ -228,34 +231,42 @@ export function AuditView({
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return logs.filter((l) => {
-      if (HIDDEN_AUDIT_USERS.has(l.userName.trim().toLowerCase())) return false;
-      if (entity !== "all" && l.entityType !== entity) return false;
-      if (operation !== "all" && l.operation !== operation) return false;
-      if (term) {
-        const hay = `${l.userName} ${l.description ?? ""} ${l.note ?? ""}`.toLowerCase();
-        if (!hay.includes(term)) return false;
-      }
-      return true;
-    });
-  }, [logs, entity, operation, search]);
-  const pagination = useTablePagination(filtered);
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState({ rows: logs, total });
+  const [loading, setLoading] = useState(false);
+  const loadedKey = useRef(JSON.stringify([1, "all", "all", ""]));
+  useEffect(() => {
+    const key = JSON.stringify([page, entity, operation, search]);
+    if (loadedKey.current === key) return;
+    let active = true;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const next = await getAuditPageAction({ page, entityType: entity, operation, search });
+        if (active) { setResult(next); loadedKey.current = key; }
+      } catch { if (active) toast.error("No se pudo consultar la auditoría."); }
+      finally { if (active) setLoading(false); }
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [page, entity, operation, search]);
+  const filtered = result.rows;
+  const pagination = { rows: filtered, totalItems: result.total, startIndex: (page - 1) * 50,
+    endIndex: Math.min(page * 50, result.total), page, pageCount: Math.max(1, Math.ceil(result.total / 50)), setPage, shouldPaginate: result.total > 50 };
+
 
   return (
-    <Card className="p-5">
+    <Card className="p-5" aria-busy={loading}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value.slice(0, 100)); setPage(1); }}
             placeholder="Buscar por usuario, concepto o motivo…"
             className="pl-9"
           />
         </div>
-        <Select value={entity} onValueChange={(v) => setEntity((v as AuditEntityType | "all") ?? "all")} items={ENTITY_OPTIONS}>
+        <Select value={entity} onValueChange={(v) => { setEntity((v as AuditEntityType | "all") ?? "all"); setPage(1); }} items={ENTITY_OPTIONS}>
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue />
           </SelectTrigger>
@@ -267,7 +278,7 @@ export function AuditView({
             ))}
           </SelectContent>
         </Select>
-        <Select value={operation} onValueChange={(v) => setOperation((v as AuditOperation | "all") ?? "all")} items={OPERATION_OPTIONS}>
+        <Select value={operation} onValueChange={(v) => { setOperation((v as AuditOperation | "all") ?? "all"); setPage(1); }} items={OPERATION_OPTIONS}>
           <SelectTrigger className="w-full sm:w-44">
             <SelectValue />
           </SelectTrigger>
@@ -281,6 +292,7 @@ export function AuditView({
         </Select>
       </div>
 
+      {loading ? <p role="status" className="text-sm text-muted-foreground">Cargando registros…</p> : null}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center">
           <div className="flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">

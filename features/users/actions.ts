@@ -1,4 +1,6 @@
 "use server";
+import { requireAdministrator } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import {
@@ -30,6 +32,8 @@ async function run(fn: () => Promise<void>): Promise<ActionResult> {
 }
 
 export async function saveUserAction(raw: unknown): Promise<ActionResult> {
+  await requireAdministrator();
+
   const g = guard();
   if (g) return g;
 
@@ -58,6 +62,8 @@ export async function saveUserAction(raw: unknown): Promise<ActionResult> {
 }
 
 export async function setUserPasswordAction(raw: unknown): Promise<ActionResult> {
+  await requireAdministrator();
+
   const g = guard();
   if (g) return g;
   const parsed = setPasswordSchema.safeParse(raw);
@@ -68,6 +74,8 @@ export async function setUserPasswordAction(raw: unknown): Promise<ActionResult>
 }
 
 export async function deactivateUserAction(id: string): Promise<ActionResult> {
+  await requireAdministrator();
+
   const g = guard();
   if (g) return g;
   return run(() => deactivateUser(id));

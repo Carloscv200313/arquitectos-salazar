@@ -7,7 +7,7 @@ import type { AuditLogRow, AuditOperation, AuditEntityType } from "@/lib/types";
 type Row = Record<string, unknown>;
 
 function sb() {
-  return createAdminClient();
+  return createAdminClient("audit");
 }
 
 const ENTITY_LABELS: Record<AuditEntityType, string> = {
@@ -62,8 +62,9 @@ export async function writeAudit(input: WriteAuditInput): Promise<void> {
         amount: input.amount ?? null,
         snapshot: input.snapshot ?? null,
       });
-  } catch (err) {
-    console.error("[audit] no se pudo registrar el log:", err);
+  } catch {
+    // Database errors can contain query details; never emit them into application logs.
+    console.error("[audit] no se pudo registrar el log");
   }
 }
 
@@ -97,7 +98,7 @@ export async function listAuditLogs(filters: AuditFilters = {}): Promise<AuditLo
   if (!isAdminConfigured()) return [];
   let query = sb()
     .from("audit_logs")
-    .select("*")
+    .select("id,created_at,user_name,entity_type,entity_id,record_id,operation,description,note,amount,snapshot")
     .not("entity_type", "is", null)
     .order("created_at", { ascending: false })
     .limit(filters.limit ?? 300);
@@ -123,4 +124,25 @@ export async function listAuditLogs(filters: AuditFilters = {}): Promise<AuditLo
     );
   }
   return rows;
+}
+
+export async function listAuditPage(filters: AuditFilters & { page?: number } = {}) {
+  const page = Math.max(1, Math.min(100000, Math.floor(filters.page ?? 1)));
+  const pageSize = 50;
+  let query = sb().from("audit_logs")
+    .select("id,created_at,user_name,entity_type,entity_id,record_id,operation,description,note,amount,snapshot", { count: "exact" })
+    .not("entity_type", "is", null)
+    .not("user_name", "ilike", "administrador").not("user_name", "ilike", "sistema")
+    .order("created_at", { ascending: false }).order("id", { ascending: false })
+    .range((page - 1) * pageSize, page * pageSize - 1);
+  if (filters.entityType && filters.entityType !== "all") query = query.eq("entity_type", filters.entityType);
+  if (filters.operation && filters.operation !== "all") query = query.eq("operation", filters.operation);
+  const term = filters.search?.trim().slice(0, 100);
+  if (term) {
+    const pattern = `"%${term.replace(/[\\%_]/g, "\\$&").replace(/"/g, '\\"')}%"`;
+    query = query.or(`user_name.ilike.${pattern},description.ilike.${pattern},note.ilike.${pattern}`);
+  }
+  const { data, error, count } = await query;
+  if (error) throw new Error("No se pudo consultar la auditoría.");
+  return { rows: (data ?? []).map(mapLog), total: count ?? 0, page, pageSize };
 }

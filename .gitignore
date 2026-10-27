@@ -46,3 +46,6 @@ next-env.d.ts
 AGENTS.md
 CLAUDE.md
 ESTADO-DEL-PROYECTO.md
+
+# Supabase request exports can contain identifiers and query filters.
+/supabase_logs.csv

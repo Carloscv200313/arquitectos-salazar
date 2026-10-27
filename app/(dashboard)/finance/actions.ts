@@ -1,4 +1,6 @@
 "use server";
+import { requirePermission, requireUser } from "@/lib/auth/authorize";
+
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -55,8 +57,8 @@ export type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
-function currentUserId(): string | null {
-  return null;
+async function currentUserId(): Promise<string> {
+  return (await requireUser()).id;
 }
 
 function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
@@ -76,6 +78,8 @@ function revalidateSalaryPaths(weekId?: string | null) {
 export async function saveManualDebtorAction(
   raw: unknown,
 ): Promise<ActionResult<{ debtorId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = manualDebtorSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -94,7 +98,7 @@ export async function saveManualDebtorAction(
       sourceAccountId: d.sourceAccountId,
       loanDate: d.loanDate,
       note: d.note || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/deudas");
     revalidatePath(`/finance/deudas/deudor-${debtorId}`);
@@ -112,6 +116,8 @@ export async function saveManualDebtorAction(
 export async function registerManualDebtorPaymentAction(
   raw: unknown,
 ): Promise<ActionResult<{ paymentId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = manualDebtorPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -129,7 +135,7 @@ export async function registerManualDebtorPaymentAction(
       paymentDate: d.paymentDate,
       toAccountId: d.toAccountId,
       note: d.note || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/deudas");
     revalidatePath(`/finance/deudas/deudor-${d.debtorId}`);
@@ -145,6 +151,8 @@ export async function registerManualDebtorPaymentAction(
 }
 
 export async function deleteManualDebtorPaymentAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = deleteManualDebtorPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -173,6 +181,8 @@ export async function deleteManualDebtorPaymentAction(raw: unknown): Promise<Act
 export async function saveManualProviderDebtAction(
   raw: unknown,
 ): Promise<ActionResult<{ debtId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = manualProviderDebtSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -190,7 +200,7 @@ export async function saveManualProviderDebtAction(
       amount: d.amount,
       debtDate: d.debtDate,
       note: d.note || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/deudas");
     revalidatePath(`/finance/deudas/${encodeURIComponent(d.provider)}`);
@@ -207,6 +217,8 @@ export async function saveManualProviderDebtAction(
 export async function registerManualProviderDebtPaymentAction(
   raw: unknown,
 ): Promise<ActionResult<{ paymentId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = manualProviderDebtPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -224,7 +236,7 @@ export async function registerManualProviderDebtPaymentAction(
       paymentDate: d.paymentDate,
       fromAccountId: d.fromAccountId,
       note: d.note || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/deudas");
     revalidatePath(`/finance/deudas/${encodeURIComponent(result.provider)}`);
@@ -239,6 +251,8 @@ export async function registerManualProviderDebtPaymentAction(
 }
 
 export async function settleProviderDebtAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = settleProviderDebtSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -258,7 +272,7 @@ export async function settleProviderDebtAction(raw: unknown): Promise<ActionResu
       settlementDate: d.settlementDate,
       fromAccountId: d.fromAccountId,
       note: d.note || undefined,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/deudas");
     revalidatePath(`/finance/deudas/${encodeURIComponent(d.provider)}`);
@@ -273,6 +287,8 @@ export async function settleProviderDebtAction(raw: unknown): Promise<ActionResu
 }
 
 export async function updateProviderDebtPaymentAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = updateProviderDebtPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -298,6 +314,8 @@ export async function updateProviderDebtPaymentAction(raw: unknown): Promise<Act
 }
 
 export async function deleteProviderDebtPaymentAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = deleteProviderDebtPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -325,6 +343,8 @@ export async function deleteProviderDebtPaymentAction(raw: unknown): Promise<Act
 export async function registerGeneralBalanceEntryAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = generalBalanceEntrySchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -342,7 +362,7 @@ export async function registerGeneralBalanceEntryAction(
       entryDate: d.entryDate,
       fromAccountId: d.fromAccountId,
       toAccountId: d.toAccountId,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/balance-general");
     revalidatePath(`/finance/balance-general/${d.fromAccountId}`);
@@ -356,6 +376,8 @@ export async function registerGeneralBalanceEntryAction(
 export async function registerGeneralBalanceAccountMovementAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = generalBalanceAccountMovementSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -373,7 +395,7 @@ export async function registerGeneralBalanceAccountMovementAction(
       description: d.description,
       amount: d.amount,
       movementDate: d.movementDate,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/balance-general");
     revalidatePath(`/finance/balance-general/${d.accountId}`);
@@ -386,6 +408,8 @@ export async function registerGeneralBalanceAccountMovementAction(
 export async function registerFinanceInternalTransferAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = registerInternalTransferSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -405,7 +429,7 @@ export async function registerFinanceInternalTransferAction(
       toPaymentMethodId: d.toPaymentMethodId,
       fromAccountBucket: d.fromAccountBucket,
       toAccountBucket: d.toAccountBucket,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/movimientos-internos");
     revalidatePath("/finance/balance-general");
@@ -419,6 +443,8 @@ export async function registerFinanceInternalTransferAction(
 export async function saveFinanceMovementTagAction(
   raw: unknown,
 ): Promise<ActionResult<{ tagId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = financeMovementTagSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -433,7 +459,7 @@ export async function saveFinanceMovementTagAction(
     const tagId = await saveFinanceMovementTag({
       id: d.id || undefined,
       name: d.name,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/movimientos");
     return { ok: true, data: { tagId } };
@@ -448,6 +474,8 @@ export async function saveFinanceMovementTagAction(
 export async function deleteFinanceMovementTagAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = z.object({ id: z.string().uuid("Etiqueta inválida") }).safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Etiqueta inválida.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -468,6 +496,8 @@ export async function deleteFinanceMovementTagAction(
 export async function saveFinanceMovementConceptAction(
   raw: unknown,
 ): Promise<ActionResult<{ conceptId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = financeMovementConceptSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -483,7 +513,7 @@ export async function saveFinanceMovementConceptAction(
       id: d.id || undefined,
       name: d.name,
       tagId: d.tagId || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/movimientos");
     return { ok: true, data: { conceptId } };
@@ -498,6 +528,8 @@ export async function saveFinanceMovementConceptAction(
 export async function deleteFinanceMovementConceptAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = z.object({ id: z.string().uuid("Concepto inválido") }).safeParse(raw);
   if (!parsed.success) {
     return { ok: false, error: "Concepto inválido.", fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -518,6 +550,8 @@ export async function deleteFinanceMovementConceptAction(
 export async function saveFinanceCaptureAction(
   raw: unknown,
 ): Promise<ActionResult<{ captureId: string }>> {
+  await requirePermission("finance.edit");
+
   const parsed = financeCaptureSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -539,7 +573,7 @@ export async function saveFinanceCaptureAction(
       paymentForm: d.paymentForm,
       description: d.description?.trim() || null,
       note: d.note?.trim() || null,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidatePath("/finance/movimientos");
     revalidatePath("/finance/estados-financieros");
@@ -553,6 +587,8 @@ export async function saveFinanceCaptureAction(
 }
 
 export async function deleteFinanceCaptureAction(raw: unknown): Promise<ActionResult> {
+  await requirePermission("finance.edit");
+
   const parsed = deleteFinanceCaptureSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -578,6 +614,8 @@ export async function deleteFinanceCaptureAction(raw: unknown): Promise<ActionRe
 export async function saveSalaryWeekAction(
   raw: unknown,
 ): Promise<ActionResult<{ weekId: string }>> {
+  await requirePermission("salary.edit");
+
   const parsed = saveSalaryWeekSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -594,7 +632,7 @@ export async function saveSalaryWeekAction(
       startDate: d.startDate,
       paymentDate: d.paymentDate || d.startDate,
       status: d.status,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(weekId);
     return { ok: true, data: { weekId } };
@@ -606,6 +644,8 @@ export async function saveSalaryWeekAction(
 export async function deleteSalaryWeekAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("salary.edit");
+
   const parsed = deleteSalaryWeekSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -619,7 +659,7 @@ export async function deleteSalaryWeekAction(
     await deleteSalaryWeek({
       salaryWeekId: parsed.data.salaryWeekId,
       note: parsed.data.note,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(parsed.data.salaryWeekId);
     return { ok: true, data: undefined };
@@ -634,6 +674,8 @@ export async function deleteSalaryWeekAction(
 export async function saveSalaryDayRecordAction(
   raw: unknown,
 ): Promise<ActionResult<{ recordId: string }>> {
+  await requirePermission("salary.edit");
+
   const parsed = saveSalaryDayRecordSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -657,7 +699,7 @@ export async function saveSalaryDayRecordAction(
       taskTypeId: d.taskTypeId ?? null,
       notes: d.notes?.trim() || null,
       status: d.status,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(d.salaryWeekId);
     return { ok: true, data: { recordId } };
@@ -672,6 +714,8 @@ export async function saveSalaryDayRecordAction(
 export async function deleteSalaryDayRecordAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("salary.edit");
+
   const parsed = z.object({
     recordId: z.string().min(1),
     salaryWeekId: z.string().uuid("Semana inválida"),
@@ -693,7 +737,7 @@ export async function deleteSalaryDayRecordAction(
     await deleteSalaryDayRecord({
       recordId: parsed.data.recordId,
       note: parsed.data.note,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(parsed.data.salaryWeekId);
     return { ok: true, data: undefined };
@@ -708,6 +752,8 @@ export async function deleteSalaryDayRecordAction(
 export async function saveSalaryPaymentAction(
   raw: unknown,
 ): Promise<ActionResult<{ paymentId: string }>> {
+  await requirePermission("salary.edit");
+
   const parsed = saveSalaryPaymentSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -733,7 +779,7 @@ export async function saveSalaryPaymentAction(
       taskTypeId: d.taskTypeId ?? null,
       notes: d.notes?.trim() || null,
       status: d.status,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(d.salaryWeekId);
     return { ok: true, data: { paymentId } };
@@ -748,6 +794,8 @@ export async function saveSalaryPaymentAction(
 export async function deleteSalaryPaymentAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("salary.edit");
+
   const parsed = z.object({
     paymentId: z.string().min(1),
     salaryWeekId: z.string().uuid("Semana inválida"),
@@ -759,7 +807,7 @@ export async function deleteSalaryPaymentAction(
   try {
     await deleteSalaryPayment({
       paymentId: parsed.data.paymentId,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(parsed.data.salaryWeekId);
     return { ok: true, data: undefined };
@@ -774,6 +822,8 @@ export async function deleteSalaryPaymentAction(
 export async function updateSalaryWeekStatusAction(
   raw: unknown,
 ): Promise<ActionResult> {
+  await requirePermission("salary.edit");
+
   const parsed = updateSalaryWeekStatusSchema.safeParse(raw);
   if (!parsed.success) {
     return {
@@ -788,7 +838,7 @@ export async function updateSalaryWeekStatusAction(
     await updateSalaryWeekStatus({
       salaryWeekId: d.salaryWeekId,
       status: d.status,
-      userId: currentUserId(),
+      userId: await currentUserId(),
     });
     revalidateSalaryPaths(d.salaryWeekId);
     if (d.status === "paid") {

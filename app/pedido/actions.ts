@@ -1,8 +1,10 @@
 "use server";
+import { searchPublicEntities } from "@/lib/data/public-search";
+import { limitPublicRequest } from "@/lib/security/rate-limit";
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { listWorks, getWork } from "@/lib/data/works";
+import { activeWorkExists } from "@/lib/data/works";
 import { createWorkOrder } from "@/lib/data/orders";
 
 // Public, unauthenticated endpoint. Narrow on purpose:
@@ -16,19 +18,9 @@ export interface WorkHit {
 }
 
 export async function searchWorks(query: string): Promise<WorkHit[]> {
-  const q = query.trim().toLowerCase();
-  if (q.length < 2) return [];
+  await limitPublicRequest("search-orders");
+  return searchPublicEntities("works", query);
 
-  const works = await listWorks();
-  return works
-    .filter(
-      (w) =>
-        w.name.toLowerCase().includes(q) ||
-        w.client.name.toLowerCase().includes(q) ||
-        (w.address?.toLowerCase().includes(q) ?? false),
-    )
-    .slice(0, 20)
-    .map((w) => ({ id: w.id, name: w.name, clientName: w.client.name }));
 }
 
 const isoDate = z
@@ -49,6 +41,7 @@ export type PublicOrderResult =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function registerPublicOrder(raw: unknown): Promise<PublicOrderResult> {
+  await limitPublicRequest("create-order", 10);
   const parsed = publicOrderSchema.safeParse(raw);
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -61,8 +54,7 @@ export async function registerPublicOrder(raw: unknown): Promise<PublicOrderResu
   const d = parsed.data;
 
   try {
-    const work = await getWork(d.workId);
-    if (!work) return { ok: false, error: "Obra no encontrada." };
+    if (!(await activeWorkExists(d.workId))) return { ok: false, error: "Obra no encontrada." };
 
     await createWorkOrder({
       workId: d.workId,

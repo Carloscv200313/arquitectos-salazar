@@ -1,3 +1,4 @@
+import { authorizeDocument, salaryResource } from "@/lib/security/documents";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { signPagoAction } from "@/app/recibo/signature-actions";
@@ -11,12 +12,15 @@ export const metadata: Metadata = {
 
 export default async function PublicSalaryReceiptSignaturePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ kind: string; weekId: string; employeeId: string; refId: string }>;
+  searchParams: Promise<{ token?: string }>;
 }) {
   const { kind, weekId, employeeId, refId } = await params;
   if (kind !== "proyecto" && kind !== "obra") notFound();
 
+  const token = await authorizeDocument(salaryResource(weekId, employeeId), "salary.view", (await searchParams).token);
   const refType = kind === "proyecto" ? "project" : "work";
   const data = await getSalaryReceipt(weekId, employeeId, refType, refId);
   if (!data) notFound();
@@ -27,7 +31,7 @@ export default async function PublicSalaryReceiptSignaturePage({
       subtitle={`${data.code ?? "Comprobante"} · ${data.concept}`}
       alreadySigned={!!data.signature}
       signAction={signPagoAction}
-      signPayload={{ kind, weekId, employeeId, refId }}
+      signPayload={{ kind: "proyecto", weekId, employeeId, refId: weekId, token }}
     />
   );
 }
