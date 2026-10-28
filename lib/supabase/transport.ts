@@ -40,12 +40,11 @@ export function databaseFetch(module: string, transport: typeof fetch = fetch): 
         status = response.status;
         const body = await response.text();
         bytes += new TextEncoder().encode(body).byteLength;
-        if (!response.ok) {
-          // Compatibility fallback is only allowed for an absent optional column.
-          let code = "";
-          try { code = JSON.parse(body).code; } catch { /* no response body is logged */ }
-          if (!(read && ["42703", "PGRST204"].includes(code))) throw new DatabaseRequestError(status);
-        }
+        // Preserve PostgREST errors for Supabase's normal error parser. In
+        // particular, writes must retain the SQLSTATE/constraint information;
+        // replacing every 4xx with a generic exception hides the actual cause.
+        // A restricted project still gets the dedicated 402 handling.
+        if (response.status === 402) throw new DatabaseRequestError(402);
         return { response, body };
       }
       try {
@@ -72,7 +71,8 @@ export function databaseFetch(module: string, transport: typeof fetch = fetch): 
             pageUrl.searchParams.set("order", order ? `${order},id.asc` : "id.asc");
           }
           const { response, body } = await send(pageUrl);
-          if (!response.ok) return new Response(body, { status: response.status, headers: response.headers });
+          // A later failed page must never look like a successful partial report.
+          if (!response.ok) throw new DatabaseRequestError(response.status);
           const page: unknown = JSON.parse(body);
           if (!Array.isArray(page)) throw new DatabaseRequestError(502);
           responseHeaders = new Headers(response.headers);

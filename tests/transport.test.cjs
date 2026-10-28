@@ -31,6 +31,24 @@ test('402 no se convierte en datos vacíos y no se reintenta automáticamente',a
  let calls=0;const {databaseFetch}=transport();const get=databaseFetch('fixture',async()=>{calls++;return Response.json({message:'synthetic-sensitive-body'},{status:402});});
  await assert.rejects(get('https://fixture.invalid/rest/v1/works?limit=1'),e=>e.status===402&&!e.message.includes('synthetic-sensitive-body'));assert.equal(calls,1);
 });
+test('un error de escritura conserva el código de PostgREST para diagnosticarlo',async()=>{
+ let calls=0;const {databaseFetch}=transport();
+ const post=databaseFetch('finance',async()=>{calls++;return Response.json({code:'23503',message:'synthetic foreign key error'},{status:409});});
+ const response=await post('https://fixture.invalid/rest/v1/finance_movement_captures',{method:'POST',body:'{}'});
+ assert.equal(response.status,409);
+ assert.deepEqual(await response.json(),{code:'23503',message:'synthetic foreign key error'});
+ assert.equal(calls,1);
+});
+test('Supabase recibe el código SQL de un INSERT fallido sin escribir en producción',async()=>{
+ const {createClient}=require('@supabase/supabase-js');
+ let calls=0;const {databaseFetch}=transport();
+ const client=createClient('https://fixture.invalid','synthetic-key',{
+  auth:{persistSession:false,autoRefreshToken:false},
+  global:{fetch:databaseFetch('finance',async()=>{calls++;return Response.json({code:'23503',message:'synthetic constraint violation',details:null,hint:null},{status:409});})},
+ });
+ const {data,error}=await client.from('finance_movement_captures').insert({amount:1000}).select('id').single();
+ assert.equal(data,null);assert.equal(error.code,'23503');assert.equal(calls,1);
+});
 test('fallo de segunda página no devuelve un balance parcial',async()=>{
  let calls=0;const {databaseFetch}=transport();const get=databaseFetch('fixture',async()=>++calls===1?Response.json(Array.from({length:500},(_,id)=>({id}))):Response.json({}, {status:500}));
  await assert.rejects(get('https://fixture.invalid/rest/v1/works'));assert.equal(calls,2);

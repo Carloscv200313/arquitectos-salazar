@@ -645,7 +645,7 @@ create table if not exists public.finance_movement_captures (
   description       text,
   status            smallint not null default 1,
   created_at        timestamptz not null default now(),
-  created_by        uuid references auth.users(id)
+  created_by        uuid
 );
 create index if not exists finance_movement_captures_date_idx
   on public.finance_movement_captures(capture_date desc, created_at desc)
