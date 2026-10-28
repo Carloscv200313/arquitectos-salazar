@@ -92,25 +92,15 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- Usuario administrador inicial.
--- Usuario:    admin
--- Contraseña: admin123
--- ----------------------------------------------------------------------------
-do $$
-declare admin_role uuid;
-begin
-  select id into admin_role from public.roles where name = 'Administrador' limit 1;
-  if not exists (select 1 from public.users where lower(email) = 'admin') then
-    perform public.admin_create_user(
-      'admin',
-      'admin123',
-      'Administrador',
-      admin_role,
-      '["dashboard.view","projects.view","projects.edit","works.view","works.edit","orders.view","orders.edit","finance.view","finance.edit","salary.view","salary.edit","settings.view","settings.edit","users.view","users.edit"]'::jsonb,
-      null
-    );
-  end if;
-end $$;
+-- Aprovisionamiento inicial: no se crea una cuenta con contraseña conocida.
+-- Crear el primer administrador manualmente con admin_create_user desde una
+-- sesión SQL administrativa. Elegir una contraseña única fuera del repositorio.
+revoke all on function public.verify_login(text,text) from public, anon, authenticated;
+revoke all on function public.admin_create_user(text,text,text,uuid,jsonb,uuid) from public, anon, authenticated;
+revoke all on function public.admin_set_password(uuid,text) from public, anon, authenticated;
+grant execute on function public.verify_login(text,text) to service_role;
+grant execute on function public.admin_create_user(text,text,text,uuid,jsonb,uuid) to service_role;
+grant execute on function public.admin_set_password(uuid,text) to service_role;
 
 -- ----------------------------------------------------------------------------
 -- Quitar FKs hacia auth.users. Ahora los usuarios viven en public.users, así

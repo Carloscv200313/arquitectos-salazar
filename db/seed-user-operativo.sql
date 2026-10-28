@@ -1,9 +1,10 @@
+-- Requiere app.bootstrap_password proporcionada manualmente para una cuenta nueva.
+-- No ejecutar automáticamente ni guardar el valor en el repositorio.
 -- ============================================================================
 -- Usuario operativo: solo Dashboard, Proyectos y Obras.
 -- Los demás módulos (Pedidos, Salario, Finanzas: balance/deudas/utilidades/
 -- movimientos, Configuración) le aparecen DESHABILITADOS en el menú.
 -- Usuario:    operador
--- Contraseña: operador123
 -- Ejecutar después de auth-users.sql. Re-ejecutable (sincroniza permisos
 -- aunque el usuario ya exista).
 -- ============================================================================
@@ -21,7 +22,7 @@ begin
   if not exists (select 1 from public.users where lower(email) = 'operador') then
     perform public.admin_create_user(
       'operador',
-      'operador123',
+      current_setting('app.bootstrap_password'),
       'Operador',
       op_role,
       op_perms,

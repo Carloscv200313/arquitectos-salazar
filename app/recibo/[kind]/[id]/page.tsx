@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { getProjectPaymentReceipt } from "@/lib/data/projects";
 import { getWorkMovementReceipt } from "@/lib/data/works";
 import { ReceiptDocument } from "@/components/receipt/receipt-document";
-import { signAbonoAction } from "@/app/recibo/signature-actions";
+import { resetReceiptSignatureAction, signAbonoAction } from "@/app/recibo/signature-actions";
+import { getCurrentAppUser } from "@/features/auth/get-user";
+import { hasPermission } from "@/lib/auth/permissions";
 
 export const metadata: Metadata = {
   title: "Recibo de dinero",
@@ -28,12 +30,15 @@ export default async function ReceiptPage({
       ? await getProjectPaymentReceipt(id)
       : await getWorkMovementReceipt(id);
   if (!data) notFound();
+  const user = data.signature ? await getCurrentAppUser() : null;
+  const canResetSignature = Boolean(user && hasPermission(user.permissions, kind === "proyecto" ? "projects.edit" : "works.edit"));
 
   return (
     <ReceiptDocument
       data={data}
       signAction={signAbonoAction}
       signPayload={{ kind, id, token }}
+      resetSignatureAction={canResetSignature ? resetReceiptSignatureAction : undefined}
     />
   );
 }

@@ -2,7 +2,7 @@
 
 import { flushSync } from "react-dom";
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, Loader2, PenLine, Printer } from "lucide-react";
+import { Copy, Download, Loader2, PenLine, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/format";
 import { montoEnPalabras, RECEIPT_BUSINESS, type ReceiptData } from "@/lib/receipt";
@@ -52,6 +52,7 @@ export function ReceiptDocument({
   autoPrint = true,
   signAction,
   signPayload,
+  resetSignatureAction,
 }: {
   data: ReceiptData;
   prepareAction?: () => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
@@ -59,6 +60,7 @@ export function ReceiptDocument({
   // Acción que persiste la firma + identificadores del documento (sin la firma).
   signAction?: (raw: unknown) => Promise<SignResult>;
   signPayload?: Record<string, unknown>;
+  resetSignatureAction?: (raw: unknown) => Promise<SignResult>;
 }) {
   const [data, setData] = useState(initialData);
   const padRef = useRef<SignaturePadHandle>(null);
@@ -66,6 +68,9 @@ export function ReceiptDocument({
   const [signature, setSignature] = useState<string | null>(data.signature);
   const [saving, setSaving] = useState(false);
   const [skipped, setSkipped] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetReason, setResetReason] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const signed = !!signature;
   // Documento visible: ya firmado, o el usuario eligió omitir la firma.
@@ -97,6 +102,29 @@ export function ReceiptDocument({
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function resetSignature() {
+    if (!resetSignatureAction || !signed || resetting) return;
+    if (resetReason.trim().length < 10) {
+      toast.error("Explica por qué se retira la firma (mínimo 10 caracteres).");
+      return;
+    }
+    setResetting(true);
+    try {
+      const result = await resetSignatureAction({ ...(signPayload ?? {}), reason: resetReason.trim() });
+      if (!result.ok) { toast.error(result.error); return; }
+      setSignature(null);
+      setData((current) => ({ ...current, signature: null }));
+      setSkipped(false);
+      setResetOpen(false);
+      setResetReason("");
+      toast.success("Firma retirada y registrada en auditoría. Ya puedes firmar nuevamente.");
+    } catch {
+      toast.error("No se pudo retirar la firma.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -345,6 +373,16 @@ export function ReceiptDocument({
         ) : (
           <>
             <div className="no-print mb-4 flex items-center justify-end gap-2">
+              {signed && resetSignatureAction ? (
+                <button
+                  type="button"
+                  onClick={() => setResetOpen(true)}
+                  disabled={resetting}
+                  className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
+                >
+                  <RotateCcw className="size-4" /> Corregir firma
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={downloadPdf}
@@ -362,6 +400,32 @@ export function ReceiptDocument({
                 <Printer className="size-4" /> Imprimir
               </button>
             </div>
+
+            {resetOpen && signed && resetSignatureAction ? (
+              <div className="no-print mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <label htmlFor="receipt-signature-reset-reason" className="block text-sm font-semibold text-amber-950">
+                  Motivo para retirar la firma
+                </label>
+                <p className="mt-1 text-xs text-amber-900">Se registrará en auditoría quién retiró la firma y por qué.</p>
+                <textarea
+                  id="receipt-signature-reset-reason"
+                  value={resetReason}
+                  onChange={(event) => setResetReason(event.target.value)}
+                  maxLength={500}
+                  rows={3}
+                  disabled={resetting}
+                  className="mt-3 w-full rounded-lg border bg-white p-2 text-sm text-foreground"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button type="button" onClick={() => { setResetOpen(false); setResetReason(""); }} disabled={resetting} className="rounded-lg border bg-white px-3 py-2 text-sm disabled:opacity-60">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={resetSignature} disabled={resetting || resetReason.trim().length < 10} className="rounded-lg bg-foreground px-3 py-2 text-sm text-background disabled:opacity-60">
+                    {resetting ? "Registrando…" : "Retirar firma y volver a firmar"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {/* Hoja A4: proporción carta vertical, contenido distribuido arriba/abajo */}
             <div

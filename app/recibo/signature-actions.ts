@@ -6,6 +6,8 @@ import { revalidatePath } from "next/cache";
 import { setProjectPaymentSignature } from "@/lib/data/projects";
 import { setWorkMovementSignature } from "@/lib/data/works";
 import { setSalaryReceiptSignature, issueSalaryReceipt } from "@/lib/data/finance";
+import { requirePermission } from "@/lib/auth/authorize";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type SignResult = { ok: true } | { ok: false; error: string };
 
@@ -39,6 +41,35 @@ export async function signAbonoAction(raw: unknown): Promise<SignResult> {
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "No se pudo guardar la firma." };
+  }
+}
+
+const resetReceiptSchema = z.object({
+  kind: z.enum(["proyecto", "obra"]),
+  id: z.string().uuid("Documento inválido"),
+  reason: z.string().trim().min(10, "Explica por qué se retira la firma (mínimo 10 caracteres).")
+    .max(500, "La explicación es demasiado larga."),
+});
+
+/** Solo un editor autenticado puede retirar una firma; el enlace público nunca autoriza esta acción. */
+export async function resetReceiptSignatureAction(raw: unknown): Promise<SignResult> {
+  const parsed = resetReceiptSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  const { kind, id, reason } = parsed.data;
+  try {
+    const user = await requirePermission(kind === "proyecto" ? "projects.edit" : "works.edit");
+    const { data, error } = await createAdminClient("receipt-signature").rpc("reset_receipt_signature", {
+      p_kind: kind,
+      p_id: id,
+      p_actor_id: user.id,
+      p_note: reason,
+    });
+    if (error || data !== true) throw new Error("No se pudo retirar la firma y registrar la auditoría.");
+    revalidatePath(`/recibo/${kind}/${id}`);
+    revalidatePath(`/firma/recibo/${kind}/${id}`);
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo retirar la firma. Comprueba tus permisos y que el recibo siga firmado." };
   }
 }
 

@@ -132,7 +132,6 @@ export async function listAuditPage(filters: AuditFilters & { page?: number } = 
   let query = sb().from("audit_logs")
     .select("id,created_at,user_name,entity_type,entity_id,record_id,operation,description,note,amount,snapshot", { count: "exact" })
     .not("entity_type", "is", null)
-    .not("user_name", "ilike", "administrador").not("user_name", "ilike", "sistema")
     .order("created_at", { ascending: false }).order("id", { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
   if (filters.entityType && filters.entityType !== "all") query = query.eq("entity_type", filters.entityType);
