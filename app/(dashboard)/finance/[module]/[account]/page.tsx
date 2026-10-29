@@ -1,7 +1,7 @@
 
 import { requirePermission } from "@/lib/auth/authorize";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { BalanceAccountDetail } from "@/components/finance/balance-account-detail";
 import { DebtorDebtDetail } from "@/components/finance/debtor-debt-detail";
@@ -108,7 +108,9 @@ export default async function FinanceAccountPage({
       getProviderDebtDetail(account),
       listPaymentMethods(),
     ]);
-    if (!detail) notFound();
+    // El proveedor deja de estar en este listado al saldar su última deuda.
+    // Una URL abierta antes del pago debe regresar al listado, no mostrar 404.
+    if (!detail) redirect("/finance/deudas");
 
     return (
       <div className="flex flex-col gap-6">

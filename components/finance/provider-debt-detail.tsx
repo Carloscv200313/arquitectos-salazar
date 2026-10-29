@@ -221,12 +221,14 @@ function SettleProviderDebtSheet({
   target,
   onSettled,
   accounts,
+  providerPending,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   target: SettleTarget;
   onSettled: (target: SettleTarget, amount: number) => void;
   accounts: PaymentMethod[];
+  providerPending: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -277,7 +279,11 @@ function SettleProviderDebtSheet({
         });
         reset();
         onOpenChange(false);
-        router.refresh();
+        if (Number.isFinite(settledAmount) && providerPending - settledAmount <= 0.001) {
+          router.replace("/finance/deudas");
+        } else {
+          router.refresh();
+        }
       } else {
         if (result.fieldErrors) setErrors(result.fieldErrors);
         toast.error(result.error);
@@ -1204,6 +1210,7 @@ export function ProviderDebtDetail({
           target={settleTarget}
           onSettled={applySettlement}
           accounts={accounts}
+          providerPending={displayDetail.totalPending}
         />
       )}
       {historyTarget && (
