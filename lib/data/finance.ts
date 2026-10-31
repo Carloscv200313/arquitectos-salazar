@@ -131,34 +131,92 @@ async function audit(action: string, recordId: string, description: string) {
 
 /* ====================================================== GENERAL BALANCE ==== */
 
-async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
+type AccountBalanceOpening = { amount: number; cutoffAt: string; cutoffMs: number };
+
+const loadAccountBalanceOpenings = cache(async (): Promise<Map<string, AccountBalanceOpening>> => {
+  const { data, error } = await sb()
+    .from("account_balance_openings")
+    .select("account_id,opening_amount,cutoff_at")
+    .limit(20);
+  // The code can be deployed before the manual SQL migration is applied.
+  if (error?.code === "PGRST205" || error?.code === "42P01") return new Map();
+  if (error) throw new Error("No se pudieron consultar los saldos de apertura.");
+  const openings = new Map<string, AccountBalanceOpening>();
+  for (const row of data ?? []) {
+    const cutoffAt = String(row.cutoff_at);
+    const cutoffMs = Date.parse(cutoffAt);
+    if (!Number.isFinite(cutoffMs)) throw new Error("Fecha de corte de saldos inválida.");
+    openings.set(String(row.account_id), {
+      amount: round2(num(row.opening_amount)), cutoffAt, cutoffMs,
+    });
+  }
+  return openings;
+});
+
+function countsAfterOpening(opening: AccountBalanceOpening | undefined, createdAt: unknown): boolean {
+  if (!opening) return true;
+  const createdMs = Date.parse(String(createdAt ?? ""));
+  if (!Number.isFinite(createdMs)) throw new Error("Un movimiento no tiene fecha de registro válida.");
+  return createdMs > opening.cutoffMs;
+}
+
+async function recentWorkMovementTimes(openings: Map<string, AccountBalanceOpening>): Promise<Map<string, string>> {
+  if (openings.size === 0) return new Map();
+  const earliest = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
+  const createdAtById = new Map<string, string>();
+  for (let from = 0; ; ) {
+    const { data, error } = await sb().from("work_movements")
+      .select("id,created_at")
+      .eq("status", 1)
+      .gte("created_at", new Date(earliest).toISOString())
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error("No se pudo comprobar la fecha de los movimientos de obra.");
+    const page = data ?? [];
+    for (const row of page) createdAtById.set(String(row.id), String(row.created_at));
+    if (page.length === 0) break;
+    from += page.length;
+  }
+  return createdAtById;
+}
+
+async function getUnifiedMethodBalances(): Promise<{
+  balances: Map<string, number>;
+  openings: Map<string, AccountBalanceOpening>;
+}> {
   const client = sb();
-  const [pp, wm, it, wt, debtorRows, debtorPayments, providerSettlements, manualProviderPayments, captures, salaryPayments] = await Promise.all([
-    client.from("project_payments").select("payment_method_id, movement_type, amount").eq("status", 1),
+  const [openings, pp, wm, it, wt, debtorRows, debtorPayments, providerSettlements, manualProviderPayments, captures, salaryPayments] = await Promise.all([
+    loadAccountBalanceOpenings(),
+    client.from("project_payments").select("payment_method_id, movement_type, amount, created_at").eq("status", 1),
     listActiveWorkMovementFacts(),
-    client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
-    client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount").eq("status", 1),
-    client.from("manual_debtors").select("source_account_id, amount").eq("status", 1),
-    client.from("manual_debtor_payments").select("to_account_id, amount").eq("status", 1),
-    client.from("provider_debt_settlements").select("from_account_id, amount").eq("status", 1),
-    client.from("manual_provider_debt_payments").select("from_account_id, amount").eq("status", 1),
+    client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount, created_at").eq("status", 1),
+    client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount, created_at").eq("status", 1),
+    client.from("manual_debtors").select("source_account_id, amount, created_at").eq("status", 1),
+    client.from("manual_debtor_payments").select("to_account_id, amount, created_at").eq("status", 1),
+    client.from("provider_debt_settlements").select("from_account_id, amount, created_at").eq("status", 1),
+    client.from("manual_provider_debt_payments").select("from_account_id, amount, created_at").eq("status", 1),
     client
       .from("finance_movement_captures")
-      .select("source_account_id, movement_type, amount")
+      .select("source_account_id, movement_type, amount, created_at")
       .eq("status", 1),
     client
       .from("salary_payments")
-      .select("payment_method_id, payment_type, amount")
+      .select("payment_method_id, payment_type, amount, created_at")
       .eq("status", 1),
   ]);
 
-  const balances = new Map<string, number>();
-  const add = (id: string | null, delta: number) => {
+  const balances = new Map<string, number>(
+    [...openings].map(([id, opening]) => [id, opening.amount]),
+  );
+  const recentWorkTimes = await recentWorkMovementTimes(openings);
+  const add = (id: string | null, delta: number, createdAt: unknown) => {
     if (!id) return;
+    if (!countsAfterOpening(openings.get(id), createdAt)) return;
     balances.set(id, round2((balances.get(id) ?? 0) + delta));
   };
   for (const p of pp.data ?? [])
-    add(p.payment_method_id as string, (p.movement_type as string) === "income" ? num(p.amount) : -num(p.amount));
+    add(p.payment_method_id as string, (p.movement_type as string) === "income" ? num(p.amount) : -num(p.amount), p.created_at);
   for (const m of wm) {
     if (
       (m.movement_type as string) === "expense" &&
@@ -166,39 +224,42 @@ async function getUnifiedMethodBalances(): Promise<Map<string, number>> {
     ) {
       continue;
     }
-    add(m.payment_method_id as string, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount));
+    const accountId = m.payment_method_id as string;
+    if (openings.has(accountId) && !recentWorkTimes.has(m.id)) continue;
+    add(accountId, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount), recentWorkTimes.get(m.id));
   }
   for (const t of it.data ?? []) {
-    add(t.from_payment_method_id as string, -num(t.amount));
-    add(t.to_payment_method_id as string, num(t.amount));
+    add(t.from_payment_method_id as string, -num(t.amount), t.created_at);
+    add(t.to_payment_method_id as string, num(t.amount), t.created_at);
   }
   for (const t of wt.data ?? []) {
-    add(t.from_payment_method_id as string, -num(t.amount));
-    add(t.to_payment_method_id as string, num(t.amount));
+    add(t.from_payment_method_id as string, -num(t.amount), t.created_at);
+    add(t.to_payment_method_id as string, num(t.amount), t.created_at);
   }
   for (const debtor of debtorRows.data ?? []) {
-    add((debtor.source_account_id as string) ?? null, -num(debtor.amount));
+    add((debtor.source_account_id as string) ?? null, -num(debtor.amount), debtor.created_at);
   }
   for (const payment of debtorPayments.data ?? []) {
-    add((payment.to_account_id as string) ?? null, num(payment.amount));
+    add((payment.to_account_id as string) ?? null, num(payment.amount), payment.created_at);
   }
   for (const payment of providerSettlements.data ?? []) {
-    add((payment.from_account_id as string) ?? null, -num(payment.amount));
+    add((payment.from_account_id as string) ?? null, -num(payment.amount), payment.created_at);
   }
   for (const payment of manualProviderPayments.data ?? []) {
-    add((payment.from_account_id as string) ?? null, -num(payment.amount));
+    add((payment.from_account_id as string) ?? null, -num(payment.amount), payment.created_at);
   }
   for (const capture of captures.data ?? []) {
     add(
       (capture.source_account_id as string) ?? null,
       (capture.movement_type as string) === "income" ? num(capture.amount) : -num(capture.amount),
+      capture.created_at,
     );
   }
   for (const payment of salaryPayments.data ?? []) {
     if (payment.payment_type === "project" || payment.payment_type === "work") continue;
-    add((payment.payment_method_id as string) ?? null, -num(payment.amount));
+    add((payment.payment_method_id as string) ?? null, -num(payment.amount), payment.created_at);
   }
-  return balances;
+  return { balances, openings };
 }
 
 async function loadMethods(): Promise<PaymentMethod[]> {
@@ -665,7 +726,7 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
     return { rows: [], total: 0, totalWithoutDebtors: 0, debtorsTotal: 0, providersTotal: 0, worksReceivableTotal: 0 };
   }
   const client = sb();
-  const [works, projects, debts, unifiedBalances, methods, entriesRes, accMovRes] = await Promise.all([
+  const [works, projects, debts, balanceState, methods, entriesRes, accMovRes] = await Promise.all([
     listWorks(),
     listProjects(),
     getDebtReport(),
@@ -675,7 +736,11 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
     client.from("general_balance_account_movements").select("*").eq("status", 1),
   ]);
 
+  const { balances: unifiedBalances, openings } = balanceState;
   const methodByName = new Map(methods.map((m) => [m.name.toLowerCase(), m]));
+  const openingByRowId = new Map(
+    methods.map((method) => [accountIdFromMethodName(method.name), openings.get(method.id)]),
+  );
   const debtorsTotal = round2(debts.filter((r) => r.type === "debtor").reduce((s, r) => s + r.amount, 0));
   const providersTotal = round2(debts.filter((r) => r.type === "provider").reduce((s, r) => s + r.amount, 0));
   const accountsPayableTotal = providersTotal;
@@ -704,7 +769,9 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
       label: methodName,
       amount: method ? unifiedBalances.get(method.id) ?? 0 : 0,
       source: "works-payment-method",
-      description: "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta.",
+      description: method && openings.has(method.id)
+        ? "Saldo de apertura más movimientos registrados después del corte."
+        : "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta.",
     };
   });
 
@@ -720,12 +787,15 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
   for (const e of entriesRes.data ?? []) {
     const from = byAccountId.get(e.from_account_id as string);
     const to = byAccountId.get(e.to_account_id as string);
-    if (from) from.amount = round2(from.amount - num(e.amount));
-    if (to) to.amount = round2(to.amount + num(e.amount));
+    if (from && countsAfterOpening(openingByRowId.get(from.id), e.created_at))
+      from.amount = round2(from.amount - num(e.amount));
+    if (to && countsAfterOpening(openingByRowId.get(to.id), e.created_at))
+      to.amount = round2(to.amount + num(e.amount));
   }
   for (const m of accMovRes.data ?? []) {
     const row = byAccountId.get(m.account_id as string);
     if (!row) continue;
+    if (!countsAfterOpening(openingByRowId.get(row.id), m.created_at)) continue;
     const sign = (m.movement_type as string) === "income" ? 1 : -1;
     row.amount = round2(row.amount + num(m.amount) * sign);
   }
@@ -989,9 +1059,13 @@ export async function getGeneralBalanceAccountReport(
     });
   }
 
+  const accountOpening = method ? (await loadAccountBalanceOpenings()).get(method.id) : undefined;
   return {
     account,
     accounts: report.rows,
+    opening: accountOpening
+      ? { amount: accountOpening.amount, cutoffAt: accountOpening.cutoffAt }
+      : undefined,
     history: history.sort((a, b) => {
       const byDate = a.date.localeCompare(b.date);
       if (byDate !== 0) return byDate;

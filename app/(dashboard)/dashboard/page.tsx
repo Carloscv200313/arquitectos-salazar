@@ -10,7 +10,7 @@ import {
   getSalaryReport,
 } from "@/lib/data/finance";
 import { buildDashboardSnapshot } from "@/lib/dashboard";
-import { buildOverviewSnapshot, type MovementLite } from "@/lib/overview";
+import { buildOverviewSnapshot, cashAndBankTotal, type MovementLite } from "@/lib/overview";
 import { round2 } from "@/lib/calculations";
 import { FadeIn, Stagger, StaggerItem } from "@/components/motion/fade-in";
 import { OverviewView } from "@/components/dashboard/overview-view";
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
     utilityReport,
     orders,
     salaryPaid: salaryReport.totals.totalPaid,
-    generalBalance: balance.total,
+    generalBalance: cashAndBankTotal(balance.rows),
   });
 
   const legacy = buildDashboardSnapshot(projects, projectMovements);

@@ -49,3 +49,7 @@ ESTADO-DEL-PROYECTO.md
 
 # Supabase request exports can contain identifiers and query filters.
 /supabase_logs.csv
+
+# Private reconciliation values supplied by the owner; never publish them.
+/db/seed-account-balance-openings-2026-10-31.sql
+/docs/corte-saldos-caja-bancos-2026-10-31.md

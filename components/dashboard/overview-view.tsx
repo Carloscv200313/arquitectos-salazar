@@ -57,7 +57,7 @@ export function OverviewView({ snapshot }: { snapshot: OverviewSnapshot }) {
         <KpiCard
           label="Caja y Bancos"
           value={formatCurrency(kpis.generalBalance)}
-          hint="Consolidado de todas las cuentas"
+          hint="Caja, efectivo y cuentas bancarias"
           icon={<Landmark className="size-5" />}
           accent
           spark={snapshot.cashflowSpark}

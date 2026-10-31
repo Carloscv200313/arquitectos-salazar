@@ -442,6 +442,7 @@ export interface GeneralBalanceAccountReport {
   account: GeneralBalanceRow;
   accounts: GeneralBalanceRow[];
   history: GeneralBalanceHistoryRow[];
+  opening?: { amount: number; cutoffAt: string };
 }
 
 export interface FinanceUtilityRow {

@@ -2,9 +2,17 @@ import { LOCALE } from "./constants";
 import { round2 } from "./calculations";
 import type {
   FinanceUtilityReport,
+  GeneralBalanceRow,
   ProjectWithFinance,
   WorkWithFinance,
 } from "./types";
+
+/** Caja y Bancos contiene solo cuentas de dinero, no deudas por pagar/cobrar. */
+export function cashAndBankTotal(rows: Pick<GeneralBalanceRow, "amount" | "source">[]): number {
+  return round2(rows
+    .filter((row) => row.source === "works-payment-method")
+    .reduce((sum, row) => sum + row.amount, 0));
+}
 
 export interface MovementLite {
   date: string;

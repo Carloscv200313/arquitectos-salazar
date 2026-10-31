@@ -154,6 +154,18 @@ create table if not exists public.payment_accounts (
   created_by  uuid references auth.users(id)
 );
 
+-- Corte de Caja y Bancos: el historial anterior permanece en sus tablas.
+create table if not exists public.account_balance_openings (
+  account_id uuid primary key references public.payment_accounts(id),
+  opening_amount numeric(14,2) not null,
+  cutoff_at timestamptz not null,
+  source_note text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.account_balance_openings enable row level security;
+revoke all on public.account_balance_openings from public, anon, authenticated, service_role;
+grant select on public.account_balance_openings to service_role;
+
 create table if not exists public.task_types (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,

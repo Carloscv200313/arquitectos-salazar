@@ -204,7 +204,7 @@ export function BalanceAccountDetail({
               {formatCurrency(report.account.amount)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Según movimientos consolidados.
+              {report.opening ? "Saldo de apertura más movimientos posteriores." : "Según movimientos consolidados."}
             </p>
           </Card>
           <Card className="p-5">
@@ -217,6 +217,18 @@ export function BalanceAccountDetail({
             </p>
           </Card>
         </div>
+
+        {report.opening && (
+          <Card className="border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+            <p className="font-semibold">Corte de saldo de esta cuenta</p>
+            <p>
+              Saldo inicial: {formatCurrency(report.opening.amount)} al {new Intl.DateTimeFormat("es-MX", {
+                timeZone: "America/Mexico_City", dateStyle: "medium", timeStyle: "short",
+              }).format(new Date(report.opening.cutoffAt))} (hora de Ciudad de México).
+              Los movimientos anteriores siguen en el historial, pero no alteran el saldo actual.
+            </p>
+          </Card>
+        )}
 
         <Card className="gap-0 overflow-hidden p-0">
           <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
