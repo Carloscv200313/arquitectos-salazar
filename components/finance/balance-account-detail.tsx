@@ -32,6 +32,8 @@ import type {
   GeneralBalanceMovementType,
 } from "@/lib/types";
 
+const HISTORY_PAGE_SIZE = 10;
+
 function EntryDrawer({
   open,
   onOpenChange,
@@ -186,6 +188,17 @@ export function BalanceAccountDetail({
   report: GeneralBalanceAccountReport;
 }) {
   const [open, setOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const filteredHistory = report.history.filter((row) => {
+    const date = row.date.slice(0, 10);
+    return (!dateFrom || date >= dateFrom) && (!dateTo || date <= dateTo);
+  });
+  const pageCount = Math.max(1, Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * HISTORY_PAGE_SIZE;
+  const visibleHistory = filteredHistory.slice(firstIndex, firstIndex + HISTORY_PAGE_SIZE);
 
   return (
     <>
@@ -244,6 +257,49 @@ export function BalanceAccountDetail({
             </Button>
           </div>
 
+          <div className="flex flex-wrap items-end gap-3 border-b px-5 py-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="history-date-from">Fecha desde</Label>
+              <Input
+                id="history-date-from"
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(event) => {
+                  setDateFrom(event.target.value);
+                  setPage(1);
+                }}
+                className="w-auto"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="history-date-to">Fecha hasta</Label>
+              <Input
+                id="history-date-to"
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(event) => {
+                  setDateTo(event.target.value);
+                  setPage(1);
+                }}
+                className="w-auto"
+              />
+            </div>
+            {(dateFrom || dateTo) && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDateFrom("");
+                  setDateTo("");
+                  setPage(1);
+                }}
+              >
+                Limpiar fechas
+              </Button>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/40">
@@ -253,6 +309,9 @@ export function BalanceAccountDetail({
                   </TableHead>
                   <TableHead className="text-xs uppercase text-muted-foreground">
                     Descripción
+                  </TableHead>
+                  <TableHead className="text-xs uppercase text-muted-foreground">
+                    Origen
                   </TableHead>
                   <TableHead className="text-xs uppercase text-muted-foreground">
                     Desde
@@ -266,7 +325,7 @@ export function BalanceAccountDetail({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {report.history.map((row) => {
+                {visibleHistory.map((row) => {
                   const isExpense = row.expenseAccount === report.account.label;
                   const isIncome = row.incomeAccount === report.account.label;
 
@@ -276,6 +335,9 @@ export function BalanceAccountDetail({
                         {formatDate(row.date)}
                       </TableCell>
                       <TableCell className="font-medium">{row.description}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {row.origin ?? "—"}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {row.expenseAccount}
                       </TableCell>
@@ -294,15 +356,33 @@ export function BalanceAccountDetail({
                     </TableRow>
                   );
                 })}
-                {report.history.length === 0 && (
+                {filteredHistory.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                      Sin movimientos registrados para esta cuenta.
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      {report.history.length === 0
+                        ? "Sin movimientos registrados para esta cuenta."
+                        : "Sin movimientos en el rango de fechas seleccionado."}
                     </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground">
+            <span>
+              {filteredHistory.length === 0
+                ? "Mostrando 0 registros"
+                : `Mostrando ${firstIndex + 1}–${Math.min(firstIndex + HISTORY_PAGE_SIZE, filteredHistory.length)} de ${filteredHistory.length} registros`}
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Página {currentPage} de {pageCount}</span>
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+                Anterior
+              </Button>
+              <Button variant="outline" size="sm" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>
+                Siguiente
+              </Button>
+            </div>
           </div>
         </Card>
       </div>

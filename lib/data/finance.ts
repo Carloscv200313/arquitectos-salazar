@@ -160,6 +160,19 @@ function countsAfterOpening(opening: AccountBalanceOpening | undefined, createdA
   return createdMs > opening.cutoffMs;
 }
 
+function salaryPaymentPredatesOpening(opening: AccountBalanceOpening | undefined, paymentDate: unknown): boolean {
+  if (!opening || typeof paymentDate !== "string") return false;
+  // A salary payment can be copied into projects/works days after it was paid.
+  // Compare its business date with the account's local opening date so that
+  // a late sync does not charge cash that was already included in the opening.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(opening.cutoffMs));
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const openingLocalDate = `${part("year")}-${part("month")}-${part("day")}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) && paymentDate < openingLocalDate;
+}
+
 async function recentWorkMovementTimes(openings: Map<string, AccountBalanceOpening>): Promise<Map<string, string>> {
   if (openings.size === 0) return new Map();
   const earliest = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
@@ -188,7 +201,7 @@ async function getUnifiedMethodBalances(): Promise<{
   const client = sb();
   const [openings, pp, wm, it, wt, debtorRows, debtorPayments, providerSettlements, manualProviderPayments, captures, salaryPayments] = await Promise.all([
     loadAccountBalanceOpenings(),
-    client.from("project_payments").select("payment_method_id, movement_type, amount, created_at").eq("status", 1),
+    client.from("project_payments").select("payment_method_id, movement_type, amount, concept, payment_date, created_at").eq("status", 1),
     listActiveWorkMovementFacts(),
     client.from("internal_transfers").select("from_payment_method_id, to_payment_method_id, amount, created_at").eq("status", 1),
     client.from("work_internal_transfers").select("from_payment_method_id, to_payment_method_id, amount, created_at").eq("status", 1),
@@ -210,13 +223,38 @@ async function getUnifiedMethodBalances(): Promise<{
     [...openings].map(([id, opening]) => [id, opening.amount]),
   );
   const recentWorkTimes = await recentWorkMovementTimes(openings);
+  const salaryWorkCandidateIds = wm.filter((movement) => {
+    const accountId = movement.payment_method_id as string;
+    const opening = openings.get(accountId);
+    return movement.movement_type === "expense" &&
+      normalizedFinanceCategory(movement.category) === "honorarios" &&
+      recentWorkTimes.has(movement.id) &&
+      countsAfterOpening(opening, recentWorkTimes.get(movement.id)) &&
+      salaryPaymentPredatesOpening(opening, movement.movement_date);
+  }).map((movement) => movement.id);
+  const salaryWorkMirrorIds = new Set<string>();
+  for (let from = 0; from < salaryWorkCandidateIds.length; from += 200) {
+    const { data, error } = await client.from("work_movements")
+      .select("id,receipt")
+      .in("id", salaryWorkCandidateIds.slice(from, from + 200));
+    if (error) throw new Error("No se pudo verificar el origen de los pagos salariales de obra.");
+    for (const row of data ?? []) {
+      if (String(row.receipt ?? "").startsWith("SAL-")) salaryWorkMirrorIds.add(String(row.id));
+    }
+  }
   const add = (id: string | null, delta: number, createdAt: unknown) => {
     if (!id) return;
     if (!countsAfterOpening(openings.get(id), createdAt)) return;
     balances.set(id, round2((balances.get(id) ?? 0) + delta));
   };
-  for (const p of pp.data ?? [])
+  for (const p of pp.data ?? []) {
+    if (
+      p.movement_type === "expense" &&
+      String(p.concept ?? "").startsWith("Pago salarial:") &&
+      salaryPaymentPredatesOpening(openings.get(p.payment_method_id as string), p.payment_date)
+    ) continue;
     add(p.payment_method_id as string, (p.movement_type as string) === "income" ? num(p.amount) : -num(p.amount), p.created_at);
+  }
   for (const m of wm) {
     if (
       (m.movement_type as string) === "expense" &&
@@ -225,6 +263,7 @@ async function getUnifiedMethodBalances(): Promise<{
       continue;
     }
     const accountId = m.payment_method_id as string;
+    if (salaryWorkMirrorIds.has(m.id)) continue;
     if (openings.has(accountId) && !recentWorkTimes.has(m.id)) continue;
     add(accountId, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount), recentWorkTimes.get(m.id));
   }
@@ -883,12 +922,22 @@ export async function getGeneralBalanceAccountReport(
           .eq("from_account_id", method.id),
       ]);
       const projectName = new Map((projRes.data ?? []).map((p) => [p.id as string, p.name as string]));
+      const workIds = [...new Set(wmRes.map((m) => m.work_id).filter((id): id is string => typeof id === "string"))];
+      const workName = new Map<string, string>();
+      for (let from = 0; from < workIds.length; from += 200) {
+        const { data, error } = await client.from("works")
+          .select("id,name")
+          .in("id", workIds.slice(from, from + 200));
+        if (error) throw new Error("No se pudo consultar el origen de los movimientos de obra.");
+        for (const work of data ?? []) workName.set(work.id as string, work.name as string);
+      }
       for (const m of wmRes) {
         const expense = (m.movement_type as string) === "expense";
         history.push({
           id: `work-${m.id}`,
           date: m.movement_date as string,
           description: m.concept as string,
+          origin: workName.get(m.work_id as string),
           expenseAccount: expense ? method.name : (m.supplier as string),
           incomeAccount: expense ? (m.supplier as string) : method.name,
           amount: num(m.amount),
@@ -901,7 +950,8 @@ export async function getGeneralBalanceAccountReport(
         history.push({
           id: `project-${p.id}`,
           date: p.payment_date as string,
-          description: `${p.concept} · ${counterparty}`,
+          description: p.concept as string,
+          origin: projectName.get(p.project_id as string),
           expenseAccount: expense ? method.name : counterparty,
           incomeAccount: expense ? counterparty : method.name,
           amount: num(p.amount),
@@ -1067,7 +1117,7 @@ export async function getGeneralBalanceAccountReport(
       ? { amount: accountOpening.amount, cutoffAt: accountOpening.cutoffAt }
       : undefined,
     history: history.sort((a, b) => {
-      const byDate = a.date.localeCompare(b.date);
+      const byDate = b.date.localeCompare(a.date);
       if (byDate !== 0) return byDate;
       return a.description.localeCompare(b.description);
     }),
@@ -2582,7 +2632,7 @@ export async function getSalaryReport(filters?: { year?: number; month?: number 
   const payments = (payRes.data ?? []).map((r) => mapSalaryPayment(r, ctx));
 
   const builtWeeks = selectedWeeks
-    .sort((a, b) => a.week_start_date.localeCompare(b.week_start_date))
+    .sort((a, b) => b.week_start_date.localeCompare(a.week_start_date))
     .map((w) =>
       buildWeek(
         w,

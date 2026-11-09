@@ -288,7 +288,7 @@ export function WorkReports({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {administrationUtilities.map((row) => (
+              {[...administrationUtilities].sort((a, b) => b.month.localeCompare(a.month)).map((row) => (
                 <TableRow key={row.month}>
                   <TableCell className="px-5 font-medium capitalize">
                     <span className="inline-flex items-center gap-2">

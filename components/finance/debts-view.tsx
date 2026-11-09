@@ -140,6 +140,11 @@ function DebtTableCard({
   providerDetails?: Map<string, ProviderDebtDetail>;
 }) {
   const isDebtor = type === "debtor";
+  const displayedRows = isDebtor
+    ? [...rows].sort((a, b) =>
+        (b.loanDate ?? "").localeCompare(a.loanDate ?? "") || b.amount - a.amount,
+      )
+    : rows;
   return (
     <Card className="gap-0 overflow-hidden rounded-2xl p-0">
       <div className="border-b px-5 py-4">
@@ -187,7 +192,7 @@ function DebtTableCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => {
+              {displayedRows.map((row) => {
                 const detail = debtorDetails?.get(row.id);
                 return (
                   <TableRow key={row.id}>

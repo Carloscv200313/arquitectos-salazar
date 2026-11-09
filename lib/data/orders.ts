@@ -106,9 +106,9 @@ async function paymentsOf(orderId: string): Promise<WorkOrderPaymentWithMethod[]
   return (data ?? [])
     .map(mapPayment)
     .sort((a, b) => {
-      const byDate = a.payment_date.localeCompare(b.payment_date);
+      const byDate = b.payment_date.localeCompare(a.payment_date);
       if (byDate !== 0) return byDate;
-      return a.created_at.localeCompare(b.created_at);
+      return b.created_at.localeCompare(a.created_at);
     });
 }
 
@@ -235,7 +235,7 @@ export async function listOrdersForWorks(works: WorkWithFinance[], workId?: stri
   return orders.flatMap(order => {
     const work = workById.get(order.work_id);
     if (!work) return [];
-    const payments = (paymentByOrder.get(order.id) ?? []).sort((a, b) => a.payment_date.localeCompare(b.payment_date) || a.created_at.localeCompare(b.created_at));
+    const payments = (paymentByOrder.get(order.id) ?? []).sort((a, b) => b.payment_date.localeCompare(a.payment_date) || b.created_at.localeCompare(a.created_at));
     const paid = round2(payments.reduce((sum, payment) => sum + payment.amount, 0));
     const pending = order.amount === null ? 0 : round2(Math.max(order.amount - paid, 0));
     return [{ ...order, work, payments, paid, pending, status: statusFor(order.amount, paid, pending) }];

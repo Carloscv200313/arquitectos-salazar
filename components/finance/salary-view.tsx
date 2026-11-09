@@ -1420,7 +1420,7 @@ function EmployeeDetailSheet({
       })
       .map((item) => ({
         ...item,
-        dates: item.dates.sort(),
+        dates: item.dates.sort((a, b) => b.localeCompare(a)),
         suggestedPerDay: item.budget !== null ? round2(item.budget / item.days) : null,
       }));
   }, [employeeSummary, projectOptions, taskRates]);
@@ -1441,7 +1441,7 @@ function EmployeeDetailSheet({
       );
 
       return [...basePayments, ...activeOptimisticPayments].sort((a, b) =>
-        a.payment_date.localeCompare(b.payment_date),
+        b.payment_date.localeCompare(a.payment_date) || b.created_at.localeCompare(a.created_at),
       );
     },
     [employeeSummary?.employee.id, employeeSummary?.payments, optimisticPayments, week?.id],

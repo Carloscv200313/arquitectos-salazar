@@ -811,9 +811,9 @@ export function ProviderDebtDetail({
       a.kind === "order" ? a.order.order_date : a.kind === "movement" ? a.movement.movementDate : a.manual.debt.debt_date;
     const bDate =
       b.kind === "order" ? b.order.order_date : b.kind === "movement" ? b.movement.movementDate : b.manual.debt.debt_date;
-    const byDate = aDate.localeCompare(bDate);
+    const byDate = bDate.localeCompare(aDate);
     if (byDate !== 0) return byDate;
-    return aPending - bPending;
+    return bPending - aPending;
   });
   const workOptions = [...new Set(debtRows.map((row) =>
     row.kind === "order" ? row.order.work.name : row.kind === "movement" ? row.movement.workName : "Administrativo",

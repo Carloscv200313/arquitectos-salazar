@@ -432,6 +432,7 @@ export interface GeneralBalanceHistoryRow {
   id: string;
   date: string;
   description: string;
+  origin?: string;
   expenseAccount: string;
   incomeAccount: string;
   amount: number;

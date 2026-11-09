@@ -98,3 +98,26 @@ test('cinco saldos de apertura ignoran registros previos y suman solo los poster
   assert.ok(detail.history.some((row) => row.id === 'account-movement-new-manual'));
   assert.equal(current.metrics.tables.account_balance_openings, 1);
 });
+
+test('sincronizar salarios anteriores al corte no vuelve a descontar Caja', async () => {
+  const data = fixture(0, 1);
+  data.account_balance_openings = [{ account_id: 'a0', opening_amount: 32379, cutoff_at: '2026-10-31T06:00:00Z' }];
+  const oldSalaryAmounts = [600, 500, 500, 1500, 760, 500, 1500, 350];
+  data.project_payments.push(...oldSalaryAmounts.map((amount, index) => ({
+    ...data.project_payments[0], id: `old-salary-${index}`, movement_type: 'expense',
+    payment_method_id: 'a0', concept: 'Pago salarial: Empleado sintético · Planos',
+    amount, payment_date: '2026-10-30', created_at: after,
+  })));
+  data.project_payments.push(
+    { ...data.project_payments[0], id: 'ordinary-backdated', movement_type: 'expense', payment_method_id: 'a0', concept: 'Pago ordinario', amount: 300, payment_date: '2026-10-30', created_at: after },
+    { ...data.project_payments[0], id: 'new-salary', movement_type: 'expense', payment_method_id: 'a0', concept: 'Pago salarial: Empleado sintético · Planos', amount: 50, payment_date: '2026-11-01', created_at: after },
+  );
+  // El trabajo se registró en septiembre, pero el dinero salió el 1 de noviembre.
+  data.salary_payments.push({ ...data.salary_payments[0], id: 'salary-prepared-earlier', payment_type: 'project', amount: 50, payment_method_id: 'a0', payment_date: '2026-11-01', created_at: '2026-09-20T12:00:00Z' });
+  data.work_movements.push(
+    { ...data.work_movements[0], id: 'old-work-salary', receipt: 'SAL-2026-10-30', category: 'Honorarios', movement_type: 'expense', payment_method_id: 'a0', amount: 200, movement_date: '2026-10-30', created_at: after },
+    { ...data.work_movements[0], id: 'ordinary-work-backdated', receipt: 'OTHER', category: 'Material', movement_type: 'expense', payment_method_id: 'a0', amount: 70, movement_date: '2026-10-30', created_at: after },
+  );
+  const report = await loadFinance(data).finance.getGeneralBalanceReport();
+  assert.equal(report.rows.find((row) => row.label === 'Caja').amount, 31959);
+});
