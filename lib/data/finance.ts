@@ -173,32 +173,19 @@ function salaryPaymentPredatesOpening(opening: AccountBalanceOpening | undefined
   return /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) && paymentDate < openingLocalDate;
 }
 
-async function recentWorkMovementTimes(openings: Map<string, AccountBalanceOpening>): Promise<Map<string, string>> {
-  if (openings.size === 0) return new Map();
-  const earliest = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
-  const createdAtById = new Map<string, string>();
-  for (let from = 0; ; ) {
-    const { data, error } = await sb().from("work_movements")
-      .select("id,created_at")
-      .eq("status", 1)
-      .gte("created_at", new Date(earliest).toISOString())
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + 999);
-    if (error) throw new Error("No se pudo comprobar la fecha de los movimientos de obra.");
-    const page = data ?? [];
-    for (const row of page) createdAtById.set(String(row.id), String(row.created_at));
-    if (page.length === 0) break;
-    from += page.length;
-  }
-  return createdAtById;
-}
+// Caja and Efectivo were reconciled against their physical counts on Nov 11.
+// The older work-row corrections are already included in that baseline.
+const CASH_RECONCILIATION_CUTOFF = Date.parse("2026-11-12T00:00:00Z");
 
-/** Reconciles edits/deletions made after an opening cutoff for older work rows. */
 async function workMovementOpeningAdjustments(
   openings: Map<string, AccountBalanceOpening>,
 ): Promise<Map<string, number>> {
   if (openings.size === 0) return new Map();
+  const { data: cashAccounts, error: cashAccountsError } = await sb().from("payment_accounts")
+    .select("id,name")
+    .in("name", ["Caja", "Efectivo"]);
+  if (cashAccountsError) throw new Error("No se pudieron consultar las cuentas de Caja y Efectivo.");
+  const reconciledAccountIds = new Set((cashAccounts ?? []).map((account) => String(account.id)));
   const earliestCutoff = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
   const auditRows: Row[] = [];
   for (let from = 0; ; ) {
@@ -230,27 +217,46 @@ async function workMovementOpeningAdjustments(
   const adjustments = new Map<string, number>();
   for (const audit of auditRows) {
     const snapshot = audit.snapshot as { before?: unknown; after?: unknown } | null;
-    const before = snapshot?.before as Row | undefined;
-    const after = snapshot?.after as Row | undefined;
     const movementCreatedAt = Date.parse(createdAtById.get(String(audit.entity_id)) ?? "");
-    if (!Number.isFinite(movementCreatedAt)) continue;
     const auditAt = Date.parse(String(audit.created_at ?? ""));
-    if (!Number.isFinite(auditAt)) continue;
+    if (!Number.isFinite(movementCreatedAt) || !Number.isFinite(auditAt)) continue;
     const applySnapshot = (movement: Row | undefined, direction: 1 | -1) => {
       if (!movement) return;
       const accountId = String(movement.payment_method_id ?? "");
       const opening = openings.get(accountId);
       if (!opening || auditAt <= opening.cutoffMs || movementCreatedAt > opening.cutoffMs) return;
+      if (reconciledAccountIds.has(accountId) && auditAt < CASH_RECONCILIATION_CUTOFF) return;
       if (String(movement.receipt ?? "").startsWith("SAL-")) return;
       if (movement.movement_type === "expense" && normalizedFinanceCategory(movement.category) === "cuenta de oficina") return;
       const movementType = movement.movement_type ?? (String(audit.description ?? "").startsWith("Ingreso") ? "income" : "expense");
       const signedAmount = num(movement.amount) * (movementType === "income" ? 1 : -1);
       adjustments.set(accountId, round2((adjustments.get(accountId) ?? 0) + signedAmount * direction));
     };
-    applySnapshot(before, -1);
-    if (audit.operation === "update") applySnapshot(after, 1);
+    applySnapshot(snapshot?.before as Row | undefined, -1);
+    if (audit.operation === "update") applySnapshot(snapshot?.after as Row | undefined, 1);
   }
   return adjustments;
+}
+
+async function recentWorkMovementTimes(openings: Map<string, AccountBalanceOpening>): Promise<Map<string, string>> {
+  if (openings.size === 0) return new Map();
+  const earliest = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
+  const createdAtById = new Map<string, string>();
+  for (let from = 0; ; ) {
+    const { data, error } = await sb().from("work_movements")
+      .select("id,created_at")
+      .eq("status", 1)
+      .gte("created_at", new Date(earliest).toISOString())
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error("No se pudo comprobar la fecha de los movimientos de obra.");
+    const page = data ?? [];
+    for (const row of page) createdAtById.set(String(row.id), String(row.created_at));
+    if (page.length === 0) break;
+    from += page.length;
+  }
+  return createdAtById;
 }
 
 /** Reconciles edited loans against account openings that predate the loan. */
@@ -1015,7 +1021,7 @@ export async function getGeneralBalanceAccountReport(
         }
       }
     } else {
-      const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes, providerSettlementsRes, manualProviderPaymentsRes] = await Promise.all([
+      const [wmRes, ppRes, projRes, debtorLoanRes, debtorPaymentRes, providerSettlementsRes, manualProviderPaymentsRes, capturesRes, salaryRes] = await Promise.all([
         listWorkMovementRows({ paymentMethodId: method.id }),
         client.from("project_payments").select(PROJECT_PAYMENT_COLUMNS).eq("status", 1).eq("payment_method_id", method.id),
         client.from("projects").select("id, name"),
@@ -1039,7 +1045,19 @@ export async function getGeneralBalanceAccountReport(
           .select("id, amount, payment_date, debt:manual_provider_debts(provider)")
           .eq("status", 1)
           .eq("from_account_id", method.id),
+        client
+          .from("finance_movement_captures")
+          .select("id,capture_date,movement_type,amount,description,concept:finance_movement_concepts(name)")
+          .eq("status", 1)
+          .eq("source_account_id", method.id),
+        client
+          .from("salary_payments")
+          .select("id,payment_date,payment_type,concept,amount")
+          .eq("status", 1)
+          .eq("payment_method_id", method.id),
       ]);
+      if (capturesRes.error) throw new Error("No se pudieron consultar los movimientos manuales de la cuenta.");
+      if (salaryRes.error) throw new Error("No se pudieron consultar los salarios semanales de la cuenta.");
       const projectName = new Map((projRes.data ?? []).map((p) => [p.id as string, p.name as string]));
       const workIds = [...new Set(wmRes.map((m) => m.work_id).filter((id): id is string => typeof id === "string"))];
       const workName = new Map<string, string>();
@@ -1119,6 +1137,33 @@ export async function getGeneralBalanceAccountReport(
           description: "Abono a deuda manual de proveedor",
           expenseAccount: method.name,
           incomeAccount: debt?.provider ?? "Proveedor",
+          amount: num(payment.amount),
+          source: "manual",
+        });
+      }
+      for (const capture of capturesRes.data ?? []) {
+        const expense = capture.movement_type === "expense";
+        const concept = relatedRow(capture.concept)?.name as string | undefined;
+        history.push({
+          id: `finance-capture-${capture.id}`,
+          date: capture.capture_date as string,
+          description: [concept, capture.description].filter(Boolean).join(" · ") || "Movimiento manual",
+          origin: "Movimientos",
+          expenseAccount: expense ? method.name : "Registro externo",
+          incomeAccount: expense ? "Registro externo" : method.name,
+          amount: num(capture.amount),
+          source: "manual",
+        });
+      }
+      for (const payment of salaryRes.data ?? []) {
+        if (payment.payment_type === "project" || payment.payment_type === "work") continue;
+        history.push({
+          id: `salary-payment-${payment.id}`,
+          date: payment.payment_date as string,
+          description: (payment.concept as string) || "Pago de salario",
+          origin: "Salarios",
+          expenseAccount: method.name,
+          incomeAccount: "Personal",
           amount: num(payment.amount),
           source: "manual",
         });
