@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -145,6 +145,15 @@ function DebtTableCard({
         (b.loanDate ?? "").localeCompare(a.loanDate ?? "") || b.amount - a.amount,
       )
     : rows;
+  const displayedGroups = isDebtor
+    ? [...displayedRows.reduce((groups, row) => {
+        const key = row.name.trim().toLocaleLowerCase("es");
+        const group = groups.get(key) ?? [];
+        group.push(row);
+        groups.set(key, group);
+        return groups;
+      }, new Map<string, DebtReportRow[]>()).values()]
+    : displayedRows.map((row) => [row]);
   return (
     <Card className="gap-0 overflow-hidden rounded-2xl p-0">
       <div className="border-b px-5 py-4">
@@ -192,7 +201,26 @@ function DebtTableCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayedRows.map((row) => {
+              {displayedGroups.map((group) => <Fragment key={`group-${group[0].id}`}>
+                {group.length > 1 && (
+                  <TableRow key={`group-${group[0].name}`} className="bg-muted/30 font-semibold hover:bg-muted/30">
+                    <TableCell className="px-5">
+                      {group[0].name} <span className="font-normal text-muted-foreground">· {group.length} préstamos</span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">Varias cuentas</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatCurrency(group.reduce((sum, row) => sum + (row.totalAmount ?? row.amount), 0))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-brand-foreground">
+                      {formatCurrency(group.reduce((sum, row) => sum + (row.totalPaid ?? 0), 0))}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-destructive">
+                      {formatCurrency(group.reduce((sum, row) => sum + row.amount, 0))}
+                    </TableCell>
+                    <TableCell className="px-5" />
+                  </TableRow>
+                )}
+                {group.map((row) => {
                 const detail = debtorDetails?.get(row.id);
                 return (
                   <TableRow key={row.id}>
@@ -255,6 +283,7 @@ function DebtTableCard({
                   </TableRow>
                 );
               })}
+              </Fragment>)}
               {rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">

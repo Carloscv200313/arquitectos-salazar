@@ -13,6 +13,7 @@ import {
   deleteSalaryWeek,
   deleteFinanceMovementConcept,
   deleteFinanceMovementTag,
+  getManualDebtorDetail,
   registerManualDebtorPayment,
   registerManualProviderDebtPayment,
   registerGeneralBalanceAccountMovement,
@@ -91,6 +92,7 @@ export async function saveManualDebtorAction(
 
   try {
     const d = parsed.data;
+    const previousDebtor = d.id ? await getManualDebtorDetail(d.id) : null;
     const debtorId = await saveManualDebtor({
       id: d.id || undefined,
       name: d.name,
@@ -104,6 +106,9 @@ export async function saveManualDebtorAction(
     revalidatePath(`/finance/deudas/deudor-${debtorId}`);
     revalidatePath("/finance/balance-general");
     revalidatePath(`/finance/balance-general/${d.sourceAccountId}`);
+    if (previousDebtor?.debtor.source_account_id && previousDebtor.debtor.source_account_id !== d.sourceAccountId) {
+      revalidatePath(`/finance/balance-general/${previousDebtor.debtor.source_account_id}`);
+    }
     return { ok: true, data: { debtorId } };
   } catch (error) {
     return {

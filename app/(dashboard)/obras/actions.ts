@@ -45,6 +45,15 @@ function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
   return out;
 }
 
+function revalidateWorkFinanceViews() {
+  revalidatePath("/finance/balance-general");
+  revalidatePath("/finance/deudas");
+  revalidatePath("/finance/estados-financieros");
+  revalidatePath("/finance/utilidades");
+  revalidatePath("/finance/movimientos-internos");
+  revalidatePath("/finance/[module]/[account]", "page");
+}
+
 export async function createWorkAction(
   raw: unknown,
 ): Promise<ActionResult<{ workId: string }>> {
@@ -142,6 +151,7 @@ export async function registerWorkMovementAction(
     });
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
+    revalidateWorkFinanceViews();
     return {
       ok: true,
       data: {
@@ -184,6 +194,7 @@ export async function editWorkMovementAction(raw: unknown): Promise<ActionResult
     );
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
+    revalidateWorkFinanceViews();
     return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "No se pudo editar el movimiento." };
@@ -206,6 +217,7 @@ export async function deleteWorkMovementAction(raw: unknown): Promise<ActionResu
     await deleteWorkMovement(d.movementId, d.note);
     revalidatePath("/obras");
     revalidatePath(`/obras/${d.workId}`);
+    revalidateWorkFinanceViews();
     return { ok: true, data: undefined };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "No se pudo eliminar el movimiento." };

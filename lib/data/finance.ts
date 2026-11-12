@@ -194,6 +194,119 @@ async function recentWorkMovementTimes(openings: Map<string, AccountBalanceOpeni
   return createdAtById;
 }
 
+/** Reconciles edits/deletions made after an opening cutoff for older work rows. */
+async function workMovementOpeningAdjustments(
+  openings: Map<string, AccountBalanceOpening>,
+): Promise<Map<string, number>> {
+  if (openings.size === 0) return new Map();
+  const earliestCutoff = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
+  const auditRows: Row[] = [];
+  for (let from = 0; ; ) {
+    const { data, error } = await sb().from("audit_logs")
+      .select("id,created_at,entity_id,operation,description,snapshot")
+      .eq("entity_type", "work_movement")
+      .in("operation", ["update", "delete"])
+      .gte("created_at", new Date(earliestCutoff).toISOString())
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error("No se pudieron reconciliar cambios de movimientos de obra.");
+    const page = (data ?? []) as Row[];
+    auditRows.push(...page);
+    if (page.length === 0) break;
+    from += page.length;
+  }
+
+  const movementIds = [...new Set(auditRows.map((row) => String(row.entity_id ?? "")).filter(Boolean))];
+  const createdAtById = new Map<string, string>();
+  for (let from = 0; from < movementIds.length; from += 200) {
+    const { data, error } = await sb().from("work_movements")
+      .select("id,created_at")
+      .in("id", movementIds.slice(from, from + 200));
+    if (error) throw new Error("No se pudieron verificar las fechas de los movimientos editados.");
+    for (const row of data ?? []) createdAtById.set(String(row.id), String(row.created_at));
+  }
+
+  const adjustments = new Map<string, number>();
+  for (const audit of auditRows) {
+    const snapshot = audit.snapshot as { before?: unknown; after?: unknown } | null;
+    const before = snapshot?.before as Row | undefined;
+    const after = snapshot?.after as Row | undefined;
+    const movementCreatedAt = Date.parse(createdAtById.get(String(audit.entity_id)) ?? "");
+    if (!Number.isFinite(movementCreatedAt)) continue;
+    const auditAt = Date.parse(String(audit.created_at ?? ""));
+    if (!Number.isFinite(auditAt)) continue;
+    const applySnapshot = (movement: Row | undefined, direction: 1 | -1) => {
+      if (!movement) return;
+      const accountId = String(movement.payment_method_id ?? "");
+      const opening = openings.get(accountId);
+      if (!opening || auditAt <= opening.cutoffMs || movementCreatedAt > opening.cutoffMs) return;
+      if (String(movement.receipt ?? "").startsWith("SAL-")) return;
+      if (movement.movement_type === "expense" && normalizedFinanceCategory(movement.category) === "cuenta de oficina") return;
+      const movementType = movement.movement_type ?? (String(audit.description ?? "").startsWith("Ingreso") ? "income" : "expense");
+      const signedAmount = num(movement.amount) * (movementType === "income" ? 1 : -1);
+      adjustments.set(accountId, round2((adjustments.get(accountId) ?? 0) + signedAmount * direction));
+    };
+    applySnapshot(before, -1);
+    if (audit.operation === "update") applySnapshot(after, 1);
+  }
+  return adjustments;
+}
+
+/** Reconciles edited loans against account openings that predate the loan. */
+async function manualDebtorOpeningAdjustments(
+  openings: Map<string, AccountBalanceOpening>,
+): Promise<Map<string, number>> {
+  if (openings.size === 0) return new Map();
+  const earliestCutoff = Math.min(...[...openings.values()].map((opening) => opening.cutoffMs));
+  const auditRows: Row[] = [];
+  for (let from = 0; ; ) {
+    const { data, error } = await sb().from("audit_logs")
+      .select("id,created_at,entity_id,operation,snapshot")
+      .eq("entity_type", "finance_movement")
+      .eq("description", "Préstamo a deudor actualizado")
+      .eq("operation", "update")
+      .gte("created_at", new Date(earliestCutoff).toISOString())
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error("No se pudieron reconciliar cambios en préstamos.");
+    const page = (data ?? []) as Row[];
+    auditRows.push(...page);
+    if (page.length === 0) break;
+    from += page.length;
+  }
+
+  const debtorIds = [...new Set(auditRows.map((row) => String(row.entity_id ?? "")).filter(Boolean))];
+  const createdAtById = new Map<string, string>();
+  for (let from = 0; from < debtorIds.length; from += 200) {
+    const { data, error } = await sb().from("manual_debtors")
+      .select("id,created_at")
+      .in("id", debtorIds.slice(from, from + 200));
+    if (error) throw new Error("No se pudieron verificar las fechas de los préstamos editados.");
+    for (const row of data ?? []) createdAtById.set(String(row.id), String(row.created_at));
+  }
+
+  const adjustments = new Map<string, number>();
+  for (const audit of auditRows) {
+    const snapshot = audit.snapshot as { before?: unknown; after?: unknown } | null;
+    const createdAt = Date.parse(createdAtById.get(String(audit.entity_id)) ?? "");
+    const auditAt = Date.parse(String(audit.created_at ?? ""));
+    if (!Number.isFinite(createdAt) || !Number.isFinite(auditAt)) continue;
+    const applySnapshot = (loan: Row | undefined, direction: 1 | -1) => {
+      if (!loan || createdAt > auditAt) return;
+      const accountId = String(loan.source_account_id ?? "");
+      const opening = openings.get(accountId);
+      if (!accountId || !opening || createdAt > opening.cutoffMs || auditAt <= opening.cutoffMs) return;
+      const amount = -num(loan.amount);
+      adjustments.set(accountId, round2((adjustments.get(accountId) ?? 0) + amount * direction));
+    };
+    applySnapshot(snapshot?.before as Row | undefined, -1);
+    applySnapshot(snapshot?.after as Row | undefined, 1);
+  }
+  return adjustments;
+}
+
 async function getUnifiedMethodBalances(): Promise<{
   balances: Map<string, number>;
   openings: Map<string, AccountBalanceOpening>;
@@ -266,6 +379,12 @@ async function getUnifiedMethodBalances(): Promise<{
     if (salaryWorkMirrorIds.has(m.id)) continue;
     if (openings.has(accountId) && !recentWorkTimes.has(m.id)) continue;
     add(accountId, (m.movement_type as string) === "income" ? num(m.amount) : -num(m.amount), recentWorkTimes.get(m.id));
+  }
+  for (const [accountId, adjustment] of await workMovementOpeningAdjustments(openings)) {
+    balances.set(accountId, round2((balances.get(accountId) ?? 0) + adjustment));
+  }
+  for (const [accountId, adjustment] of await manualDebtorOpeningAdjustments(openings)) {
+    balances.set(accountId, round2((balances.get(accountId) ?? 0) + adjustment));
   }
   for (const t of it.data ?? []) {
     add(t.from_payment_method_id as string, -num(t.amount), t.created_at);
@@ -1198,6 +1317,47 @@ async function getFinanceUtilityReportUncached(): Promise<FinanceUtilityReport> 
 
 export const getFinanceUtilityReport = cache(getFinanceUtilityReportUncached);
 
+/** Cobros brutos que alimentan el flujo de caja, separados por origen. */
+export async function getCashFlowMonthlyIncomeReport(): Promise<{
+  projects: Array<{ month: string; amount: number }>;
+  works: Array<{ month: string; amount: number }>;
+}> {
+  if (!isAdminConfigured()) return { projects: [], works: [] };
+
+  const projectByMonth = new Map<string, number>();
+  for (let offset = 0; ; ) {
+    const { data, error } = await sb().from("project_payments")
+      .select("id,payment_date,amount")
+      .eq("status", 1)
+      .eq("movement_type", "income")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw new Error("No se pudieron consultar los ingresos de proyectos.");
+    const page = data ?? [];
+    for (const payment of page) {
+      const month = String(payment.payment_date ?? "").slice(0, 7);
+      if (!/^\d{4}-\d{2}$/.test(month)) continue;
+      projectByMonth.set(month, round2((projectByMonth.get(month) ?? 0) + num(payment.amount)));
+    }
+    if (page.length === 0) break;
+    offset += page.length;
+  }
+
+  const workByMonth = new Map<string, number>();
+  for (const movement of await listActiveWorkMovementFacts()) {
+    if (movement.movement_type !== "income" || normalizedFinanceCategory(movement.category) !== "abono de obra") continue;
+    const month = movement.movement_date.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) continue;
+    workByMonth.set(month, round2((workByMonth.get(month) ?? 0) + num(movement.amount)));
+  }
+
+  const monthlyRows = (values: Map<string, number>) => [...values.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount }));
+  return { projects: monthlyRows(projectByMonth), works: monthlyRows(workByMonth) };
+}
+
 export interface WorkFinancialMonthlyReport {
   income: Array<{ month: string; amount: number }>;
   expenses: Array<{ month: string; amount: number }>;
@@ -1922,11 +2082,37 @@ export async function saveManualDebtor(data: SaveManualDebtorData): Promise<stri
     if (detail && payload.amount < detail.totalPaid - 0.001) {
       throw new Error("El monto prestado no puede ser menor a los abonos registrados.");
     }
+    const { data: beforeRow, error: beforeError } = await client
+      .from("manual_debtors")
+      .select("id,name,amount,source_account_id,loan_date,note,created_at")
+      .eq("id", data.id)
+      .eq("status", 1)
+      .maybeSingle();
+    if (beforeError) throw new Error(beforeError.message);
+    if (!beforeRow) throw new Error("No se encontró el préstamo activo.");
     const { error } = await client
       .from("manual_debtors")
-      .update(payload)
-      .eq("id", data.id);
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("status", 1);
     if (error) throw new Error(error.message);
+    await writeAudit({
+      entityType: "finance_movement",
+      entityId: data.id,
+      operation: "update",
+      amount: round2(data.amount),
+      description: "Préstamo a deudor actualizado",
+      snapshot: {
+        before: {
+          amount: num(beforeRow.amount),
+          source_account_id: beforeRow.source_account_id,
+        },
+        after: {
+          amount: round2(data.amount),
+          source_account_id: payload.source_account_id,
+        },
+      },
+    });
     return data.id;
   }
   const { data: created, error } = await client

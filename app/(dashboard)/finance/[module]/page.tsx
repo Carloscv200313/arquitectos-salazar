@@ -11,6 +11,7 @@ import { MovementsView } from "@/components/finance/movements-view";
 import { SalaryView } from "@/components/finance/salary-view";
 import { UtilitiesView } from "@/components/finance/utilities-view";
 import {
+  getCashFlowMonthlyIncomeReport,
   getDebtReport,
   getAdministrativeSalaryMonthlyReport,
   getConsolidatedFinanceMovementReport,
@@ -72,6 +73,7 @@ export default async function FinanceModulePage({
           getWorkFinancialMonthlyReport(),
           getProjectArchitectCommissionMonthlyReport(),
           getAdministrativeSalaryMonthlyReport(),
+          getCashFlowMonthlyIncomeReport(),
         ])
       : Promise.resolve(null),
     item.slug === "deudas"
@@ -129,6 +131,7 @@ export default async function FinanceModulePage({
           workExpenses={statements[2].expenses}
           architectCommissions={statements[3]}
           administrativeSalaries={statements[4]}
+          cashIncome={statements[5]}
         />
       ) : debts ? (
         <DebtsView

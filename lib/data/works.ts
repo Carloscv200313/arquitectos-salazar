@@ -865,10 +865,11 @@ export async function updateWorkMovement(
         movement_date: before.movement_date,
         supplier: before.supplier,
         category: before.category,
+        movement_type: before.movement_type,
         payment_method_id: before.payment_method_id,
         observations: before.observations,
       },
-      after: update,
+      after: { ...update, movement_type: before.movement_type },
     },
   });
 }

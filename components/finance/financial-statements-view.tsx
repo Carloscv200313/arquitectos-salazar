@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format";
+import { calculateCashFlowBalances } from "@/lib/financial-statements";
 import type { FinanceCaptureReport, FinanceUtilityReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ interface MonthColumn {
 }
 
 const FINANCING_ROWS = ["Pago de interés y capital", "Prestamos", "Créditos"];
+const TAX_TAGS = new Set(["impuesto", "impuestos"]);
 const RESERVED_INCOME_TAGS = new Set([
   "otros ingresos",
   "otro ingreso",
@@ -93,6 +95,26 @@ function monthKeyFromISO(date: string) {
 
 function monthKeyFromPeriod(period: string) {
   return period.slice(0, 7);
+}
+
+function monthColumnsBetween(dateFrom: string, dateTo: string): MonthColumn[] {
+  const first = new Date(`${dateFrom}-01T12:00:00`);
+  const last = new Date(`${dateTo}-01T12:00:00`);
+  if (Number.isNaN(first.getTime()) || Number.isNaN(last.getTime()) || first > last) return [];
+  const result: MonthColumn[] = [];
+  const current = new Date(first);
+  while (current <= last) {
+    const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`;
+    const monthLabel = MONTH_LABELS[current.getMonth()];
+    result.push({
+      key,
+      label: first.getFullYear() === last.getFullYear()
+        ? monthLabel
+        : `${monthLabel} ${current.getFullYear()}`,
+    });
+    current.setMonth(current.getMonth() + 1);
+  }
+  return result;
 }
 
 function addValue(values: MonthlyValues, month: string, amount: number) {
@@ -513,6 +535,7 @@ export function FinancialStatementsView({
   workExpenses,
   architectCommissions,
   administrativeSalaries,
+  cashIncome,
 }: {
   movements: FinanceCaptureReport;
   utilities: FinanceUtilityReport;
@@ -520,6 +543,10 @@ export function FinancialStatementsView({
   workExpenses: Array<{ month: string; amount: number }>;
   architectCommissions: Array<{ month: string; amount: number }>;
   administrativeSalaries: Array<{ month: string; amount: number }>;
+  cashIncome: {
+    projects: Array<{ month: string; amount: number }>;
+    works: Array<{ month: string; amount: number }>;
+  };
 }) {
   const availablePeriods = [
     ...new Set([
@@ -529,6 +556,8 @@ export function FinancialStatementsView({
       ...architectCommissions.map((row) => row.month.slice(0, 7)),
       ...administrativeSalaries.map((row) => row.month.slice(0, 7)),
       ...movements.rows.map((row) => row.capture_date.slice(0, 7)),
+      ...cashIncome.projects.map((row) => row.month.slice(0, 7)),
+      ...cashIncome.works.map((row) => row.month.slice(0, 7)),
     ]),
   ].filter(Boolean).sort();
   const latestPeriod = availablePeriods.at(-1) ?? new Date().toISOString().slice(0, 7);
@@ -536,41 +565,33 @@ export function FinancialStatementsView({
   const [isExporting, setIsExporting] = useState(false);
   const [dateFrom, setDateFrom] = useState(`${initialYear}-01`);
   const [dateTo, setDateTo] = useState(`${initialYear}-12`);
-  const months = useMemo(() => {
-    const first = new Date(`${dateFrom}-01T12:00:00`);
-    const last = new Date(`${dateTo}-01T12:00:00`);
-    if (Number.isNaN(first.getTime()) || Number.isNaN(last.getTime()) || first > last) return [];
-    const result: MonthColumn[] = [];
-    const current = new Date(first);
-    while (current <= last) {
-      const key = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}`;
-      const monthLabel = MONTH_LABELS[current.getMonth()];
-      result.push({
-        key,
-        label: first.getFullYear() === last.getFullYear()
-          ? monthLabel
-          : `${monthLabel} ${current.getFullYear()}`,
-      });
-      current.setMonth(current.getMonth() + 1);
-    }
-    return result;
-  }, [dateFrom, dateTo]);
-  const projectIncome = utilityValues(utilities, "projectUtility", months);
-  const workIncomeValues = monthlyAmountValues(workIncome, months);
-  const otherIncome = valuesByMovementType(movements, "income", months);
-  const regularIncome = sumValues(months, projectIncome, workIncomeValues);
-  const totalIncome = sumValues(months, regularIncome, otherIncome);
-  const workExpenseValues = monthlyAmountValues(workExpenses, months);
-  const architectCommissionValues = monthlyAmountValues(architectCommissions, months);
-  const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries, months);
-  const directCosts = sumValues(months, workExpenseValues, architectCommissionValues);
+  const months = useMemo(() => monthColumnsBetween(dateFrom, dateTo), [dateFrom, dateTo]);
+  const earliestPeriod = availablePeriods[0];
+  const calculationMonths = useMemo(
+    () => monthColumnsBetween(earliestPeriod && earliestPeriod < dateFrom ? earliestPeriod : dateFrom, dateTo),
+    [dateFrom, dateTo, earliestPeriod],
+  );
+  const projectIncome = utilityValues(utilities, "projectUtility", calculationMonths);
+  const workIncomeValues = monthlyAmountValues(workIncome, calculationMonths);
+  const otherIncome = valuesByMovementType(movements, "income", calculationMonths);
+  const regularIncome = sumValues(calculationMonths, projectIncome, workIncomeValues);
+  const totalIncome = sumValues(calculationMonths, regularIncome, otherIncome);
+  const cashProjectIncome = monthlyAmountValues(cashIncome.projects, calculationMonths);
+  const cashWorkIncome = monthlyAmountValues(cashIncome.works, calculationMonths);
+  const cashOperatingFlow = sumValues(calculationMonths, cashProjectIncome, cashWorkIncome, otherIncome);
+  const workExpenseValues = monthlyAmountValues(workExpenses, calculationMonths);
+  const architectCommissionValues = monthlyAmountValues(architectCommissions, calculationMonths);
+  const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries, calculationMonths);
+  const directCosts = sumValues(calculationMonths, workExpenseValues, architectCommissionValues);
   const tagLabels = uniqueLabels(movements.tags.map((tag) => tag.name));
   const financeLabels = tagLabels.filter(isFinancingLabel);
+  const taxLabels = tagLabels.filter((label) => TAX_TAGS.has(normalizedLabel(label)));
   const adminLabels = tagLabels.filter((label) => {
     const normalized = normalizedLabel(label);
     return (
       !RESERVED_INCOME_TAGS.has(normalized) &&
       !RESERVED_DIRECT_COST_TAGS.has(normalized) &&
+      !TAX_TAGS.has(normalized) &&
       !isFinancingLabel(label)
     );
   });
@@ -580,46 +601,57 @@ export function FinancialStatementsView({
   ) {
     adminLabels.push("Sueldos");
   }
-  const adminRows: StatementRow[] = valuesByTag(movements, adminLabels, months).map((row): StatementRow =>
+  const adminRows: StatementRow[] = valuesByTag(movements, adminLabels, calculationMonths).map((row): StatementRow =>
     normalizedLabel(row.label) === "sueldos"
       ? {
           ...row,
-          values: sumValues(months, row.values, administrativeSalaryValues),
+          values: sumValues(calculationMonths, row.values, administrativeSalaryValues),
           tone: "admin",
           description:
             "Aquí se cruzan los pagos por semana registrados en Salario y las capturas manuales vinculadas a la etiqueta Sueldos. No incluye pagos por proyecto ni mano de obra de Obras.",
         }
       : { ...row, tone: "admin" },
   );
-  const financeRows: StatementRow[] = valuesByTag(movements, financeLabels, months).map((row) => ({
+  const financeRows: StatementRow[] = valuesByTag(movements, financeLabels, calculationMonths).map((row) => ({
     ...row,
     tone: "finance",
   }));
-  const adminTotal = sumValues(months, ...adminRows.map((row) => row.values));
-  const financeTotal = sumValues(months, ...financeRows.map((row) => row.values));
-  const grossUtility = subtractValues(totalIncome, months, directCosts);
-  const operatingUtility = subtractValues(grossUtility, months, adminTotal);
-  const beforeTaxes = subtractValues(operatingUtility, months, financeTotal);
-  const taxes = zeroValues(months);
-  const netUtility = subtractValues(beforeTaxes, months, taxes);
+  const adminTotal = sumValues(calculationMonths, ...adminRows.map((row) => row.values));
+  const financeTotal = sumValues(calculationMonths, ...financeRows.map((row) => row.values));
+  const grossUtility = subtractValues(totalIncome, calculationMonths, directCosts);
+  const operatingUtility = subtractValues(grossUtility, calculationMonths, adminTotal);
+  const beforeTaxes = subtractValues(operatingUtility, calculationMonths, financeTotal);
+  const taxes = sumValues(
+    calculationMonths,
+    ...valuesByTag(movements, taxLabels, calculationMonths).map((row) => row.values),
+  );
+  const netUtility = subtractValues(beforeTaxes, calculationMonths, taxes);
+  const cashBalances = calculateCashFlowBalances(
+    calculationMonths.map((month) => month.key),
+    cashOperatingFlow,
+    directCosts,
+    adminTotal,
+    financeTotal,
+    taxes,
+  );
 
   const cashFlowRows: StatementRow[] = [
-    { label: "SALDO INICIAL", values: zeroValues(months), strong: true },
-    { label: "Flujo operativo", values: zeroValues(months), section: true },
-    { label: "Ingresos", values: totalIncome, section: true, tone: "income" },
+    { label: "SALDO INICIAL", values: cashBalances.opening, strong: true },
+    { label: "Flujo operativo", values: cashOperatingFlow, section: true },
+    { label: "Ingresos", values: cashOperatingFlow, section: true, tone: "income" },
     {
       label: "Ingresos por proyectos",
-      values: projectIncome,
+      values: cashProjectIncome,
       tone: "income",
       description:
-        "Estos ingresos vienen del 50% de utilidad que se registra en cada proyecto. Esta información se llena de forma automática: si dan un abono a un proyecto en Utilidad, entonces esa utilidad suma aquí.",
+        "Suma de los pagos de ingreso registrados en Proyectos durante el mes.",
     },
     {
       label: "Ingresos de obras",
-      values: workIncomeValues,
+      values: cashWorkIncome,
       tone: "income",
       description:
-        "Estos ingresos van a venir de la categoría que se va a dar de alta llamada Cuenta de Oficina, más todos los gastos registrados ese mes en las obras. En ese momento aparece aquí el ingreso por obra en el estado de resultados. Se registra un movimiento en la categoría Cuenta de Oficina donde se registran los movimientos de obras como una salida de utilidad. Este movimiento queda registrado en la obra y en la tabla Resumen por categoría.",
+        "Suma de los movimientos de ingreso en la categoría Abono de obra durante el mes.",
     },
     {
       label: "Otros ingresos",
@@ -630,7 +662,7 @@ export function FinancialStatementsView({
     },
     {
       label: "Gastos",
-      values: sumValues(months, directCosts, adminTotal, financeTotal),
+      values: sumValues(calculationMonths, directCosts, adminTotal, financeTotal, taxes),
       section: true,
       tone: "direct",
     },
@@ -687,6 +719,8 @@ export function FinancialStatementsView({
       description:
         "Estos campos quedan pendientes de nombre o se ponen dinámicos para que aparezcan cuando se agreguen etiquetas.",
     })),
+    { label: "Impuestos", values: taxes, tone: "finance" },
+    { label: "SALDO FINAL", values: cashBalances.closing, strong: true },
   ];
 
   const resultRows: StatementRow[] = [
