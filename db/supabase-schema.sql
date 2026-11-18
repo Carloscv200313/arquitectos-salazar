@@ -625,7 +625,7 @@ create table if not exists public.finance_movement_tags (
   name       text not null,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
-  created_by uuid references auth.users(id)
+  created_by uuid references public.users(id)
 );
 create unique index if not exists finance_movement_tags_name_uidx
   on public.finance_movement_tags (lower(name))
@@ -637,7 +637,7 @@ create table if not exists public.finance_movement_concepts (
   tag_id     uuid references public.finance_movement_tags(id) on delete set null,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
-  created_by uuid references auth.users(id)
+  created_by uuid references public.users(id)
 );
 create unique index if not exists finance_movement_concepts_name_uidx
   on public.finance_movement_concepts (lower(name))
