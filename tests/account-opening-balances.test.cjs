@@ -49,11 +49,6 @@ test('desplegar el código antes de crear la tabla conserva los saldos existente
 test('cinco saldos de apertura ignoran registros previos y suman solo los posteriores', async () => {
   const data = fixture(0, 1);
   const base = { status: 1, created_at: before };
-  data.payment_accounts.push(
-    { ...base, id: 'a3', name: 'Efectivo' },
-    { ...base, id: 'a4', name: 'Cuenta de Silvia' },
-    { ...base, id: 'a5', name: 'Cuenta fiscal' },
-  );
   data.account_balance_openings = [
     ['a0', 100], ['a1', 0], ['a3', 200], ['a4', 30.25], ['a5', 400.50],
   ].map(([account_id, opening_amount]) => ({ account_id, opening_amount, cutoff_at: cutoff }));
@@ -97,6 +92,31 @@ test('cinco saldos de apertura ignoran registros previos y suman solo los poster
   assert.ok(detail.history.some((row) => row.id === 'account-movement-old-manual'));
   assert.ok(detail.history.some((row) => row.id === 'account-movement-new-manual'));
   assert.equal(current.metrics.tables.account_balance_openings, 1);
+});
+
+test('una cuenta activa creada desde configuración aparece con saldo e historial', async () => {
+  const data = fixture(0, 1);
+  const base = { status: 1, created_at: '2026-11-18T17:34:02Z' };
+  data.payment_accounts.push({ ...base, id: 'a6', name: 'Cuenta de Oficina' });
+  data.finance_movement_captures.push({
+    ...data.finance_movement_captures[0],
+    id: 'office-income',
+    source_account_id: 'a6',
+    movement_type: 'income',
+    amount: 250,
+    capture_date: '2026-11-18',
+    created_at: '2026-11-18T18:00:00Z',
+  });
+
+  const finance = loadFinance(data).finance;
+  const report = await finance.getGeneralBalanceReport();
+  const account = report.rows.find((row) => row.label === 'Cuenta de Oficina');
+  assert.ok(account);
+  assert.equal(account.amount, 250);
+
+  const detail = await finance.getGeneralBalanceAccountReport('cuenta-de-oficina');
+  assert.equal(detail.account.label, 'Cuenta de Oficina');
+  assert.ok(detail.history.some((row) => row.id === 'finance-capture-office-income'));
 });
 
 test('sincronizar salarios anteriores al corte no vuelve a descontar Caja', async () => {

@@ -6,15 +6,14 @@ const { fixture, database } = require('./helpers/financial-fixture.cjs');
 
 test('el historial de Efectivo identifica la obra y el proyecto de cada movimiento', async () => {
   const data = fixture(0, 1);
-  data.payment_accounts.push({ ...data.payment_accounts[0], id: 'cash', name: 'Efectivo' });
   data.works[0].name = 'Casa de Fulanito';
-  data.work_movements[0].payment_method_id = 'cash';
+  data.work_movements[0].payment_method_id = 'a3';
   data.work_movements[0].concept = 'Instalaciones';
   data.work_movements.push({
     ...data.work_movements[0], id: 'latest-work-movement',
     movement_date: '2026-11-09', concept: 'Movimiento reciente',
   });
-  data.project_payments[0].payment_method_id = 'cash';
+  data.project_payments[0].payment_method_id = 'a3';
   data.project_payments[0].concept = 'Anticipo';
 
   const db = database(data);

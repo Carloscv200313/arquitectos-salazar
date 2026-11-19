@@ -1,6 +1,6 @@
 function fixture(orderCount=12, movementCount=40) {
  const base={status:1,created_at:'2026-10-01T12:00:00Z',updated_at:'2026-10-01T12:00:00Z',created_by:null};
- const accounts=['Caja','Cuenta de Rosa','Cuentas por pagar'].map((name,i)=>({...base,id:'a'+i,name}));
+ const accounts=['Caja','Cuenta de Rosa','Cuentas por pagar','Efectivo','Cuenta de Silvia','Cuenta fiscal'].map((name,i)=>({...base,id:'a'+i,name}));
  const client={...base,id:'c1',name:'Cliente sintético'};
  const work={...base,id:'w1',name:'Obra sintética',client_id:'c1',client,work_status:'active',address:'Dirección sintética'};
  const movements=Array.from({length:movementCount},(_,i)=>({...base,id:'m'+String(i).padStart(5,'0'),work_id:'w1',movement_date:i%2?'2026-10-01':'2026-09-30',concept:'Concepto sintético',supplier:'Proveedor sintético',category:i%5===0?'Cuenta de oficina':i%4===0?'Honorarios':'Material',movement_type:i%3===0?'income':'expense',amount:100.25+i/100,payment_method_id:i%2?'a2':'a0',method:accounts[i%2?2:0],signature:'data:image/png;base64,'+'A'.repeat(4000)}));

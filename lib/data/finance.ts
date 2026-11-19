@@ -430,7 +430,9 @@ async function loadMethods(): Promise<PaymentMethod[]> {
   const { data } = await sb()
     .from("payment_accounts")
     .select("id, name, created_at")
-    .eq("status", 1);
+    .eq("status", 1)
+    .order("created_at", { ascending: true })
+    .order("name", { ascending: true });
   return (data ?? []).map((r) => ({
     id: r.id as string,
     name: r.name as string,
@@ -901,7 +903,6 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
   ]);
 
   const { balances: unifiedBalances, openings } = balanceState;
-  const methodByName = new Map(methods.map((m) => [m.name.toLowerCase(), m]));
   const openingByRowId = new Map(
     methods.map((method) => [accountIdFromMethodName(method.name), openings.get(method.id)]),
   );
@@ -916,28 +917,37 @@ async function getGeneralBalanceReportUncached(): Promise<GeneralBalanceReport> 
   );
   const accountsReceivable = round2(debtorsTotal + worksReceivableTotal + projectsReceivableTotal);
 
-  const rows: GeneralBalanceRow[] = SEED_PAYMENT_METHODS.map((methodName) => {
-    const normalized = methodName.toLowerCase();
-    if (normalized === "cuentas por pagar") {
-      return {
-        id: "accounts-payable",
-        label: "Cuentas por pagar",
-        amount: accountsPayableTotal,
-        source: "providers",
-        description: "Saldo pendiente de pedidos a proveedores.",
-      };
-    }
-    const method = methodByName.get(normalized);
-    return {
-      id: accountIdFromMethodName(methodName),
-      label: methodName,
-      amount: method ? unifiedBalances.get(method.id) ?? 0 : 0,
+  const preferredOrder = new Map(
+    SEED_PAYMENT_METHODS.map((name, index) => [name.toLowerCase(), index]),
+  );
+  const accountMethods = methods
+    .filter((method) => method.name.toLowerCase() !== "cuentas por pagar")
+    .sort((a, b) => {
+      const aOrder = preferredOrder.get(a.name.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = preferredOrder.get(b.name.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder
+        || a.created_at.localeCompare(b.created_at)
+        || a.name.localeCompare(b.name, "es");
+    });
+
+  const rows: GeneralBalanceRow[] = [
+    {
+      id: "accounts-payable",
+      label: "Cuentas por pagar",
+      amount: accountsPayableTotal,
+      source: "providers",
+      description: "Saldo pendiente de pedidos a proveedores.",
+    },
+    ...accountMethods.map((method): GeneralBalanceRow => ({
+      id: accountIdFromMethodName(method.name),
+      label: method.name,
+      amount: unifiedBalances.get(method.id) ?? 0,
       source: "works-payment-method",
-      description: method && openings.has(method.id)
+      description: openings.has(method.id)
         ? "Saldo de apertura más movimientos registrados después del corte."
         : "Movimientos de proyectos, obras, pedidos y salarios por esta cuenta.",
-    };
-  });
+    })),
+  ];
 
   rows.push({
     id: "accounts-receivable",
