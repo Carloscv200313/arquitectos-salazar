@@ -683,12 +683,15 @@ function DebtorPaymentSheet({
 function ManualProviderDebtSheet({
   open,
   onOpenChange,
+  accounts,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  accounts: PaymentMethod[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [provider, setProvider] = useState("");
+  const [sourceAccountId, setSourceAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [debtDate, setDebtDate] = useState(todayISODate());
   const [note, setNote] = useState("");
@@ -696,6 +699,7 @@ function ManualProviderDebtSheet({
 
   function reset() {
     setProvider("");
+    setSourceAccountId("");
     setAmount("");
     setDebtDate(todayISODate());
     setNote("");
@@ -707,6 +711,7 @@ function ManualProviderDebtSheet({
     startTransition(async () => {
       const result = await saveManualProviderDebtAction({
         provider,
+        sourceAccountId,
         amount: Number(amount),
         debtDate,
         note,
@@ -750,6 +755,33 @@ function ManualProviderDebtSheet({
               aria-invalid={!!errors.provider}
             />
             {errors.provider && <p className="text-xs text-destructive">{errors.provider}</p>}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="provider-debt-account">Cuenta de origen</Label>
+            <Select
+              value={sourceAccountId}
+              onValueChange={(value) => setSourceAccountId(value ?? "")}
+              items={accounts.map((account) => ({ value: account.id, label: account.name }))}
+            >
+              <SelectTrigger
+                id="provider-debt-account"
+                className="w-full"
+                aria-invalid={!!errors.sourceAccountId}
+                aria-describedby={errors.sourceAccountId ? "provider-debt-account-error" : undefined}
+              >
+                <SelectValue placeholder="Selecciona caja, efectivo o cuenta" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.sourceAccountId && (
+              <p id="provider-debt-account-error" className="text-xs text-destructive">
+                {errors.sourceAccountId}
+              </p>
+            )}
           </div>
           <div className="grid gap-2">
             <Label htmlFor="provider-debt-amount">Monto</Label>
@@ -925,6 +957,7 @@ export function DebtsView({
         <ManualProviderDebtSheet
           open={providerSheetOpen}
           onOpenChange={setProviderSheetOpen}
+          accounts={accounts}
         />
       )}
       {paymentTarget && (

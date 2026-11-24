@@ -53,6 +53,8 @@ export function ReceiptDocument({
   signAction,
   signPayload,
   resetSignatureAction,
+  sharePath,
+  shareLabel = "Copiar enlace del comprobante",
 }: {
   data: ReceiptData;
   prepareAction?: () => Promise<{ ok: true; code: string } | { ok: false; error: string }>;
@@ -61,6 +63,8 @@ export function ReceiptDocument({
   signAction?: (raw: unknown) => Promise<SignResult>;
   signPayload?: Record<string, unknown>;
   resetSignatureAction?: (raw: unknown) => Promise<SignResult>;
+  sharePath?: string | null;
+  shareLabel?: string;
 }) {
   const [data, setData] = useState(initialData);
   const padRef = useRef<SignaturePadHandle>(null);
@@ -74,7 +78,7 @@ export function ReceiptDocument({
 
   const signed = !!signature;
   // Documento visible: ya firmado, o el usuario eligió omitir la firma.
-  const visible = signed || skipped;
+  const visible = signed || skipped || !signAction;
 
   useEffect(() => {
     // Solo auto-imprime si ya está firmado.
@@ -310,6 +314,17 @@ export function ReceiptDocument({
     }
   }
 
+  async function copyShareLink() {
+    if (!sharePath) return;
+    const url = `${window.location.origin}${sharePath}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Enlace del comprobante copiado");
+    } catch {
+      toast.error("No se pudo copiar el enlace.");
+    }
+  }
+
   return (
     <>
       <style>{`
@@ -372,7 +387,16 @@ export function ReceiptDocument({
           </div>
         ) : (
           <>
-            <div className="no-print mb-4 flex items-center justify-end gap-2">
+            <div className="no-print mb-4 flex flex-wrap items-center justify-end gap-2">
+              {sharePath ? (
+                <button
+                  type="button"
+                  onClick={copyShareLink}
+                  className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
+                >
+                  <Copy className="size-4" /> {shareLabel}
+                </button>
+              ) : null}
               {signed && resetSignatureAction ? (
                 <button
                   type="button"

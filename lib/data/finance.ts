@@ -488,15 +488,18 @@ function mapManualDebtorPayment(row: Row): ManualDebtorPayment {
 }
 
 function mapManualProviderDebt(row: Row): ManualProviderDebt {
+  const account = mapPaymentAccount(relatedRow(row.sourceAccount));
   return {
     id: row.id as string,
     provider: row.provider as string,
     amount: num(row.amount),
     debt_date: (row.debt_date as string) ?? (row.created_at as string)?.slice(0, 10) ?? "",
+    source_account_id: (row.source_account_id as string) ?? null,
     note: (row.note as string) ?? null,
     created_at: row.created_at as string,
     updated_at: (row.updated_at as string) ?? (row.created_at as string),
     created_by: (row.created_by as string) ?? null,
+    account,
   };
 }
 
@@ -653,10 +656,10 @@ export async function getManualDebtorDetail(id: string): Promise<ManualDebtorDet
 async function getManualProviderDebtDetailsUncached(): Promise<ManualProviderDebtDetail[]> {
   if (!isAdminConfigured()) return [];
   const client = sb();
-  const [debtRes, paymentRes] = await Promise.all([
+  const [initialDebtRes, paymentRes] = await Promise.all([
     client
       .from("manual_provider_debts")
-      .select("*")
+      .select("*, sourceAccount:payment_accounts!manual_provider_debts_source_account_id_fkey(id,name,created_at)")
       .eq("status", 1)
       .order("provider", { ascending: true }),
     client
@@ -666,6 +669,17 @@ async function getManualProviderDebtDetailsUncached(): Promise<ManualProviderDeb
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false }),
   ]);
+
+  // Mantiene visible la pantalla durante un despliegue donde el código llegue
+  // antes que la migración de source_account_id.
+  let debtRes = initialDebtRes;
+  if (debtRes.error && ["42703", "PGRST200", "PGRST204"].includes(debtRes.error.code ?? "")) {
+    debtRes = await client
+      .from("manual_provider_debts")
+      .select("*")
+      .eq("status", 1)
+      .order("provider", { ascending: true });
+  }
 
   if (debtRes.error) throw new Error(debtRes.error.message);
   if (paymentRes.error) throw new Error(paymentRes.error.message);
@@ -1909,8 +1923,11 @@ export async function getConsolidatedFinanceMovementReport(): Promise<FinanceCap
 
   return {
     rows,
-    concepts: concepts.sort((a, b) => a.name.localeCompare(b.name)),
-    tags: tags.sort((a, b) => a.name.localeCompare(b.name)),
+    // Los filtros y formularios deben mostrar únicamente el catálogo
+    // administrado en Finanzas. Los conceptos automáticos de Obras,
+    // Proyectos y Salarios se conservan solo dentro de cada fila.
+    concepts: manualReport.concepts,
+    tags: manualReport.tags,
     accounts: manualReport.accounts,
     totals: {
       amount: round2(rows.reduce((sum, row) => sum + row.amount, 0)),
@@ -1945,7 +1962,15 @@ export async function saveFinanceMovementTag(data: {
     .insert({ name, created_by: data.userId })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (["42703", "PGRST204"].includes(error.code ?? "")) {
+      throw new Error("Falta aplicar la migración de cuenta de origen para deudas de proveedor.");
+    }
+    if (error.code === "23503" && error.message.includes("manual_provider_debts_created_by_fkey")) {
+      throw new Error("Falta aplicar la corrección de usuario para registrar deudas de proveedor.");
+    }
+    throw new Error(error.message);
+  }
   return created.id as string;
 }
 
@@ -2279,6 +2304,7 @@ export async function deleteManualDebtorPayment(data: {
 export interface SaveManualProviderDebtData {
   id?: string;
   provider: string;
+  sourceAccountId: string;
   amount: number;
   debtDate: string;
   note?: string | null;
@@ -2287,8 +2313,18 @@ export interface SaveManualProviderDebtData {
 
 export async function saveManualProviderDebt(data: SaveManualProviderDebtData): Promise<string> {
   const client = sb();
+  const { data: sourceAccount, error: sourceAccountError } = await client
+    .from("payment_accounts")
+    .select("id, name")
+    .eq("id", data.sourceAccountId)
+    .eq("status", 1)
+    .maybeSingle();
+  if (sourceAccountError) throw new Error(sourceAccountError.message);
+  if (!sourceAccount) throw new Error("Selecciona una cuenta activa para registrar la deuda.");
+
   const payload = {
     provider: data.provider.trim(),
+    source_account_id: data.sourceAccountId,
     amount: round2(data.amount),
     debt_date: data.debtDate,
     note: data.note?.trim() || null,
@@ -2308,7 +2344,7 @@ export async function saveManualProviderDebt(data: SaveManualProviderDebtData): 
 
   const { data: created, error } = await client
     .from("manual_provider_debts")
-    .insert({ ...payload, created_by: await getCurrentUserId() })
+    .insert({ ...payload, created_by: data.userId })
     .select("id")
     .single();
   if (error) throw new Error(error.message);

@@ -3229,10 +3229,17 @@
                 "provider": "Proveedor sintético",
                 "amount": 123.45,
                 "debt_date": "2026-10-01",
+                "source_account_id": "a2",
                 "note": null,
                 "created_at": "2026-10-01T12:00:00Z",
                 "updated_at": "2026-10-01T12:00:00Z",
-                "created_by": null
+                "created_by": null,
+                "account": {
+                  "id": "a2",
+                  "name": "Cuentas por pagar",
+                  "is_active": true,
+                  "created_at": "2026-10-01T12:00:00Z"
+                }
               },
               "totalAmount": 123.45,
               "totalPaid": 23.45,

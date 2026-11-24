@@ -3,11 +3,12 @@ create table if not exists public.manual_provider_debts (
   provider   text not null,
   amount     numeric(14,2) not null default 0,
   debt_date  date not null default current_date,
+  source_account_id uuid references public.payment_accounts(id),
   note       text,
   status     smallint not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  created_by uuid references auth.users(id)
+  created_by uuid references public.users(id)
 );
 
 create table if not exists public.manual_provider_debt_payments (
@@ -18,11 +19,15 @@ create table if not exists public.manual_provider_debt_payments (
   note         text,
   status       smallint not null default 1,
   created_at   timestamptz not null default now(),
-  created_by   uuid references auth.users(id)
+  created_by   uuid references public.users(id)
 );
 
 create index if not exists manual_provider_debts_provider_idx
   on public.manual_provider_debts(lower(provider))
+  where status = 1;
+
+create index if not exists manual_provider_debts_source_account_idx
+  on public.manual_provider_debts(source_account_id)
   where status = 1;
 
 create index if not exists manual_provider_debt_payments_debt_idx

@@ -50,3 +50,16 @@ test('cada saldo inicial arrastra el cierre anterior, incluso fuera del rango vi
   assert.deepEqual(result.opening, { '2025-12': 0, '2026-01': 800, '2026-02': 1210 });
   assert.deepEqual(result.closing, { '2025-12': 800, '2026-01': 1210, '2026-02': 1400 });
 });
+
+test('flujo operativo suma proyectos, abonos de obra e ingresos de movimientos', () => {
+  const { calculateCashOperatingFlow } = createLoader(root)('lib/financial-statements');
+  assert.deepEqual(
+    calculateCashOperatingFlow(
+      ['2026-01', '2026-02'],
+      { '2026-01': 100, '2026-02': 25 },
+      { '2026-01': 50 },
+      { '2026-01': 10, '2026-02': 5 },
+    ),
+    { '2026-01': 160, '2026-02': 30 },
+  );
+});

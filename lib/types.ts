@@ -328,10 +328,12 @@ export interface ManualProviderDebt {
   provider: string;
   amount: number;
   debt_date: string;
+  source_account_id: string | null;
   note: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  account: PaymentMethod | null;
 }
 
 export interface ManualProviderDebtPayment {

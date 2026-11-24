@@ -202,6 +202,7 @@ export async function saveManualProviderDebtAction(
     const debtId = await saveManualProviderDebt({
       id: d.id || undefined,
       provider: d.provider,
+      sourceAccountId: d.sourceAccountId,
       amount: d.amount,
       debtDate: d.debtDate,
       note: d.note || null,

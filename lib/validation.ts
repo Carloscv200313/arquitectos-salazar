@@ -623,6 +623,7 @@ export const deleteManualDebtorPaymentSchema = z.object({
 export const manualProviderDebtSchema = z.object({
   id: z.string().uuid("Deuda inválida").optional().or(z.literal("")),
   provider: name,
+  sourceAccountId: z.string().uuid("Selecciona la cuenta de origen"),
   amount: money,
   debtDate: isoDate,
   note: z.string().trim().max(200, "Máximo 200 caracteres").optional().or(z.literal("")),

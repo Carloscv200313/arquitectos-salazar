@@ -297,6 +297,7 @@ create table if not exists public.manual_provider_debts (
   provider    text not null check (char_length(trim(provider)) between 2 and 120),
   amount      numeric(14,2) not null check (amount >= 0),
   debt_date   date not null default current_date,
+  source_account_id uuid references public.payment_accounts(id),
   note        text,
   status      smallint not null default 1,
   created_at  timestamptz not null default now(),
@@ -318,6 +319,9 @@ create table if not exists public.manual_provider_debt_payments (
 
 create index if not exists idx_manual_provider_debts_provider
   on public.manual_provider_debts (lower(provider))
+  where status = 1;
+create index if not exists idx_manual_provider_debts_source_account
+  on public.manual_provider_debts (source_account_id)
   where status = 1;
 create index if not exists idx_manual_provider_debt_payments_debt
   on public.manual_provider_debt_payments (debt_id)

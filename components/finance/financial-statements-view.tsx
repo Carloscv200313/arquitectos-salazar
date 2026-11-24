@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/format";
-import { calculateCashFlowBalances } from "@/lib/financial-statements";
+import {
+  calculateCashFlowBalances,
+  calculateCashOperatingFlow,
+} from "@/lib/financial-statements";
 import type { FinanceCaptureReport, FinanceUtilityReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -578,7 +581,12 @@ export function FinancialStatementsView({
   const totalIncome = sumValues(calculationMonths, regularIncome, otherIncome);
   const cashProjectIncome = monthlyAmountValues(cashIncome.projects, calculationMonths);
   const cashWorkIncome = monthlyAmountValues(cashIncome.works, calculationMonths);
-  const cashOperatingFlow = sumValues(calculationMonths, cashProjectIncome, cashWorkIncome, otherIncome);
+  const cashOperatingFlow = calculateCashOperatingFlow(
+    calculationMonths.map((month) => month.key),
+    cashProjectIncome,
+    cashWorkIncome,
+    otherIncome,
+  );
   const workExpenseValues = monthlyAmountValues(workExpenses, calculationMonths);
   const architectCommissionValues = monthlyAmountValues(architectCommissions, calculationMonths);
   const administrativeSalaryValues = monthlyAmountValues(administrativeSalaries, calculationMonths);
